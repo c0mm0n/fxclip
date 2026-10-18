@@ -1,10 +1,5 @@
 param([Parameter(Mandatory = $true)][string]$Executable)
 $ErrorActionPreference = 'Stop'
-# WinForms/OLE clipboard writes require an STA thread.
-if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
-    & (Get-Process -Id $PID).Path -STA -NoProfile -File $PSCommandPath -Executable $Executable
-    exit $LASTEXITCODE
-}
 $process = $null
 $temporary = Join-Path $env:RUNNER_TEMP ('fxclip-e2e-' + [guid]::NewGuid())
 $originalAppData = $env:APPDATA
@@ -21,45 +16,93 @@ function Wait-Text([string]$Expected) {
     do {
         Start-Sleep -Milliseconds 100
         if ($process.HasExited) { throw 'Published app exited while cleaning.' }
-        $actual = [Windows.Forms.Clipboard]::GetText()
+        $actual = [DesktopProbe]::Text()
         if ($actual -ceq $Expected) { return }
     } while ((Get-Date) -lt $deadline)
     throw "Clipboard text did not match within eight seconds."
 }
 function Copy-Data([string]$Text, [switch]$Browser, [switch]$Excluded, [switch]$Restricted) {
-    $data = [Windows.Forms.DataObject]::new()
-    $data.SetText($Text, [Windows.Forms.TextDataFormat]::UnicodeText)
-    if ($Browser) {
-        $html = '<html><body><!--StartFragment--><a href="https://example.com/">link</a><!--EndFragment--></body></html>'
-        $header = "Version:0.9`r`nStartHTML:{0:D10}`r`nEndHTML:{1:D10}`r`nStartFragment:{2:D10}`r`nEndFragment:{3:D10}`r`n"
-        $start = ($header -f 0,0,0,0).Length
-        $cfHtml = ($header -f $start,($start + $html.Length),($start + $html.IndexOf('<a')),($start + $html.IndexOf('<!--EndFragment-->'))) + $html
-        $data.SetText($cfHtml, [Windows.Forms.TextDataFormat]::Html)
-        $data.SetData('Chromium internal source URL', $false, 'https://example.com/')
-    }
-    if ($Excluded) { $data.SetData('ExcludeClipboardContentFromMonitorProcessing', $false, [IO.MemoryStream]::new([byte[]](0,0,0,0))) }
-    if ($Restricted) {
-        foreach ($name in @('CanIncludeInClipboardHistory', 'CanUploadToCloudClipboard')) {
-            $data.SetData($name, $false, [IO.MemoryStream]::new([byte[]](0,0,0,0)))
-        }
-    }
-    [Windows.Forms.Clipboard]::SetDataObject($data, $true)
+    [DesktopProbe]::Copy($Text, $Browser.IsPresent, $Excluded.IsPresent, $Restricted.IsPresent)
 }
 try {
-    Add-Type -AssemblyName System.Windows.Forms
     Add-Type @'
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Text;
 public static class DesktopProbe {
     [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access);
     [DllImport("user32.dll")] public static extern bool CloseDesktop(IntPtr desktop);
     [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern IntPtr CreateWindowEx(uint extended, string cls, string name, uint style, int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
+    [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr window);
+    [DllImport("user32.dll")] static extern bool EmptyClipboard();
+    [DllImport("user32.dll")] static extern IntPtr SetClipboardData(uint format, IntPtr data);
+    [DllImport("user32.dll")] static extern bool IsClipboardFormatAvailable(uint format);
+    [DllImport("kernel32.dll")] static extern IntPtr GlobalAlloc(uint flags, UIntPtr size);
+    [DllImport("kernel32.dll")] static extern IntPtr GlobalFree(IntPtr data);
     [DllImport("user32.dll")] static extern bool OpenClipboard(IntPtr owner);
     [DllImport("user32.dll")] static extern bool CloseClipboard();
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern uint RegisterClipboardFormat(string name);
     [DllImport("user32.dll")] static extern IntPtr GetClipboardData(uint format);
     [DllImport("kernel32.dll")] static extern IntPtr GlobalLock(IntPtr memory);
     [DllImport("kernel32.dll")] static extern bool GlobalUnlock(IntPtr memory);
+    public static bool HasFormat(string name) { return IsClipboardFormatAvailable(RegisterClipboardFormat(name)); }
+    public static string Text() {
+        if (!OpenClipboard(IntPtr.Zero)) return "";
+        try {
+            var data = GetClipboardData(13);
+            var memory = data == IntPtr.Zero ? IntPtr.Zero : GlobalLock(data);
+            if (memory == IntPtr.Zero) return "";
+            try { return Marshal.PtrToStringUni(memory); }
+            finally { GlobalUnlock(data); }
+        } finally { CloseClipboard(); }
+    }
+    // Publish all formats under one native lock, just as a browser does. This avoids
+    // OleFlushClipboard racing the cleaner and PowerShell's WinForms COM runtime.
+    public static void Copy(string text, bool browser, bool excluded, bool restricted) {
+        var formats = new Dictionary<uint, byte[]>();
+        formats[13] = Encoding.Unicode.GetBytes(text + "\0");
+        if (browser) {
+            var html = "<html><body><!--StartFragment--><a href=\"https://example.com/\">link</a><!--EndFragment--></body></html>";
+            var template = "Version:0.9\r\nStartHTML:{0:D10}\r\nEndHTML:{1:D10}\r\nStartFragment:{2:D10}\r\nEndFragment:{3:D10}\r\n";
+            var start = string.Format(template, 0, 0, 0, 0).Length;
+            var header = string.Format(template, start, start + html.Length, start + html.IndexOf("<a"), start + html.IndexOf("<!--EndFragment-->"));
+            formats[RegisterClipboardFormat("HTML Format")] = Encoding.UTF8.GetBytes(header + html + "\0");
+            formats[RegisterClipboardFormat("Chromium internal source URL")] = Encoding.Unicode.GetBytes("https://example.com/\0");
+        }
+        if (excluded) formats[RegisterClipboardFormat("ExcludeClipboardContentFromMonitorProcessing")] = new byte[4];
+        if (restricted) {
+            formats[RegisterClipboardFormat("CanIncludeInClipboardHistory")] = new byte[4];
+            formats[RegisterClipboardFormat("CanUploadToCloudClipboard")] = new byte[4];
+        }
+        var owner = CreateWindowEx(0, "STATIC", "fxclip smoke writer", 0, 0, 0, 0, 0, new IntPtr(-3), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        if (owner == IntPtr.Zero) throw new Win32Exception();
+        try {
+            var opened = false;
+            for (var i = 0; i < 50 && !opened; i++) {
+                opened = OpenClipboard(owner);
+                if (!opened) System.Threading.Thread.Sleep(20);
+            }
+            if (!opened) throw new Win32Exception();
+            try {
+                if (!EmptyClipboard()) throw new Win32Exception();
+                foreach (var format in formats) {
+                    var data = GlobalAlloc(0x0042, new UIntPtr((uint)format.Value.Length));
+                    if (data == IntPtr.Zero) throw new OutOfMemoryException();
+                    try {
+                        var memory = GlobalLock(data);
+                        if (memory == IntPtr.Zero) throw new Win32Exception();
+                        try { Marshal.Copy(format.Value, 0, memory, format.Value.Length); }
+                        finally { GlobalUnlock(data); }
+                        if (SetClipboardData(format.Key, data) == IntPtr.Zero) throw new Win32Exception();
+                        data = IntPtr.Zero;
+                    } finally { if (data != IntPtr.Zero) GlobalFree(data); }
+                }
+            } finally { CloseClipboard(); }
+        } finally { DestroyWindow(owner); }
+    }
     public static bool ZeroMarker(string name) {
         if (!OpenClipboard(IntPtr.Zero)) return false;
         try {
@@ -103,21 +146,20 @@ public static class DesktopProbe {
     Check-Case 'browser-html-metadata-cleaned' {
         Copy-Data 'https://example.com/?utm_source=browser&keep=1' -Browser
         Wait-Text 'https://example.com/?keep=1'
-        $data = [Windows.Forms.Clipboard]::GetDataObject()
-        if ($data.GetDataPresent('HTML Format') -or $data.GetDataPresent('Chromium internal source URL')) { throw 'Browser formats were not flattened to text.' }
+        if ([DesktopProbe]::HasFormat('HTML Format') -or [DesktopProbe]::HasFormat('Chromium internal source URL')) { throw 'Browser formats were not flattened to text.' }
     }
     Check-Case 'browser-rich-prose-preserved' {
         $text = 'Read https://example.com/?utm_source=browser'
         Copy-Data $text -Browser
         Start-Sleep -Seconds 1
-        if ([Windows.Forms.Clipboard]::GetText() -cne $text -or ![Windows.Forms.Clipboard]::ContainsText([Windows.Forms.TextDataFormat]::Html)) { throw 'Rich prose was modified.' }
+        if ([DesktopProbe]::Text() -cne $text -or ![DesktopProbe]::HasFormat('HTML Format')) { throw 'Rich prose was modified.' }
     }
     Check-Case 'excluded-source-untouched' {
         $text = 'https://example.com/?utm_source=excluded'
         Copy-Data $text -Browser -Excluded
         $sequence = [DesktopProbe]::GetClipboardSequenceNumber()
         Start-Sleep -Seconds 1
-        if ([DesktopProbe]::GetClipboardSequenceNumber() -ne $sequence -or [Windows.Forms.Clipboard]::GetText() -cne $text -or ![Windows.Forms.Clipboard]::ContainsText([Windows.Forms.TextDataFormat]::Html)) { throw 'Excluded copy was modified.' }
+        if ([DesktopProbe]::GetClipboardSequenceNumber() -ne $sequence -or [DesktopProbe]::Text() -cne $text -or ![DesktopProbe]::HasFormat('HTML Format')) { throw 'Excluded copy was modified.' }
     }
     Check-Case 'privacy-opt-outs-preserved' {
         Copy-Data 'https://example.com/?utm_source=private' -Restricted
