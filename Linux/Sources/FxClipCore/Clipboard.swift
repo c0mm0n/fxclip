@@ -1,0 +1,63 @@
+import Foundation
+import FxEngine
+
+public struct ClipboardSnapshot: Equatable {
+    public let types: Set<String>
+    public let text: String
+    public init(types: Set<String>, text: String) { self.types = types; self.text = text }
+
+    public static func allows(_ types: Set<String>) -> Bool {
+        guard types.contains(where: { $0 == "text/plain" || $0.hasPrefix("text/plain;") }) else { return false }
+        return types.allSatisfy {
+            $0 == "text/plain" || $0.hasPrefix("text/plain;") ||
+            ["UTF8_STRING", "STRING", "TEXT", "text/html", "text/rtf", "application/rtf"].contains($0)
+        }
+    }
+
+    public var eligible: Bool {
+        guard Self.allows(types) else { return false }
+        let rich = !types.isDisjoint(with: ["text/html", "text/rtf", "application/rtf"])
+        return !rich || Self.isBareURL(text)
+    }
+
+    public static func isBareURL(_ text: String) -> Bool {
+        let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.contains(where: { $0.isWhitespace }),
+              let u = URLComponents(string: s),
+              ["http", "https"].contains(u.scheme?.lowercased() ?? ""),
+              let host = u.host, !host.isEmpty else { return false }
+        return true
+    }
+}
+
+/// Only holds the current selection in memory. No clipboard history or logging.
+public final class ClipboardController {
+    private var seen: ClipboardSnapshot?
+    private var original: String?
+    private var ownWrite: String?
+
+    public init() {}
+
+    public func tick(engine: Engine, app: String?,
+                     read: () -> ClipboardSnapshot?, write: (String) -> Bool) {
+        guard let current = read(), current.eligible else { reset(); return }
+        if current != seen {
+            // wl-copy offers plain text under several compatible MIME aliases.
+            // Recognize its value without feeding our mirror back into the engine.
+            if current.text != ownWrite || current.types.contains("text/html") {
+                original = current.text
+            }
+            ownWrite = nil
+            seen = current
+        }
+        guard let original else { return }
+        let clean = engine.clean(original).text
+        let desired = app.map { engine.preview(clean, forBundleID: $0) } ?? clean
+        guard desired != current.text else { return }
+        // A fresh type + text read protects newer copies, including images/files.
+        guard read() == current else { reset(); return }
+        if write(desired) { ownWrite = desired } else { reset() }
+    }
+
+    private func reset() { seen = nil; original = nil; ownWrite = nil }
+}

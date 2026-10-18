@@ -1,0 +1,80 @@
+name: Build Linux
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: "0.0.0-dev"
+        required: false
+  push:
+    branches: [linux]
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      VERSION: ${{ inputs.version || '0.0.0-dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1.2"
+      - name: Test shared engine on Linux Foundation
+        run: swift test --package-path Engine
+      - name: Bake version and build static Swift runtime
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          version = os.environ['VERSION']
+          if not version or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.+-_' for c in version):
+              raise SystemExit('Invalid version')
+          Path('Linux/Sources/fxclip/Version.swift').write_text('enum Version { static let value = ' + json.dumps(version) + ' }\n')
+          PY
+          swift build --package-path Linux -c release --static-swift-stdlib -Xswiftc -gnone -Xswiftc -debug-prefix-map -Xswiftc "$PWD=."
+          mkdir package
+          cp Linux/.build/release/fxclip package/
+          strip package/fxclip
+          cp Shared/rules.json package/fxclip.rules.json
+          cp Linux/dist/* package/
+          chmod +x package/install.sh
+          test "$(package/fxclip --version)" = "fxclip $VERSION"
+          if ldd package/fxclip | grep -Ei 'libswift|libFoundation|libdispatch|libBlocksRuntime'; then
+            echo 'Unexpected dynamic Swift dependency' >&2
+            exit 1
+          fi
+          if strings package/fxclip | grep -E '/Users/|/home/[^ /]+'; then
+            echo 'Unexpected home path in release binary' >&2
+            exit 1
+          fi
+      - name: Test Linux clipboard policy and adapters
+        run: |
+          swift test --package-path Linux
+          export XDG_CONFIG_HOME="$(mktemp -d)"
+          test "$(package/fxclip clean 'https://x.com/example/status/123?utm_source=test')" = 'https://x.com/example/status/123'
+          test "$(package/fxclip clean 'https://x.com/example/status/123?utm_source=test' --app ORG.TELEGRAM.DESKTOP)" = 'https://fxtwitter.com/example/status/123'
+          if XDG_CURRENT_DESKTOP=GNOME package/fxclip 2>gnome.log; then exit 1; fi
+          grep -q 'GNOME Wayland does not support' gnome.log
+          sh -n Linux/dist/install.sh
+          bash -n Linux/scripts/e2e.sh
+          unit_dir=$(mktemp -d)
+          sed 's|^ExecStart=.*|ExecStart=/usr/bin/true|' Linux/dist/fxclip.service > "$unit_dir/fxclip.service"
+          systemd-analyze --user verify "$unit_dir/fxclip.service"
+      - name: Install headless Wayland tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sway wl-clipboard foot dbus-x11 jq fonts-dejavu-core
+      - name: End-to-end under headless Sway
+        run: dbus-run-session -- bash Linux/scripts/e2e.sh "$PWD/package/fxclip"
+      - name: Package Linux release
+        run: tar -C package -czf fxclip-linux-x86_64.tar.gz fxclip fxclip.rules.json fxclip.service install.sh README.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: fxclip-linux-x86_64.tar.gz
+          if-no-files-found: error
