@@ -14,6 +14,10 @@ cleanup() {
     status=$?
     if (( status != 0 )); then
         cat "$work/sway.log" "$work/daemon.log" 2>/dev/null || true
+        "$binary" check || true
+        wl-paste --list-types || true
+        swaymsg -t get_tree -r | jq '.. | objects | select(.focused? == true) | {type, app_id, window_properties}' || true
+        if [[ -n "$daemon_pid" ]]; then ps -o pid,ppid,stat,comm --ppid "$daemon_pid" || true; fi
     fi
     [[ -z "$daemon_pid" ]] || kill "$daemon_pid" 2>/dev/null || true
     [[ -z "$sway_pid" ]] || kill "$sway_pid" 2>/dev/null || true
@@ -67,6 +71,7 @@ printf '%s' 'https://x.com/example/status/123?utm_source=test' | wl-copy
 assert_clipboard 'https://x.com/example/status/123'
 foot --app-id=org.telegram.desktop sh -c 'sleep 120' >"$work/telegram.log" 2>&1 &
 assert_focus org.telegram.desktop
+"$binary" check
 assert_clipboard 'https://fxtwitter.com/example/status/123'
 "$binary" check | grep -q 'Focused app: org.telegram.desktop'
 foot --app-id=com.example.Other sh -c 'sleep 120' >"$work/other.log" 2>&1 &
