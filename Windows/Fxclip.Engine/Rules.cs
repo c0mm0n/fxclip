@@ -37,12 +37,13 @@ public sealed class UserSettings
         var node = JsonNode.Parse(json) as JsonObject ?? throw new JsonException("Expected settings object.");
         foreach (var key in node.Where(p => p.Value is null).Select(p => p.Key).ToArray()) node.Remove(key);
         var settings = node.Deserialize<UserSettings>(Json) ?? throw new JsonException();
+        if (settings.DisabledSites.Any(s => s is null)) throw new JsonException("Invalid site.");
         foreach (var h in settings.NeverClean)
             if (h is null || h.Host is null) throw new JsonException("Invalid host.");
         foreach (var p in settings.Previews.Values)
             if (p is null || p.Apps is null || p.Apps.Any(a => a is null)) throw new JsonException("Invalid preview.");
         foreach (var a in settings.AddedApps)
-            if (a is null || a.Id is null || a.Name is null || a.BundleIDs is null) throw new JsonException("Invalid app.");
+            if (a is null || a.Id is null || a.Name is null || a.BundleIDs is null || a.BundleIDs.Any(id => id is null) || (a.Linux ?? []).Any(id => id is null) || (a.Windows ?? []).Any(id => id is null)) throw new JsonException("Invalid app.");
         // These fields are mandatory inside the nested Swift Codable types.
         if (node["previews"] is JsonObject previews)
             foreach (var p in previews.Select(p => p.Value))

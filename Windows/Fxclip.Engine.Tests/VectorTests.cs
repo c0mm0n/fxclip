@@ -76,6 +76,13 @@ public class VectorTests
     [InlineData("https://x.com/a https://x.com/b", false)]
     public void BareUrl(string text, bool expected) => Assert.Equal(expected, Cleaner.IsBareUrl(text));
 
+    [Theory]
+    [InlineData("{\"disabledSites\":[null]}")]
+    [InlineData("{\"addedApps\":[{\"id\":\"a\",\"name\":\"A\",\"bundleIDs\":[null]}]}")]
+    [InlineData("{\"previews\":{\"x\":{\"enabled\":true,\"apps\":[null]}}}")]
+    [InlineData("{\"neverClean\":[{\"host\":\"example.com\"}]}")]
+    public void MalformedNestedSettingsAreRejected(string json) => Assert.Throws<JsonException>(() => UserSettings.Parse(json));
+
     [Fact]
     public void MissingAndNullSettingsUseDefaults()
     {
