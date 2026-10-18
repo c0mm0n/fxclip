@@ -1,0 +1,2 @@
+// Your team stays out of git: put DEVELOPMENT_TEAM = <team id> in Local.xcconfig (ignored).
+#include? "Local.xcconfig"

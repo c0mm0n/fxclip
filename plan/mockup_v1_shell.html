@@ -1,0 +1,114 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  .cap { font-size:13px; color:var(--muted-foreground); margin:26px 0 8px; } .cap:first-child{margin-top:0} .cap b{color:var(--foreground)}
+  .mac { font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; color:#ececec; -webkit-font-smoothing:antialiased; }
+  .win { display:flex; height:470px; border-radius:12px; overflow:hidden; box-shadow:0 0 0 .5px rgba(255,255,255,.18), 0 20px 50px rgba(0,0,0,.45); background:#232323; }
+  .side { width:170px; flex:none; background:linear-gradient(160deg,#4a4a4f,#3a3a3e 60%,#45403c); padding:10px 8px 12px; display:flex; flex-direction:column; border-right:1px solid rgba(255,255,255,.08); }
+  .lights { display:flex; gap:7px; padding:2px 6px 18px; } .lights i{width:11px;height:11px;border-radius:50%;display:block} .lights i:nth-child(1){background:#ff5f57}.lights i:nth-child(2){background:#febc2e}.lights i:nth-child(3){background:#28c840}
+  .item { display:flex; align-items:center; gap:8px; height:30px; padding:0 8px 0 6px; border-radius:8px; font-size:12.5px; font-weight:500; margin-bottom:3px; }
+  .item.on { background:#2f5fd0; font-weight:600; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
+  .tile { width:20px; height:20px; border-radius:5px; display:grid; place-items:center; font-size:11px; color:#fff; box-shadow:inset 0 0 0 .5px rgba(255,255,255,.25), 0 1px 1px rgba(0,0,0,.2); }
+  .o{background:#ff9f0a}.b{background:#0a84ff}.r{background:#ff453a}.g{background:#8e8e93}.v{background:#5e5ce6}
+  .grow{flex:1}
+  .main { flex:1; padding:22px 24px; overflow:hidden; background:linear-gradient(120deg,#2a2a2d,#1f1f1f); }
+  .title { display:flex; align-items:center; gap:8px; margin-bottom:16px; }
+  .title h1 { font-size:26px; font-weight:700; margin:0; letter-spacing:-.3px; }
+  .info { width:16px; height:16px; border-radius:50%; border:1.5px solid #bbb; color:#bbb; font-size:10px; font-weight:700; display:grid; place-items:center; }
+  .card { background:rgba(255,255,255,.055); border-radius:12px; box-shadow:inset 0 0 0 .5px rgba(255,255,255,.08); margin-bottom:12px; }
+  .row { display:flex; align-items:center; gap:10px; padding:10px 14px; }
+  .row + .row { border-top:.5px solid rgba(255,255,255,.08); }
+  .sub { color:#9a9a9f; font-size:11.5px; }
+  .tg { width:30px; height:18px; border-radius:9px; background:#555; position:relative; flex:none; }
+  .tg::after { content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#eee; }
+  .tg.on { background:#0a84ff; } .tg.on::after { left:14px; }
+  .btn { padding:3px 10px; border-radius:6px; background:rgba(255,255,255,.12); font-size:12px; white-space:nowrap; }
+  .chips { display:flex; gap:6px; padding:8px 14px; border-top:.5px solid rgba(255,255,255,.08); background:rgba(0,0,0,.12); border-radius:0 0 12px 12px; flex-wrap:wrap; }
+  .chip { display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:10px; background:rgba(0,0,0,.35); box-shadow:inset 0 0 0 .5px rgba(255,255,255,.12); font-size:11.5px; }
+  .chip.add { background:none; color:#9a9a9f; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18); }
+  .ap { width:13px; height:13px; border-radius:3px; display:inline-block; }
+  .tgm{background:#2aa3e0}.dsc{background:#5865f2}
+  .circle { width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,.08); display:grid; place-items:center; font-size:15px; }
+  .big { font-size:28px; font-weight:700; letter-spacing:-.5px; }
+  .stats { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .stats .card { padding:14px; margin:0; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#30d158; display:inline-block; margin-right:6px; }
+  .count { color:#9a9a9f; font-size:11.5px; margin-left:auto; display:flex; align-items:center; gap:6px; }
+  h3 { font-size:13px; margin:14px 0 6px 2px; }
+</style></head><body>
+
+<div class="cap"><b>Overview</b>: the new home screen. Status, proof it works, and what's active, all on one page.</div>
+<div class="mac"><div class="win">
+  <div class="side">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="item on"><span class="tile o">◔</span>Overview</div>
+    <div class="item"><span class="tile b">🔗</span>Preview links</div>
+    <div class="item"><span class="tile r">⊘</span>Trackers</div>
+    <div class="item"><span class="tile g">✋</span>Never clean</div>
+    <div class="grow"></div>
+    <div class="item"><span class="tile g">⚙</span>Settings</div>
+  </div>
+  <div class="main">
+    <div class="title"><h1>Overview</h1><span class="info">i</span></div>
+    <div class="card"><div class="row"><span class="dot"></span><b>Cleaning links</b><span class="grow"></span><span class="btn">Skip next copy</span><span class="btn">Pause</span></div></div>
+    <div class="stats">
+      <div class="card"><div class="big">1 284</div><div class="sub">trackers removed</div></div>
+      <div class="card"><div class="big">2 min</div><div class="sub">since the last link was cleaned</div></div>
+    </div>
+    <h3>Preview links in use</h3>
+    <div class="card">
+      <div class="row"><b>X</b><span class="sub">→ fxtwitter.com</span><span class="grow"></span><span class="chip"><i class="ap tgm"></i>Telegram</span><span class="chip"><i class="ap dsc"></i>Discord</span></div>
+      <div class="row"><b>Instagram</b><span class="sub">→ zzinstagram.com</span><span class="grow"></span><span class="chip"><i class="ap tgm"></i>Telegram</span></div>
+    </div>
+  </div>
+</div></div>
+
+<div class="cap"><b>Preview links</b>: one card per rewrite, VoiceInk "Modes" style: apps as chips in the strip at the bottom of the card.</div>
+<div class="mac"><div class="win">
+  <div class="side">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="item"><span class="tile o">◔</span>Overview</div>
+    <div class="item on"><span class="tile b">🔗</span>Preview links</div>
+    <div class="item"><span class="tile r">⊘</span>Trackers</div>
+    <div class="item"><span class="tile g">✋</span>Never clean</div>
+    <div class="grow"></div>
+    <div class="item"><span class="tile g">⚙</span>Settings</div>
+  </div>
+  <div class="main">
+    <div class="title"><h1>Preview links</h1><span class="info">i</span></div>
+    <div class="card">
+      <div class="row"><span class="circle">𝕏</span><div><b style="font-size:14px">X</b><div class="sub">x.com, twitter.com → fxtwitter.com</div></div><span class="grow"></span><span class="tg on"></span></div>
+      <div class="chips"><span class="chip"><i class="ap tgm"></i>Telegram</span><span class="chip"><i class="ap dsc"></i>Discord</span><span class="chip add">＋ Choose apps</span></div>
+    </div>
+    <div class="card">
+      <div class="row"><span class="circle">◎</span><div><b style="font-size:14px">Instagram</b><div class="sub">instagram.com → zzinstagram.com</div></div><span class="grow"></span><span class="tg on"></span></div>
+      <div class="chips"><span class="chip"><i class="ap tgm"></i>Telegram</span><span class="chip add">＋ Choose apps</span></div>
+    </div>
+  </div>
+</div></div>
+
+<div class="cap"><b>Trackers</b>: one row per site, a count instead of raw parameter names (ⓘ lists them).</div>
+<div class="mac"><div class="win">
+  <div class="side">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="item"><span class="tile o">◔</span>Overview</div>
+    <div class="item"><span class="tile b">🔗</span>Preview links</div>
+    <div class="item on"><span class="tile r">⊘</span>Trackers</div>
+    <div class="item"><span class="tile g">✋</span>Never clean</div>
+    <div class="grow"></div>
+    <div class="item"><span class="tile g">⚙</span>Settings</div>
+  </div>
+  <div class="main">
+    <div class="title"><h1>Trackers</h1><span class="info">i</span></div>
+    <div class="card">
+      <div class="row"><b>All websites</b><span class="count">26 trackers <span class="info">i</span></span><span class="tg on"></span></div>
+      <div class="row">X<span class="count">4 trackers <span class="info">i</span></span><span class="tg on"></span></div>
+      <div class="row">YouTube<span class="count">4 trackers <span class="info">i</span></span><span class="tg on"></span></div>
+      <div class="row">Instagram<span class="count">4 trackers <span class="info">i</span></span><span class="tg on"></span></div>
+      <div class="row">Amazon<span class="count">20 trackers <span class="info">i</span></span><span class="tg on"></span></div>
+      <div class="row">TikTok<span class="count">6 trackers <span class="info">i</span></span><span class="tg on"></span></div>
+      <div class="row"><span class="sub">+ Spotify, AliExpress, Facebook, LinkedIn, Reddit (scroll)</span></div>
+    </div>
+  </div>
+</div></div>
+</body></html>

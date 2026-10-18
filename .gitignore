@@ -1,0 +1,6 @@
+build/
+Engine/.build/
+FxClip.xcodeproj/
+.DS_Store
+Local.xcconfig
+*.bak

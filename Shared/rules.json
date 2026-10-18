@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "trackers": {
+    "everywhere": {
+      "params": ["fbclid", "gclid", "gclsrc", "dclid", "gbraid", "wbraid", "msclkid", "yclid",
+                 "twclid", "ttclid", "li_fat_id", "igshid", "igsh", "mc_cid", "mc_eid",
+                 "_hsenc", "_hsmi", "mkt_tok", "oly_anon_id", "oly_enc_id", "vero_id", "srsltid"],
+      "prefixes": ["utm_", "aff_", "pk_", "mtm_"]
+    },
+    "sites": [
+      { "id": "x", "name": "X", "hosts": ["x.com", "twitter.com"],
+        "params": ["s", "t", "ref_src", "ref_url"] },
+      { "id": "youtube", "name": "YouTube", "hosts": ["youtube.com", "youtu.be"],
+        "params": ["si", "feature", "pp", "ab_channel"] },
+      { "id": "instagram", "name": "Instagram", "hosts": ["instagram.com"],
+        "params": ["igsh", "igshid", "img_index_ref", "exln"] },
+      { "id": "tiktok", "name": "TikTok", "hosts": ["tiktok.com"],
+        "params": ["_t", "_r", "is_from_webapp", "sender_device", "is_copy_url", "refer"] },
+      { "id": "spotify", "name": "Spotify", "hosts": ["spotify.com"],
+        "params": ["si", "context", "nd", "dlsi"] },
+      { "id": "amazon", "name": "Amazon",
+        "hosts": ["amazon.com", "amazon.fr", "amazon.de", "amazon.co.uk", "amazon.it", "amazon.es", "amzn.to", "amzn.eu"],
+        "params": ["tag", "ref", "ref_", "linkCode", "linkId", "ascsubtag", "creative", "creativeASIN",
+                   "camp", "content-id", "pd_rd_w", "pd_rd_r", "pd_rd_wg", "pd_rd_i", "pf_rd_p", "pf_rd_r",
+                   "dib", "dib_tag", "_encoding"],
+        "stripRefPath": true },
+      { "id": "aliexpress", "name": "AliExpress", "hosts": ["aliexpress.com"],
+        "params": ["sk", "spm", "scm", "pvid", "algo_pvid", "algo_exp_id", "terminal_id", "afSmartRedirect", "gatewayAdapt"] },
+      { "id": "facebook", "name": "Facebook", "hosts": ["facebook.com"],
+        "params": ["mibextid", "rdid", "share_url", "sfnsn"] },
+      { "id": "linkedin", "name": "LinkedIn", "hosts": ["linkedin.com"],
+        "params": ["trk", "trackingId", "lipi", "rcm"] },
+      { "id": "reddit", "name": "Reddit", "hosts": ["reddit.com"],
+        "params": ["share_id", "rdt", "ref", "ref_source", "context"] }
+    ]
+  },
+  "previews": [
+    { "id": "x", "name": "X",
+      "from": ["x.com", "www.x.com", "mobile.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"],
+      "to": "fxtwitter.com",
+      "apps": ["telegram"] },
+    { "id": "instagram", "name": "Instagram",
+      "from": ["instagram.com", "www.instagram.com"],
+      "to": "zzinstagram.com",
+      "apps": ["telegram"] }
+  ],
+  "apps": [
+    { "id": "telegram", "name": "Telegram",
+      "bundleIDs": ["ru.keepcoder.Telegram", "org.telegram.desktop", "com.tdesktop.Telegram"] }
+  ]
+}

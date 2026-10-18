@@ -1,0 +1,200 @@
+{
+  "source": "legacy fxclip.swift test mode",
+  "vectors": [
+    {
+      "input": "https://x.com/jack/status/20?s=46&t=abcDEF",
+      "clean": "https://x.com/jack/status/20",
+      "telegram": "https://fxtwitter.com/jack/status/20"
+    },
+    {
+      "input": "https://twitter.com/a/status/1?ref_src=twsrc%5Etfw",
+      "clean": "https://twitter.com/a/status/1",
+      "telegram": "https://fxtwitter.com/a/status/1"
+    },
+    {
+      "input": "https://mobile.x.com/a/status/1",
+      "clean": "https://mobile.x.com/a/status/1",
+      "telegram": "https://fxtwitter.com/a/status/1"
+    },
+    {
+      "input": "http://X.COM/a/status/1?s=1",
+      "clean": "http://X.COM/a/status/1",
+      "telegram": "https://fxtwitter.com/a/status/1"
+    },
+    {
+      "input": "https://x.com",
+      "clean": "https://x.com",
+      "telegram": "https://x.com"
+    },
+    {
+      "input": "https://sub.x.com/a?s=1",
+      "clean": "https://sub.x.com/a",
+      "telegram": "https://sub.x.com/a"
+    },
+    {
+      "input": "https://notx.com/a?s=1",
+      "clean": "https://notx.com/a?s=1",
+      "telegram": "https://notx.com/a?s=1"
+    },
+    {
+      "input": "https://www.instagram.com/p/DeUHj7eM0ws/?exln=MXh5NzlwOHAxNDhtbg==",
+      "clean": "https://www.instagram.com/p/DeUHj7eM0ws/",
+      "telegram": "https://zzinstagram.com/p/DeUHj7eM0ws/"
+    },
+    {
+      "input": "https://www.instagram.com/reel/abc/?igsh=MTc4&utm_source=ig",
+      "clean": "https://www.instagram.com/reel/abc/",
+      "telegram": "https://zzinstagram.com/reel/abc/"
+    },
+    {
+      "input": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&si=abc&t=42s",
+      "clean": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s",
+      "telegram": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s"
+    },
+    {
+      "input": "https://youtu.be/dQw4w9WgXcQ?si=xyz",
+      "clean": "https://youtu.be/dQw4w9WgXcQ",
+      "telegram": "https://youtu.be/dQw4w9WgXcQ"
+    },
+    {
+      "input": "https://www.youtube.com/watch?v=a&list=PL1&pp=ygU",
+      "clean": "https://www.youtube.com/watch?v=a&list=PL1",
+      "telegram": "https://www.youtube.com/watch?v=a&list=PL1"
+    },
+    {
+      "input": "https://www.amazon.fr/dp/B0ABC/ref=sr_1_1?keywords=foo&qid=123&tag=aff-21&th=1",
+      "clean": "https://www.amazon.fr/dp/B0ABC?keywords=foo&qid=123&th=1",
+      "telegram": "https://www.amazon.fr/dp/B0ABC?keywords=foo&qid=123&th=1"
+    },
+    {
+      "input": "https://www.amazon.com/gp/product/B01?linkCode=ll1&linkId=x&smid=A1",
+      "clean": "https://www.amazon.com/gp/product/B01?smid=A1",
+      "telegram": "https://www.amazon.com/gp/product/B01?smid=A1"
+    },
+    {
+      "input": "https://amzn.eu/d/abc/ref=x",
+      "clean": "https://amzn.eu/d/abc",
+      "telegram": "https://amzn.eu/d/abc"
+    },
+    {
+      "input": "https://example.com/?utm_source=a&utm_medium=b&id=5#frag",
+      "clean": "https://example.com/?id=5#frag",
+      "telegram": "https://example.com/?id=5#frag"
+    },
+    {
+      "input": "https://example.com/?q=a%2Bb&utm_campaign=x",
+      "clean": "https://example.com/?q=a%2Bb",
+      "telegram": "https://example.com/?q=a%2Bb"
+    },
+    {
+      "input": "https://github.com/foo/bar?ref=main",
+      "clean": "https://github.com/foo/bar?ref=main",
+      "telegram": "https://github.com/foo/bar?ref=main"
+    },
+    {
+      "input": "https://example.com/page?fbclid=IwAR&gclid=xyz",
+      "clean": "https://example.com/page",
+      "telegram": "https://example.com/page"
+    },
+    {
+      "input": "https://example.com/?UTM_SOURCE=a",
+      "clean": "https://example.com/",
+      "telegram": "https://example.com/"
+    },
+    {
+      "input": "https://example.com/?FBCLID=a",
+      "clean": "https://example.com/?FBCLID=a",
+      "telegram": "https://example.com/?FBCLID=a"
+    },
+    {
+      "input": "https://example.com/?utm%5Fsource=a&b=1",
+      "clean": "https://example.com/?b=1",
+      "telegram": "https://example.com/?b=1"
+    },
+    {
+      "input": "https://example.com/?=x&&utm_source=a",
+      "clean": "https://example.com/?=x&",
+      "telegram": "https://example.com/?=x&"
+    },
+    {
+      "input": "https://example.com/?utm_source=a",
+      "clean": "https://example.com/",
+      "telegram": "https://example.com/"
+    },
+    {
+      "input": "see (https://x.com/a/status/1?s=20).",
+      "clean": "see (https://x.com/a/status/1).",
+      "telegram": "see (https://fxtwitter.com/a/status/1)."
+    },
+    {
+      "input": "[link](https://x.com/a/status/1?t=1)",
+      "clean": "[link](https://x.com/a/status/1)",
+      "telegram": "[link](https://fxtwitter.com/a/status/1)"
+    },
+    {
+      "input": "https://en.wikipedia.org/wiki/Foo_(bar)",
+      "clean": "https://en.wikipedia.org/wiki/Foo_(bar)",
+      "telegram": "https://en.wikipedia.org/wiki/Foo_(bar)"
+    },
+    {
+      "input": "https://example.com/redirect?url=https://x.com/a/status/1?s=1",
+      "clean": "https://example.com/redirect?url=https://x.com/a/status/1?s=1",
+      "telegram": "https://example.com/redirect?url=https://x.com/a/status/1?s=1"
+    },
+    {
+      "input": "https://www.tiktok.com/@u/video/1?_t=abc&_r=1&is_from_webapp=1",
+      "clean": "https://www.tiktok.com/@u/video/1",
+      "telegram": "https://www.tiktok.com/@u/video/1"
+    },
+    {
+      "input": "https://open.spotify.com/track/1?si=abc&context=x",
+      "clean": "https://open.spotify.com/track/1",
+      "telegram": "https://open.spotify.com/track/1"
+    },
+    {
+      "input": "https://www.reddit.com/r/a/comments/b/?share_id=x&context=3",
+      "clean": "https://www.reddit.com/r/a/comments/b/",
+      "telegram": "https://www.reddit.com/r/a/comments/b/"
+    },
+    {
+      "input": "https://www.linkedin.com/posts/x?trk=public&lipi=abc",
+      "clean": "https://www.linkedin.com/posts/x",
+      "telegram": "https://www.linkedin.com/posts/x"
+    },
+    {
+      "input": "https://www.facebook.com/x?mibextid=abc",
+      "clean": "https://www.facebook.com/x",
+      "telegram": "https://www.facebook.com/x"
+    },
+    {
+      "input": "https://www.aliexpress.com/item/1.html?spm=a&sk=b&pvid=c",
+      "clean": "https://www.aliexpress.com/item/1.html",
+      "telegram": "https://www.aliexpress.com/item/1.html"
+    },
+    {
+      "input": "a https://x.com/a/status/1?s=1 and https://youtu.be/x?si=1.",
+      "clean": "a https://x.com/a/status/1 and https://youtu.be/x.",
+      "telegram": "a https://fxtwitter.com/a/status/1 and https://youtu.be/x."
+    },
+    {
+      "input": "hello world",
+      "clean": "hello world",
+      "telegram": "hello world"
+    },
+    {
+      "input": "line1 https://x.com/a?s=1\nline2 https://instagram.com/p/x/?igsh=1",
+      "clean": "line1 https://x.com/a\nline2 https://instagram.com/p/x/",
+      "telegram": "line1 https://fxtwitter.com/a\nline2 https://zzinstagram.com/p/x/"
+    },
+    {
+      "input": "Is it https://x.com/a?s=1?!",
+      "clean": "Is it https://x.com/a?!",
+      "telegram": "Is it https://fxtwitter.com/a?!"
+    },
+    {
+      "input": "https://example.com/a)))",
+      "clean": "https://example.com/a)))",
+      "telegram": "https://example.com/a)))"
+    }
+  ]
+}

@@ -1,0 +1,224 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  :root { --mac-bg:#ececec; --grp:#fff; --line:rgba(0,0,0,.09); --txt:#1d1d1f; --sub:#6e6e73; --acc:#0a84ff; --hl:#ffe08a; --del:#ffd5d2; }
+  body { font-family: var(--font-sans); }
+  .cap { font-size:13px; color:var(--muted-foreground); margin:28px 0 8px; }
+  .cap b { color:var(--foreground); }
+  .cap:first-child { margin-top:0; }
+  .mac { font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; color:var(--txt); -webkit-font-smoothing:antialiased; }
+  .win { background:var(--mac-bg); border-radius:12px; box-shadow:0 0 0 .5px rgba(0,0,0,.25), 0 18px 50px rgba(0,0,0,.28); overflow:hidden; max-width:680px; }
+  .tb { display:flex; align-items:center; padding:10px 14px 6px; background:#e3e3e3; border-bottom:.5px solid rgba(0,0,0,.15); }
+  .lights { display:flex; gap:8px; width:70px; }
+  .lights i { width:12px; height:12px; border-radius:50%; display:block; }
+  .lights i:nth-child(1){background:#ff5f57} .lights i:nth-child(2){background:#febc2e} .lights i:nth-child(3){background:#28c840}
+  .tabs { flex:1; display:flex; justify-content:center; gap:4px; margin-right:70px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 12px; border-radius:6px; font-size:11px; color:#555; }
+  .tab .ic { font-size:18px; line-height:22px; filter:grayscale(1); opacity:.7; }
+  .tab.on { background:rgba(0,0,0,.08); color:var(--acc); }
+  .tab.on .ic { filter:none; opacity:1; }
+  .title { text-align:center; font-weight:600; font-size:13px; flex:1; margin-right:70px; }
+  .body { padding:18px 20px 20px; }
+  .hd { font-weight:600; font-size:13px; margin:0 0 6px 4px; }
+  .hint { color:var(--sub); font-size:12px; margin:6px 4px 16px; }
+  .grp { background:var(--grp); border-radius:10px; box-shadow:0 0 0 .5px rgba(0,0,0,.08); margin-bottom:18px; }
+  .row { display:flex; align-items:center; gap:10px; padding:9px 12px; min-height:24px; }
+  .row + .row { border-top:.5px solid var(--line); }
+  .grow { flex:1; min-width:0; }
+  .sub { color:var(--sub); font-size:12px; }
+  .tg { width:32px; height:19px; border-radius:10px; background:#d9d9d9; position:relative; flex:none; }
+  .tg::after { content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.3); }
+  .tg.on { background:var(--acc); } .tg.on::after { left:15px; }
+  .btn { display:inline-block; padding:3px 10px; border-radius:6px; background:#fff; box-shadow:0 0 0 .5px rgba(0,0,0,.2), 0 1px 1px rgba(0,0,0,.06); font-size:12.5px; white-space:nowrap; }
+  .btn.pri { background:var(--acc); color:#fff; box-shadow:none; }
+  .chip { display:inline-flex; align-items:center; gap:4px; padding:1px 8px; border-radius:10px; background:#eef4ff; color:#0057c2; font-size:11.5px; margin:2px 3px 2px 0; }
+  .chip.p { background:#f1f1f3; color:#3a3a3c; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:11px; }
+  .chip.sug { background:none; box-shadow:inset 0 0 0 1px #c7c7cc; color:var(--sub); }
+  .ap { width:16px; height:16px; border-radius:4px; display:inline-block; flex:none; }
+  .tgm { background:linear-gradient(#37aee2,#1e96c8); } .dsc { background:#5865f2; } .wa { background:#25d366; } .sl { background:#4a154b; }
+  .arrow { color:var(--sub); margin:0 4px; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:11.5px; }
+  .field { background:#fff; border-radius:6px; box-shadow:0 0 0 .5px rgba(0,0,0,.25) inset; padding:5px 8px; }
+  .popup { padding:3px 8px; border-radius:6px; background:#fff; box-shadow:0 0 0 .5px rgba(0,0,0,.2), 0 1px 1px rgba(0,0,0,.06); font-size:12.5px; display:inline-flex; gap:6px; align-items:center; white-space:nowrap; }
+  .res { display:grid; grid-template-columns:96px 1fr; gap:6px 10px; padding:10px 12px; align-items:baseline; }
+  .res .k { color:var(--sub); font-size:12px; text-align:right; }
+  .res .v { word-break:break-all; }
+  del { background:var(--del); text-decoration:line-through; text-decoration-color:#c0392b; }
+  mark { background:var(--hl); border-radius:2px; }
+  .why { grid-column:2; display:flex; flex-wrap:wrap; gap:4px; }
+  .why span { font-size:11px; color:#8a4b00; background:#fff3d6; border-radius:4px; padding:1px 6px; }
+  .why span.b { color:#0057c2; background:#eef4ff; }
+  .chev { color:#b0b0b5; font-size:11px; }
+  .warn { color:#b25000; font-size:12px; }
+  .stack { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+  /* menu bar */
+  .bar { max-width:680px; background:rgba(235,235,240,.9); border-radius:10px 10px 0 0; height:26px; display:flex; justify-content:flex-end; align-items:center; gap:16px; padding:0 14px; font-size:13px; box-shadow:0 0 0 .5px rgba(0,0,0,.15); }
+  .bar .me { background:rgba(0,0,0,.12); border-radius:4px; padding:0 6px; font-weight:600; }
+  .menuwrap { max-width:680px; height:318px; position:relative; background:linear-gradient(135deg,#9db7d6,#c9b6d9); border-radius:0 0 10px 10px; }
+  .menu { position:absolute; right:150px; top:4px; width:258px; background:rgba(246,246,246,.97); border-radius:9px; box-shadow:0 0 0 .5px rgba(0,0,0,.2), 0 10px 30px rgba(0,0,0,.25); padding:5px; }
+  .mi { display:flex; justify-content:space-between; padding:3px 9px; border-radius:5px; }
+  .mi.hov { background:var(--acc); color:#fff; }
+  .mi .sc { color:var(--sub); } .mi.hov .sc { color:#fff; }
+  .mi.info { color:var(--sub); font-size:12px; }
+  .sep { height:.5px; background:rgba(0,0,0,.12); margin:5px 9px; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#28c840; margin-right:6px; }
+  .flash { position:absolute; right:120px; top:4px; }
+  .sheet { background:#f6f6f6; border-radius:12px; box-shadow:0 0 0 .5px rgba(0,0,0,.25), 0 18px 50px rgba(0,0,0,.28); max-width:520px; padding:18px 20px; }
+  .lbl { width:110px; text-align:right; color:var(--txt); flex:none; }
+  .steps { display:flex; gap:6px; justify-content:center; margin-bottom:14px; }
+  .steps i { width:7px; height:7px; border-radius:50%; background:#c7c7cc; display:block; } .steps i.on { background:var(--acc); }
+  .big { font-size:20px; font-weight:700; text-align:center; margin:0 0 4px; }
+  .lead { text-align:center; color:var(--sub); margin:0 0 16px; }
+  .cb { width:14px; height:14px; border-radius:4px; box-shadow:inset 0 0 0 1px #b0b0b5; background:#fff; display:inline-block; flex:none; position:relative; }
+  .cb.on { background:var(--acc); box-shadow:none; }
+  .cb.on::after { content:"✓"; color:#fff; font-size:11px; position:absolute; left:2.5px; top:-1px; }
+</style></head><body>
+
+<div class="cap"><b>1 · Menu bar menu</b>: status, proof it's working (no link or site shown), one-shot skip</div>
+<div class="mac">
+  <div class="bar"><span>🔋</span><span>Wi-Fi</span><span class="me">⌁</span><span>Sat 18 Oct 18:42</span></div>
+  <div class="menuwrap">
+    <div class="menu">
+      <div class="mi"><span><span class="dot"></span>Cleaning links</span></div>
+      <div class="mi info"><span>Link cleaned · 2 min ago</span></div>
+      <div class="mi info"><span>1 284 trackers removed</span></div>
+      <div class="sep"></div>
+      <div class="mi"><span>Pause</span><span class="sc">⌥⌘P</span></div>
+      <div class="mi hov"><span>Skip next clean</span><span class="sc"></span></div>
+      <div class="sep"></div>
+      <div class="mi"><span>Settings…</span><span class="sc">⌘,</span></div>
+      <div class="mi"><span>Check for Updates…</span></div>
+      <div class="mi"><span>About fxclip</span></div>
+      <div class="sep"></div>
+      <div class="mi"><span>Quit fxclip</span><span class="sc">⌘Q</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="cap"><b>2 · Settings › Preview links</b>: the main screen. One row per rewrite, the apps it applies to as chips, live tester underneath.</div>
+<div class="mac"><div class="win">
+  <div class="tb"><div class="lights"><i></i><i></i><i></i></div>
+    <div class="tabs"><div class="tab"><span class="ic">⚙️</span>General</div><div class="tab"><span class="ic">🧹</span>Trackers</div><div class="tab on"><span class="ic">🔗</span>Preview links</div></div></div>
+  <div class="body">
+    <div class="hint" style="margin-top:0">In the apps you pick, links are swapped for a mirror that shows the full post in the chat preview. Switch to any other app and the clean link is put back.</div>
+    <div class="grp">
+      <div class="row"><div class="tg on"></div>
+        <div class="grow"><div><b>X</b><span class="arrow">→</span>fxtwitter.com</div>
+          <div><span class="chip"><i class="ap tgm"></i>Telegram</span><span class="chip"><i class="ap dsc"></i>Discord</span></div></div>
+        <span class="btn">Choose apps…</span><span class="btn">Edit</span></div>
+      <div class="row"><div class="tg on"></div>
+        <div class="grow"><div><b>Instagram</b><span class="arrow">→</span>zzinstagram.com</div>
+          <div><span class="chip"><i class="ap tgm"></i>Telegram</span></div></div>
+        <span class="btn">Choose apps…</span><span class="btn">Edit</span></div>
+      <div class="row"><div class="tg"></div>
+        <div class="grow"><div style="color:var(--sub)"><b>TikTok</b><span class="arrow">→</span>vxtiktok.com <span class="sub">· added by you</span></div>
+          <div class="sub">No app chosen yet. Off until you pick one.</div></div>
+        <span class="btn">Choose apps…</span><span class="btn">Edit</span></div>
+      <div class="row"><span class="btn">＋ Add preview link</span><span class="grow"></span><span class="sub">Built-ins: Reset any row from Edit</span></div>
+    </div>
+
+    <div class="hd">Try a link</div>
+    <div class="grp">
+      <div class="row"><div class="field grow mono">https://x.com/jack/status/20?s=46&amp;t=Hk3o9…</div><span class="sub">Paste in</span><span class="popup"><i class="ap tgm"></i>Telegram ⌄</span></div>
+      <div class="res" style="border-top:.5px solid var(--line)">
+        <span class="k">You copied</span><span class="v mono">https://x.com/jack/status/20<del>?s=46&amp;t=Hk3o9…</del></span>
+        <span class="k">Everywhere</span><span class="v mono">https://x.com/jack/status/20</span>
+        <span class="k">In Telegram</span><span class="v mono">https://<mark>fxtwitter.com</mark>/jack/status/20</span>
+        <span class="why"><span>X share tags: s, t</span><span class="b">X → fxtwitter.com</span></span>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<div class="cap"><b>3 · Edit preview link</b> (sheet): which sites, which mirror, which apps. A clash is flagged per app, not globally.</div>
+<div class="mac"><div class="sheet">
+  <div class="hd" style="font-size:15px;margin-bottom:14px">Edit preview link</div>
+  <div class="row" style="padding:5px 0"><span class="lbl">Links from</span><div class="grow"><span class="chip p">x.com</span><span class="chip p">twitter.com</span><span class="chip p">mobile.x.com</span><span class="chip p">www.x.com</span> <span class="btn">＋</span></div></div>
+  <div class="row" style="padding:5px 0"><span class="lbl">Become</span><div class="field grow mono">https://fxtwitter.com/…</div></div>
+  <div class="row" style="padding:5px 0;align-items:flex-start"><span class="lbl" style="padding-top:2px">In these apps</span>
+    <div class="grow">
+      <div class="row" style="padding:3px 0"><span class="cb on"></span><i class="ap tgm"></i>Telegram <span class="sub">(all 3 versions)</span></div>
+      <div class="row" style="padding:3px 0;border:0"><span class="cb on"></span><i class="ap dsc"></i>Discord</div>
+      <div class="row" style="padding:3px 0;border:0"><span class="cb"></span><i class="ap wa"></i>WhatsApp <span class="chip sug">suggested</span></div>
+      <div class="row" style="padding:3px 0;border:0"><span class="cb"></span><i class="ap sl"></i>Slack <span class="chip sug">suggested</span> <span class="warn">⚠︎ Slack already uses vxtwitter.com for x.com</span></div>
+      <div style="margin-top:4px"><span class="btn">Choose another app…</span></div>
+    </div></div>
+  <div style="display:flex;gap:8px;margin-top:14px"><span class="btn">Reset to built-in</span><span class="grow" style="flex:1"></span><span class="btn">Cancel</span><span class="btn pri">Save</span></div>
+</div></div>
+
+<div class="cap"><b>4 · Settings › Trackers</b>: what gets removed, per site, readable; exceptions at the bottom</div>
+<div class="mac"><div class="win">
+  <div class="tb"><div class="lights"><i></i><i></i><i></i></div>
+    <div class="tabs"><div class="tab"><span class="ic">⚙️</span>General</div><div class="tab on"><span class="ic">🧹</span>Trackers</div><div class="tab"><span class="ic">🔗</span>Preview links</div></div></div>
+  <div class="body">
+    <div class="row" style="padding:0 0 12px"><div class="field grow" style="color:var(--sub)">🔍 Search a site or a tracker</div><span class="btn">Try a link…</span></div>
+    <div class="grp">
+      <div class="row"><div class="tg on"></div><div class="grow"><b>All websites</b><div class="sub">Ad-click and newsletter IDs, removed from every link</div>
+        <div><span class="chip p">utm_*</span><span class="chip p">fbclid</span><span class="chip p">gclid</span><span class="chip p">msclkid</span><span class="chip p">igsh</span><span class="chip p">mc_cid</span><span class="chip p">aff_*</span><span class="sub">+17 more</span></div></div><span class="chev">⌄</span></div>
+      <div class="row"><div class="tg on"></div><div class="grow"><b>YouTube</b> <span class="sub">· share and channel tags</span>
+        <div><span class="chip p">si</span><span class="chip p">feature</span><span class="chip p">pp</span><span class="chip p">ab_channel</span> <span class="sub">Timestamps and playlists are kept</span></div></div><span class="chev">⌄</span></div>
+      <div class="row"><div class="tg on"></div><div class="grow"><b>Amazon</b> <span class="sub">· affiliate tags</span>
+        <div><span class="chip p">tag</span><span class="chip p">ref</span><span class="chip p">linkCode</span><span class="chip p">pd_rd_*</span><span class="sub">+12 more</span></div>
+        <div class="row" style="padding:6px 0 0;border:0"><div class="tg on" style="transform:scale(.8)"></div><span>Remove referral path <span class="mono sub">/ref=…</span></span></div></div><span class="chev">⌄</span></div>
+      <div class="row"><div class="tg on"></div><div class="grow"><b>X</b> <span class="sub">· share tags</span> <span class="chip p">s</span><span class="chip p">t</span><span class="chip p">ref_src</span></div><span class="chev">›</span></div>
+      <div class="row"><div class="tg on"></div><div class="grow"><b>Instagram</b> <span class="sub">· share tags</span> <span class="chip p">igsh</span><span class="chip p">exln</span><span class="sub">+2</span></div><span class="chev">›</span></div>
+      <div class="row"><div class="tg on"></div><div class="grow"><b>TikTok, Spotify, AliExpress, Facebook, LinkedIn, Reddit</b> <span class="sub">· 6 more sites</span></div><span class="chev">›</span></div>
+      <div class="row"><span class="btn">＋ Add tracker</span><span class="grow"></span><span class="sub">Edited rules show a dot · <u>Restore all defaults</u></span></div>
+    </div>
+    <div class="hd">Never clean links from</div>
+    <div class="grp">
+      <div class="row"><div class="grow mono">intranet.mycompany.com</div><span class="sub">+ subdomains</span><span class="btn">Remove</span></div>
+      <div class="row"><span class="btn">＋ Add website</span></div>
+    </div>
+    <div class="hint" style="margin-bottom:0">Links from these sites are left exactly as copied. Preview links are set separately.</div>
+  </div>
+</div></div>
+
+<div class="cap"><b>5 · Settings › General</b>: you decide where it shows up</div>
+<div class="mac"><div class="win">
+  <div class="tb"><div class="lights"><i></i><i></i><i></i></div>
+    <div class="tabs"><div class="tab on"><span class="ic">⚙️</span>General</div><div class="tab"><span class="ic">🧹</span>Trackers</div><div class="tab"><span class="ic">🔗</span>Preview links</div></div></div>
+  <div class="body">
+    <div class="grp"><div class="row"><span class="grow"><b>Clean links automatically</b><div class="sub">Same as Pause in the menu</div></span><div class="tg on"></div></div></div>
+    <div class="hd">Where fxclip shows up</div>
+    <div class="grp">
+      <div class="row"><span class="grow">Icon in the menu bar</span><div class="tg on"></div></div>
+      <div class="row"><span class="grow">Icon in the Dock</span><div class="tg"></div></div>
+      <div class="row"><span class="grow">Flash when a link is cleaned<div class="sub">A small tick near the menu bar, never the link itself</div></span><div class="tg"></div></div>
+      <div class="row"><span class="grow">Open at login</span><div class="tg on"></div></div>
+    </div>
+    <div class="hint" style="margin-top:-10px">Both icons hidden? Open fxclip again from Spotlight to come back here.</div>
+    <div class="hd">Updates</div>
+    <div class="grp"><div class="row"><span class="grow">Check for updates automatically</span><div class="tg on"></div></div></div>
+    <div class="hd">Your rules</div>
+    <div class="grp"><div class="row"><span class="btn">Export…</span><span class="btn">Import…</span><span class="grow"></span><span class="btn">Reset everything…</span></div></div>
+    <div class="hd">Privacy</div>
+    <div class="grp"><div class="row"><span class="grow sub">Links are cleaned on this Mac. Nothing is stored or sent. Mirrors like fxtwitter.com only see a link when someone opens it.</span></div>
+      <div class="row"><span class="grow">1 284 trackers removed</span><span class="btn">Reset counter</span></div></div>
+  </div>
+</div></div>
+
+<div class="cap"><b>6 · First run, step 2 of 3</b>: previews are opt-in, Telegram preselected</div>
+<div class="mac"><div class="win" style="max-width:520px">
+  <div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="title">Welcome to fxclip</div></div>
+  <div class="body">
+    <div class="steps"><i></i><i class="on"></i><i></i></div>
+    <p class="big">Better previews in your chats</p>
+    <p class="lead">X and Instagram links often show no preview in chat apps. fxclip can swap them for a mirror while you paste, then put the clean link back.</p>
+    <div class="grp"><div class="res">
+      <span class="k">You copy</span><span class="v mono">https://x.com/jack/status/20</span>
+      <span class="k">In Telegram</span><span class="v mono">https://<mark>fxtwitter.com</mark>/jack/status/20</span>
+      <span class="k">Anywhere else</span><span class="v mono">https://x.com/jack/status/20</span>
+    </div></div>
+    <div class="hd">Do it in</div>
+    <div class="grp">
+      <div class="row"><span class="cb on"></span><i class="ap tgm"></i><span class="grow">Telegram</span></div>
+      <div class="row"><span class="cb"></span><i class="ap dsc"></i><span class="grow">Discord</span></div>
+      <div class="row"><span class="cb"></span><i class="ap wa"></i><span class="grow">WhatsApp</span></div>
+    </div>
+    <div class="hint">fxtwitter.com and zzinstagram.com are run by third parties. They see a link only when someone opens it.</div>
+    <div style="display:flex;gap:8px"><span class="btn">Back</span><span style="flex:1"></span><span class="btn">Not now</span><span class="btn pri">Continue</span></div>
+  </div>
+</div></div>
+
+</body></html>
