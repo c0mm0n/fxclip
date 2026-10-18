@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 binary=$(realpath "$1")
+# Both the daemon and test clients use the release tools, never distro versions.
+export PATH="$(dirname "$binary")/libexec:$PATH"
+test "$(wl-paste --version | sed -n "1p")" = 'wl-clipboard 2.3.0'
 work=$(mktemp -d)
 export XDG_RUNTIME_DIR="$work/runtime"
 export XDG_CONFIG_HOME="$work/config"
@@ -30,7 +33,7 @@ output * mode 1280x720
 seat seat0 fallback true
 focus_follows_mouse no
 CONFIG
-sway --unsupported-gpu -c "$work/sway.conf" >"$work/sway.log" 2>&1 &
+env LD_PRELOAD="${FXCLIP_E2E_SWAY_PRELOAD:-}" sway --unsupported-gpu -c "$work/sway.conf" >"$work/sway.log" 2>&1 &
 sway_pid=$!
 for _ in {1..100}; do
     socket=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'sway-ipc.*.sock' -print -quit)
@@ -42,8 +45,27 @@ for _ in {1..100}; do
     sleep 0.1
 done
 : "${SWAYSOCK:?Sway did not start}"
+if [[ "${FXCLIP_E2E_EXT_ONLY:-0}" == 1 ]]; then
+    wayland-info >"$work/globals.log"
+    grep -q "interface: 'ext_data_control_manager_v1'" "$work/globals.log"
+    if grep -q "interface: 'zwlr_data_control_manager_v1'" "$work/globals.log"; then
+        echo 'wlr-data-control must be hidden for the ext-only regression test' >&2
+        exit 1
+    fi
+    legacy=${FXCLIP_E2E_LEGACY_WL_PASTE:?Legacy wl-paste required}
+    test "$("$legacy" --version | sed -n "1p")" = 'wl-clipboard 2.2.1'
+    status=0
+    timeout 2 "$legacy" --watch true >"$work/legacy.log" 2>&1 || status=$?
+    test "$status" -eq 1
+    grep -q 'Watch mode requires.*data-control protocol' "$work/legacy.log"
+    cp "$binary" "$work/legacy-fxclip"
+    PATH="$(dirname "$legacy"):$PATH" "$work/legacy-fxclip" check >"$work/legacy-check.log"
+    grep -q 'needs wl-clipboard 2.3.0 or later' "$work/legacy-check.log"
+    printf '%s\n' 'Ext-only globals verified: ext advertised, wlr absent; wl-paste 2.2.1 watch rejected.'
+fi
 "$binary" check | tee "$work/check.log"
 grep -q 'Data-control: available' "$work/check.log"
+grep -q 'libexec/wl-paste (wl-clipboard 2.3.0)' "$work/check.log"
 # A missing KDE adapter is actionable in check, including under systemd sessions.
 env -u SWAYSOCK XDG_CURRENT_DESKTOP=KDE XDG_SESSION_DESKTOP=KDE "$binary" check >"$work/kde-check.log"
 grep -q 'Focus adapter error: kdotool .*failed' "$work/kde-check.log"

@@ -13,7 +13,24 @@ public struct CommandResult {
 }
 
 public enum Commands {
-    public static func find(_ name: String, environment: [String: String] = ProcessInfo.processInfo.environment) -> String? {
+    public static func find(_ name: String, environment: [String: String] = ProcessInfo.processInfo.environment,
+                            executableURL: URL? = Bundle.main.executableURL) -> String? {
+        if name.contains("/") {
+            return FileManager.default.isExecutableFile(atPath: name) ? name : nil
+        }
+        if name == "wl-copy" || name == "wl-paste" {
+            var directories: [URL] = []
+            if let executableURL {
+                directories.append(executableURL.resolvingSymlinksInPath().deletingLastPathComponent().appendingPathComponent("libexec"))
+            }
+            if let home = environment["HOME"] {
+                directories.append(URL(fileURLWithPath: home).appendingPathComponent(".local/lib/fxclip"))
+            }
+            for directory in directories {
+                let path = directory.appendingPathComponent(name).path
+                if FileManager.default.isExecutableFile(atPath: path) { return path }
+            }
+        }
         for dir in (environment["PATH"] ?? "/usr/local/bin:/usr/bin:/bin").split(separator: ":") {
             let path = String(dir) + "/" + name
             if FileManager.default.isExecutableFile(atPath: path) { return path }

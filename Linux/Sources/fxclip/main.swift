@@ -35,8 +35,25 @@ func run() throws {
     let focus = Focus(desktop: desktop)
     if args == ["check"] {
         print("Compositor: \(desktop.rawValue)")
-        print("wl-clipboard: \(tools ? "present" : "missing (install wl-clipboard)")")
+        for name in ["wl-paste", "wl-copy"] {
+            if let path = Commands.find(name) {
+                let version = Commands.run(path, ["--version"]).text.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+                print("\(name): \(path) (\(version.isEmpty ? "version unavailable" : version))")
+            } else {
+                print("\(name): missing (reinstall the fxclip tarball or install wl-clipboard)")
+            }
+        }
         print("Data-control: \(available ? "available" : "unavailable")")
+        if tools && wayland && !available {
+            let version = Commands.run("wl-paste", ["--version"]).text
+            let info = Commands.find("wayland-info").map { Commands.run($0) }
+            let globals = info.flatMap { $0.status == 0 ? $0.text : nil }
+            if let globals {
+                let protocols = ClipboardDiagnostics.advertisedProtocols(globals)
+                print("Advertised data-control: \(protocols.isEmpty ? "none" : protocols.joined(separator: ", "))")
+            }
+            print(ClipboardDiagnostics.failure(version: version, waylandInfo: globals))
+        }
         let app = focus.current()
         print("Focused app: \(app ?? "unavailable (previews disabled)")")
         if let error = focus.lastError { print("Focus adapter error: \(error)") }
@@ -45,7 +62,7 @@ func run() throws {
         return
     }
     guard desktop != .gnome else { throw Failure("GNOME Wayland does not support background clipboard access (data-control). Use Sway, Hyprland or KDE Plasma.") }
-    guard tools else { throw Failure("Install wl-clipboard (wl-copy and wl-paste) first.") }
+    guard tools else { throw Failure("Reinstall the fxclip Linux tarball, or install wl-clipboard (wl-copy and wl-paste).") }
     guard wayland else { throw Failure("A Wayland session is required (WAYLAND_DISPLAY is unset).") }
     guard available else { throw Failure("Wayland data-control is unavailable. Background clipboard access requires Sway/wlroots, Hyprland or KDE Plasma.") }
     if desktop == .unknown { log("Unknown compositor: cleaning enabled; previews disabled.") }

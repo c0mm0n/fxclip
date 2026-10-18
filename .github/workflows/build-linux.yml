@@ -24,6 +24,11 @@ jobs:
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.1.2"
+      - name: Build bundled wl-clipboard 2.3.0 with ext-data-control
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build libwayland-dev pkg-config curl xz-utils
+          bash Linux/scripts/build-wl-clipboard.sh "$PWD/package/libexec"
       - name: Test shared engine on Linux Foundation
         run: swift test --package-path Engine
       - name: Bake version and build static Swift runtime
@@ -37,7 +42,7 @@ jobs:
           Path('Linux/Sources/fxclip/Version.swift').write_text('enum Version { static let value = ' + json.dumps(version) + ' }\n')
           PY
           swift build --package-path Linux -c release --static-swift-stdlib -Xswiftc -gnone -Xswiftc -debug-prefix-map -Xswiftc "$PWD=."
-          mkdir package
+          mkdir -p package
           cp Linux/.build/release/fxclip package/
           strip package/fxclip
           python3 Linux/scripts/sanitize-runtime-paths.py package/fxclip
@@ -61,6 +66,7 @@ jobs:
           test "$(package/fxclip clean 'https://x.com/example/status/123?utm_source=test' --app ORG.TELEGRAM.DESKTOP)" = 'https://fxtwitter.com/example/status/123'
           if XDG_CURRENT_DESKTOP=GNOME package/fxclip 2>gnome.log; then exit 1; fi
           grep -q 'GNOME Wayland does not support' gnome.log
+          bash Linux/scripts/test-install.sh "$PWD/package"
           sh -n Linux/dist/install.sh
           bash -n Linux/scripts/e2e.sh
           unit_dir=$(mktemp -d)
@@ -69,7 +75,7 @@ jobs:
       - name: Install headless Wayland tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y sway wl-clipboard foot dbus-x11 jq fonts-dejavu-core
+          sudo apt-get install -y sway foot dbus-x11 jq fonts-dejavu-core
       - name: End-to-end under headless Sway
         run: dbus-run-session -- bash Linux/scripts/e2e.sh "$PWD/package/fxclip"
       - name: Package Linux release
@@ -80,8 +86,12 @@ jobs:
           tar xzf fxclip-linux-x86_64.tar.gz -C "$archive_dir"
           test "$(find "$archive_dir" -mindepth 1 -maxdepth 1 -printf '%f\n')" = fxclip-linux-x86_64
           cd "$archive_dir/fxclip-linux-x86_64"
-          for file in fxclip fxclip.rules.json fxclip.service install.sh README.md; do test -f "$file"; done
-          test "$(find . -type f | wc -l)" -eq 5
+          for file in fxclip fxclip.rules.json fxclip.service install.sh README.md libexec/wl-copy libexec/wl-paste libexec/LICENSE.wl-clipboard libexec/wl-clipboard-source.tar.gz; do test -f "$file"; done
+          test "$(find . -type f | wc -l)" -eq 9
+          for tool in wl-copy wl-paste; do
+            test -x "libexec/$tool"
+            test "$("libexec/$tool" --version | sed -n "1p")" = "wl-clipboard 2.3.0"
+          done
           test -x ./install.sh
           test "$(./fxclip --version)" = "fxclip $VERSION"
       - uses: actions/upload-artifact@v4
@@ -89,3 +99,31 @@ jobs:
           name: release-linux
           path: fxclip-linux-x86_64.tar.gz
           if-no-files-found: error
+
+  ext-data-control:
+    needs: linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-linux
+      - name: Exercise ext-only Sway 1.11 on Fedora 43
+        run: |
+          tar xzf fxclip-linux-x86_64.tar.gz
+          docker run --rm -v "$PWD:/src" -w /src fedora:43 bash -euxo pipefail -c '
+            dnf install -y --setopt=install_weak_deps=False sway foot wayland-utils jq dejavu-sans-mono-fonts dbus-daemon gcc wayland-devel wayland-protocols-devel meson ninja-build git diffutils procps-ng findutils which util-linux
+            # Fedora gives sway CAP_SYS_NICE; remove it for unprivileged headless
+            # Docker and to allow the test-only LD_PRELOAD global filter.
+            setcap -r /usr/bin/sway
+            sway --version
+            rpm -q wlroots
+            gcc -shared -fPIC Linux/scripts/ext-only-globals.c -o /tmp/ext-only-globals.so $(pkg-config --cflags --libs wayland-server) -ldl
+            git clone --depth 1 --branch v2.2.1 https://github.com/bugaevc/wl-clipboard /tmp/wl-clipboard-2.2.1
+            meson setup /tmp/legacy-build /tmp/wl-clipboard-2.2.1 --buildtype=release
+            ninja -C /tmp/legacy-build
+            useradd -m e2e
+            chmod -R a+rX fxclip-linux-x86_64
+            runuser -u e2e -- env FXCLIP_E2E_EXT_ONLY=1 FXCLIP_E2E_SWAY_PRELOAD=/tmp/ext-only-globals.so FXCLIP_E2E_LEGACY_WL_PASTE=/tmp/legacy-build/src/wl-paste dbus-run-session -- bash Linux/scripts/e2e.sh /src/fxclip-linux-x86_64/fxclip
+          '
