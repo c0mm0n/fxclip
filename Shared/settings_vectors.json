@@ -211,6 +211,39 @@
           "output": "https://x.com/a"
         }
       ]
+    },
+    {
+      "name": "edge cases (byte-exact with the Swift engine)",
+      "settings": {
+        "neverClean": [
+          {
+            "host": "bücher.example",
+            "subdomains": false
+          }
+        ]
+      },
+      "cases": [
+        {
+          "input": "https://xn--bcher-kva.example/?utm_source=x",
+          "app": null,
+          "output": "https://xn--bcher-kva.example/?utm_source=x"
+        },
+        {
+          "input": "https://bücher.example/?utm_source=x",
+          "app": null,
+          "output": "https://bücher.example/?utm_source=x"
+        },
+        {
+          "input": "https://amazon.com/dp/A/ref=x?#f",
+          "app": null,
+          "output": "https://amazon.com/dp/A?#f"
+        },
+        {
+          "input": "https://amazon.com/dp/A/ref=x?tag=1#f",
+          "app": null,
+          "output": "https://amazon.com/dp/A#f"
+        }
+      ]
     }
   ]
 }
