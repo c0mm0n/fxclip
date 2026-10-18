@@ -6,6 +6,8 @@ StartLimitBurst=3
 
 [Service]
 Type=simple
+# Keep the wl-copy selection owner alive after restoring on shutdown.
+KillMode=process
 ExecStart=%h/.local/bin/fxclip
 Restart=on-failure
 RestartSec=3

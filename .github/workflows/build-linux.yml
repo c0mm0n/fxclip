@@ -73,7 +73,7 @@ jobs:
       - name: End-to-end under headless Sway
         run: dbus-run-session -- bash Linux/scripts/e2e.sh "$PWD/package/fxclip"
       - name: Package Linux release
-        run: tar -C package -czf fxclip-linux-x86_64.tar.gz fxclip fxclip.rules.json fxclip.service install.sh README.md
+        run: tar --owner=0 --group=0 --numeric-owner -C package -czf fxclip-linux-x86_64.tar.gz fxclip fxclip.rules.json fxclip.service install.sh README.md
       - uses: actions/upload-artifact@v4
         with:
           name: release-linux

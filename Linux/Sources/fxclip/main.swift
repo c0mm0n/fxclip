@@ -51,7 +51,11 @@ func run() throws {
     if desktop == .hyprland && Commands.find("hyprctl") == nil { log("hyprctl is missing; previews disabled, cleaning is enabled.") }
     let settings = Settings(rules: try rules())
     let clipboard = WaylandClipboard(), controller = ClipboardController()
+    var updating = false
     let tick = {
+        guard !updating else { return }
+        updating = true
+        defer { updating = false }
         settings.reload()
         controller.tick(engine: settings.engine, app: focus.current(), read: clipboard.read, write: clipboard.write)
     }
