@@ -73,7 +73,17 @@ jobs:
       - name: End-to-end under headless Sway
         run: dbus-run-session -- bash Linux/scripts/e2e.sh "$PWD/package/fxclip"
       - name: Package Linux release
-        run: tar --owner=0 --group=0 --numeric-owner -C package -czf fxclip-linux-x86_64.tar.gz fxclip fxclip.rules.json fxclip.service install.sh README.md
+        run: |
+          mv package fxclip-linux-x86_64
+          tar --owner=0 --group=0 --numeric-owner -czf fxclip-linux-x86_64.tar.gz fxclip-linux-x86_64
+          archive_dir=$(mktemp -d)
+          tar xzf fxclip-linux-x86_64.tar.gz -C "$archive_dir"
+          test "$(find "$archive_dir" -mindepth 1 -maxdepth 1 -printf '%f\n')" = fxclip-linux-x86_64
+          cd "$archive_dir/fxclip-linux-x86_64"
+          for file in fxclip fxclip.rules.json fxclip.service install.sh README.md; do test -f "$file"; done
+          test "$(find . -type f | wc -l)" -eq 5
+          test -x ./install.sh
+          test "$(./fxclip --version)" = "fxclip $VERSION"
       - uses: actions/upload-artifact@v4
         with:
           name: release-linux

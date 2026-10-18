@@ -37,7 +37,9 @@ func run() throws {
         print("Compositor: \(desktop.rawValue)")
         print("wl-clipboard: \(tools ? "present" : "missing (install wl-clipboard)")")
         print("Data-control: \(available ? "available" : "unavailable")")
-        print("Focused app: \(focus.current() ?? "unavailable (previews disabled)")")
+        let app = focus.current()
+        print("Focused app: \(app ?? "unavailable (previews disabled)")")
+        if let error = focus.lastError { print("Focus adapter error: \(error)") }
         print("Config: \(Settings.configURL().path)")
         if desktop == .gnome { print("GNOME Wayland does not support background clipboard access; use Sway, Hyprland or KDE Plasma.") }
         return
@@ -57,7 +59,10 @@ func run() throws {
         updating = true
         defer { updating = false }
         settings.reload()
-        controller.tick(engine: settings.engine, app: focus.current(), read: clipboard.read, write: clipboard.write)
+        let app = focus.current()
+        controller.tick(engine: settings.engine, app: app, read: clipboard.read, write: { text, expected in
+            clipboard.write(text, replacing: expected, stillValid: { focus.current() == app })
+        })
     }
     // Ignore SIGPIPE if a clipboard owner exits while a pipe is being read/written.
     signal(SIGPIPE, SIG_IGN)
@@ -65,7 +70,9 @@ func run() throws {
     let term = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
     let interrupt = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
     let quit = {
-        controller.tick(engine: settings.engine, app: nil, read: clipboard.read, write: clipboard.write)
+        controller.tick(engine: settings.engine, app: nil, read: clipboard.read, write: { text, expected in
+            clipboard.write(text, replacing: expected)
+        })
         // wl-copy must outlive us to keep the restored selection available.
         focus.stop()
         exit(0)

@@ -44,6 +44,9 @@ done
 : "${SWAYSOCK:?Sway did not start}"
 "$binary" check | tee "$work/check.log"
 grep -q 'Data-control: available' "$work/check.log"
+# A missing KDE adapter is actionable in check, including under systemd sessions.
+env -u SWAYSOCK XDG_CURRENT_DESKTOP=KDE XDG_SESSION_DESKTOP=KDE "$binary" check >"$work/kde-check.log"
+grep -q 'Focus adapter error: kdotool .*failed' "$work/kde-check.log"
 "$binary" >"$work/daemon.log" 2>&1 &
 daemon_pid=$!
 
@@ -101,8 +104,12 @@ assert_clipboard 'https://zzinstagram.com/p/123/'
 printf '%s' '{"previews":{"instagram":{"enabled":false,"apps":[]}}}' >"$XDG_CONFIG_HOME/fxclip/settings.json"
 assert_clipboard 'https://instagram.com/p/123/'
 printf '%s' 'invalid JSON' >"$XDG_CONFIG_HOME/fxclip/settings.json"
+sleep 0.7
+assert_clipboard 'https://instagram.com/p/123/'
+test "$(cat "$XDG_CONFIG_HOME/fxclip/settings.json")" = 'invalid JSON'
+test ! -e "$XDG_CONFIG_HOME/fxclip/settings.unreadable.json"
+printf '%s' '{}' >"$XDG_CONFIG_HOME/fxclip/settings.json"
 assert_clipboard 'https://zzinstagram.com/p/123/'
-test -f "$XDG_CONFIG_HOME/fxclip/settings.unreadable.json"
 # SIGTERM restores the clean selection, whose wl-copy owner must outlive fxclip.
 kill -TERM "$daemon_pid"
 wait "$daemon_pid"

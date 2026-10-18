@@ -31,7 +31,7 @@ public final class ClipboardController {
     public init() {}
 
     public func tick(engine: Engine, app: String?,
-                     read: () -> ClipboardSnapshot?, write: (String) -> Bool) {
+                     read: () -> ClipboardSnapshot?, write: (String, ClipboardSnapshot) -> Bool) {
         guard let current = read(), current.eligible else { reset(); return }
         if current != seen {
             // wl-copy offers plain text under several compatible MIME aliases.
@@ -48,7 +48,7 @@ public final class ClipboardController {
         guard desired != current.text else { return }
         // A fresh type + text read protects newer copies, including images/files.
         guard read() == current else { reset(); return }
-        if write(desired) { ownWrite = desired } else { reset() }
+        if write(desired, current) { ownWrite = desired } else { reset() }
     }
 
     private func reset() { seen = nil; original = nil; ownWrite = nil }

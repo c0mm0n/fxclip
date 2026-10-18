@@ -31,7 +31,7 @@ install -m 644 "$source_dir/fxclip.rules.json" "$bin_dir/fxclip.rules.json"
 install -m 644 "$source_dir/fxclip.service" "$unit_dir/fxclip.service"
 systemctl --user daemon-reload
 # Run from a terminal in the graphical session, whose focus sockets the daemon needs.
-for variable in WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP HYPRLAND_INSTANCE_SIGNATURE SWAYSOCK XDG_RUNTIME_DIR PATH XDG_CONFIG_HOME; do
+for variable in WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP HYPRLAND_INSTANCE_SIGNATURE SWAYSOCK KDE_SESSION_VERSION KDE_FULL_SESSION DISPLAY XDG_RUNTIME_DIR PATH XDG_CONFIG_HOME; do
     if printenv "$variable" >/dev/null 2>&1; then
         systemctl --user import-environment "$variable"
     fi
