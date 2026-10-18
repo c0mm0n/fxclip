@@ -7,11 +7,13 @@ Each version ships on its own. The sections below describe the full product; any
 
 - **v1.0, ship what's useful:**
   - Today's engine and menu bar app (done), plus per-app preview links.
-  - Settings with 3 tabs, toggles only:
+  - Settings window with a sidebar (replaced the 3 tabs, 2026-10-18), toggles only:
+    - Overview: status, Pause / Skip next copy, counters, preview links in use.
     - Preview links: on/off and apps per rewrite.
-    - Trackers: on/off per site, plus "Never clean links from".
-    - General: menu bar, Dock, Open at login.
-  - One first-run screen. Notarized DMG with Sparkle updates.
+    - Trackers: on/off per site. Never clean: websites left untouched.
+    - Settings: menu bar, Dock, Open at login.
+  - One first-run screen.
+  - Distribution: ad-hoc signed DMG on GitHub Releases, built by CI from a tag (done). Notarization and Sparkle updates wait for the signing identity.
 - **v1.1, copy extras:** remove "mailto:", force HTTPS, Songlink, "Copy without any parameters", "Expand short link".
 - **v1.2, more coverage:** the ClearURLs catalog plus offline redirect unwrapping.
 - **v1.3, power users:** the link tester, the "cleaned" flash, editing and adding rules, import/export.
