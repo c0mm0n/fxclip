@@ -63,6 +63,7 @@ public class VectorTests
     [InlineData("https://example.com/?q=a+b%2Bc==&utm_source=x#Keep%20This", "https://example.com/?q=a+b%2Bc==#Keep%20This", 1)]
     [InlineData("https://example.com/?utm_%FF=x&fbclid=a", "https://example.com/", 2)]
     [InlineData("https://amazon.com/dp/A/ref=x?tag=z", "https://amazon.com/dp/A", 2)]
+    [InlineData("https://amazon.com/dp/A/ref=x?#f", "https://amazon.com/dp/A?#f", 1)]
     public void RawBytesAndCounts(string input, string expected, int count)
     {
         var result = new Cleaner(Rules.BuiltIn()).Clean(input);

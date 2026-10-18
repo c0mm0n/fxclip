@@ -17,21 +17,20 @@ internal sealed class ClipboardService : IDisposable
     private readonly SettingsStore store;
     private uint? seen;
     private Clip? clip;
+    private PendingRestoration? restoration;
     private int attempts;
     private bool busy;
     private bool paused;
     private bool skipNext;
-    private sealed record Clip(uint Sequence, string Text, string Clean);
+    private sealed record Clip(uint Sequence, string Text, string Clean, ClipboardPrivacy Privacy, bool Owned = false);
     public Cleaner Engine { get; set; }
     public event Action? Changed;
     public bool Paused => paused;
     public bool SkipNext => skipNext;
     public DateTime? LastClean { get; private set; }
     public string Status { get; private set; } = "Cleaning links";
-    private static readonly uint[] PrivateFormats = [
-        Native.RegisterClipboardFormat("ExcludeClipboardContentFromMonitorProcessing"),
-        Native.RegisterClipboardFormat("CanIncludeInClipboardHistory"),
-        Native.RegisterClipboardFormat("CanUploadToCloudClipboard")];
+    private static readonly Dictionary<string, uint> PrivateFormats = new[] { ClipboardPolicy.Exclude, ClipboardPolicy.History, ClipboardPolicy.Cloud }
+        .ToDictionary(name => name, Native.RegisterClipboardFormat);
 
     public ClipboardService(SettingsStore store)
     {
@@ -54,11 +53,7 @@ internal sealed class ClipboardService : IDisposable
         return 0;
     }
 
-    public void Request()
-    {
-        attempts = 0;
-        Tick();
-    }
+    public void Request() { attempts = 0; Tick(); }
     public void TogglePause()
     {
         paused = !paused;
@@ -77,8 +72,13 @@ internal sealed class ClipboardService : IDisposable
         var success = false;
         try { success = InspectAndApply(); }
         finally { busy = false; }
-        if (!success && ++attempts < 10) retry.Start();
-        else if (!success) { Status = "Clipboard busy · waiting for the next copy"; Changed?.Invoke(); }
+        if (restoration is not null)
+        {
+            retry.Interval = restoration.Delay(DateTimeOffset.UtcNow);
+            retry.Start();
+        }
+        else if (!success && ++attempts < 10) { retry.Interval = TimeSpan.FromMilliseconds(30); retry.Start(); }
+        else if (!success) { Status = paused ? "Paused" : "Clipboard busy · waiting for the next copy"; Changed?.Invoke(); }
     }
 
     private bool InspectAndApply()
@@ -87,105 +87,171 @@ internal sealed class ClipboardService : IDisposable
         try
         {
             var sequence = Native.GetClipboardSequenceNumber();
+            // CloseClipboard can synthesize formats and advance the sequence after our write.
+            // On the following notification, owner + exact text recognise that closed write.
+            var ownWrite = false;
+            if (clip is { Owned: true } current && Native.GetClipboardOwner() == window.Handle)
+            {
+                if (!TryReadText(out var actual)) return false;
+                ownWrite = ClipboardPolicy.IsOwnWrite(window.Handle, Native.GetClipboardOwner(), current.Text, actual);
+                if (ownWrite)
+                {
+                    sequence = Native.GetClipboardSequenceNumber();
+                    clip = current with { Sequence = sequence };
+                    seen = sequence;
+                }
+            }
+            if (restoration?.SupersededBy(sequence, ownWrite) == true) restoration = null;
+            if (restoration is not null) restoration = restoration with { Sequence = sequence };
             if (sequence != seen)
             {
                 clip = null;
                 if (paused) { seen = sequence; return true; }
                 if (skipNext) { seen = sequence; skipNext = false; Changed?.Invoke(); return true; }
-                if (!CanRead(out var rich)) { seen = sequence; return true; }
-                var data = Native.GetClipboardData(13);
-                if (data == 0) return false;
-                var memory = Native.GlobalLock(data);
-                if (memory == 0) return false;
-                string text;
-                try
-                {
-                    var size = Native.GlobalSize(data);
-                    if (size > 32 * 1024 * 1024) { seen = sequence; return true; }
-                    text = Marshal.PtrToStringUni(memory, checked((int)size / 2))!.Split('\0')[0];
-                }
-                finally { Native.GlobalUnlock(data); }
+                // Policy is checked before GetClipboardData: excluded sources are never read.
+                var policy = ClipboardPolicy.Read(Formats());
+                if (!policy.Allowed) { seen = sequence; return true; }
+                if (!TryReadPrivacy(out var privacy)) return false;
+                if (!TryReadText(out var text)) return false;
                 if (sequence != Native.GetClipboardSequenceNumber()) return false;
                 seen = sequence;
-                if (rich && !Cleaner.IsBareUrl(text)) return true;
+                if (text is null || (policy.BareUrlOnly && !Cleaner.IsBareUrl(text))) return true;
                 var result = Engine.Clean(text);
-                clip = new(sequence, text, result.Text);
+                clip = new(sequence, text, result.Text, privacy);
                 if (result.Removed > 0)
                 {
                     store.Record(result.Removed);
                     LastClean = DateTime.Now;
                 }
             }
-            if (!paused) ApplyLocked(ForegroundExe());
+            var success = true;
+            if (restoration is not null)
+            {
+                success = ApplyLocked(null);
+                if (clip is null || clip.Text == clip.Clean) restoration = null;
+            }
+            else if (!paused) success = ApplyLocked(ForegroundExe());
             Status = paused ? "Paused" : "Cleaning links";
             Changed?.Invoke();
-            return true;
+            return success;
         }
         finally { Native.CloseClipboard(); }
     }
 
-    private static bool CanRead(out bool rich)
+    private static ClipboardFormat[] Formats()
     {
-        rich = false;
-        if (!Native.IsClipboardFormatAvailable(13)) return false;
-        // Conservative whitelist: never flatten files, images, objects or unknown payloads.
+        var formats = new List<ClipboardFormat>();
         for (uint format = Native.EnumClipboardFormats(0); format != 0; format = Native.EnumClipboardFormats(format))
         {
-            if (format is 1 or 7 or 13 or 16 || PrivateFormats.Contains(format)) continue;
             var name = new StringBuilder(256);
             Native.GetClipboardFormatName(format, name, name.Capacity);
-            if (name.ToString() is "HTML Format" or "Rich Text Format" or "Rich Text Format Without Objects") { rich = true; continue; }
-            return false;
+            formats.Add(new(format, name.ToString()));
         }
+        return formats.ToArray();
+    }
+
+    private static bool TryReadText(out string? text)
+    {
+        text = null;
+        var data = Native.GetClipboardData(13);
+        if (data == 0) return false;
+        var size = Native.GlobalSize(data);
+        if (size > 32 * 1024 * 1024) return true;
+        var memory = Native.GlobalLock(data);
+        if (memory == 0) return false;
+        try { text = Marshal.PtrToStringUni(memory, checked((int)size / 2))!.Split('\0')[0]; }
+        finally { Native.GlobalUnlock(data); }
         return true;
     }
 
-    private static string ForegroundExe()
+    private static bool TryReadPrivacy(out ClipboardPrivacy privacy)
     {
-        Native.GetWindowThreadProcessId(Native.GetForegroundWindow(), out var pid);
+        privacy = default;
+        if (!TryZeroMarker(ClipboardPolicy.History, out var history) || !TryZeroMarker(ClipboardPolicy.Cloud, out var cloud)) return false;
+        privacy = new(history, cloud);
+        return true;
+    }
+    private static bool TryZeroMarker(string name, out bool zero)
+    {
+        zero = false;
+        var format = PrivateFormats[name];
+        if (!Native.IsClipboardFormatAvailable(format)) return true;
+        var data = Native.GetClipboardData(format);
+        if (data == 0 || Native.GlobalSize(data) < 4) return false;
+        var memory = Native.GlobalLock(data);
+        if (memory == 0) return false;
+        try { zero = Marshal.ReadInt32(memory) == 0; return true; }
+        finally { Native.GlobalUnlock(data); }
+    }
+
+    private static string ProcessExe(uint pid)
+    {
         try { using var process = Process.GetProcessById((int)pid); return process.ProcessName + ".exe"; }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { return ""; }
     }
-
-    private void ApplyLocked(string? app)
+    private static string ForegroundExe()
     {
-        var current = clip;
-        if (current is null || Native.GetClipboardSequenceNumber() != current.Sequence) return;
-        var wanted = app is null ? current.Clean : Engine.Preview(current.Clean, app);
-        if (wanted == current.Text) return;
-        var preview = wanted != current.Clean;
-        // Allocate everything before emptying: allocation failure leaves the original intact.
-        var blocks = new List<(uint Format, nint Memory)>();
-        try
+        var foreground = Native.GetForegroundWindow();
+        Native.GetWindowThreadProcessId(foreground, out var pid);
+        var exe = ProcessExe(pid);
+        if (!exe.Equals("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)) return exe;
+        var children = new List<uint>();
+        Native.EnumChildWindows(foreground, (child, _) =>
         {
-            blocks.Add((13, Allocate(Encoding.Unicode.GetBytes(wanted + "\0"))));
-            if (preview)
-                foreach (var format in PrivateFormats) blocks.Add((format, Allocate(new byte[4])));
-            // Clipboard is locked, so another app cannot write between this check and EmptyClipboard.
-            if (Native.GetClipboardSequenceNumber() != current.Sequence || !Native.EmptyClipboard()) return;
-            // Privacy markers precede preview text, and every marker must succeed.
-            foreach (var block in blocks.OrderBy(b => b.Format == 13))
-            {
-                if (Native.SetClipboardData(block.Format, block.Memory) == 0)
-                {
-                    // If a privacy marker failed, publish the clean text instead of a preview.
-                    var clean = Allocate(Encoding.Unicode.GetBytes(current.Clean + "\0"));
-                    if (Native.SetClipboardData(13, clean) == 0) Native.GlobalFree(clean);
-                    seen = Native.GetClipboardSequenceNumber();
-                    clip = null;
-                    return;
-                }
-                var index = blocks.FindIndex(b => b.Memory == block.Memory);
-                blocks[index] = (block.Format, 0); // ownership transferred to Windows
-            }
-            // Read our sequence while still holding the lock, before any later external copy.
-            var ours = Native.GetClipboardSequenceNumber();
-            clip = new(ours, wanted, current.Clean);
-            seen = ours;
-        }
-        finally { foreach (var block in blocks) if (block.Memory != 0) Native.GlobalFree(block.Memory); }
+            Native.GetWindowThreadProcessId(child, out var childPid);
+            children.Add(childPid);
+            return childPid == 0 || childPid == pid;
+        }, 0);
+        return ProcessExe(ForegroundProcess.Resolve(pid, exe, children));
     }
 
+    private bool ApplyLocked(string? app)
+    {
+        var current = clip;
+        if (current is null) return true;
+        if (Native.GetClipboardSequenceNumber() != current.Sequence) return false;
+        var wanted = app is null ? current.Clean : Engine.Preview(current.Clean, app);
+        if (wanted == current.Text) return true;
+        // Allocate both paths before emptying, including the source privacy restrictions.
+        var blocks = new List<(uint Format, nint Memory)>();
+        var fallback = new List<(uint Format, nint Memory)>();
+        try
+        {
+            Prepare(blocks, wanted, current.Privacy, wanted != current.Clean);
+            Prepare(fallback, current.Clean, current.Privacy, false);
+            if (Native.GetClipboardSequenceNumber() != current.Sequence || !Native.EmptyClipboard()) return false;
+            if (!Publish(blocks))
+            {
+                // Re-establish ALL source markers before publishing fallback text.
+                if (!Native.EmptyClipboard() || !Publish(fallback)) { clip = null; seen = Native.GetClipboardSequenceNumber(); return true; }
+                wanted = current.Clean;
+            }
+            var ours = Native.GetClipboardSequenceNumber();
+            clip = current with { Sequence = ours, Text = wanted, Owned = true };
+            seen = ours;
+            return true;
+        }
+        finally
+        {
+            foreach (var block in blocks.Concat(fallback)) if (block.Memory != 0) Native.GlobalFree(block.Memory);
+        }
+    }
+    private static void Prepare(List<(uint Format, nint Memory)> blocks, string text, ClipboardPrivacy privacy, bool preview)
+    {
+        foreach (var name in privacy.Markers(preview)) blocks.Add((PrivateFormats[name], Allocate(new byte[4])));
+        blocks.Add((13, Allocate(Encoding.Unicode.GetBytes(text + "\0"))));
+    }
+    private static bool Publish(List<(uint Format, nint Memory)> blocks)
+    {
+        // Markers always precede text. A failed restriction must never publish text.
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            var block = blocks[i];
+            if (Native.SetClipboardData(block.Format, block.Memory) == 0) return false;
+            blocks[i] = (block.Format, 0);
+        }
+        return true;
+    }
     private static nint Allocate(byte[] bytes)
     {
         var handle = Native.GlobalAlloc(0x0042, (nuint)bytes.Length);
@@ -199,21 +265,20 @@ internal sealed class ClipboardService : IDisposable
 
     public void RestoreClean()
     {
-        for (var attempt = 0; attempt < 10; attempt++)
-        {
-            if (Native.OpenClipboard(window.Handle))
-            {
-                try { ApplyLocked(null); }
-                finally { Native.CloseClipboard(); }
-                return;
-            }
-            Thread.Sleep(25);
-        }
+        if (clip is { Owned: true } current && current.Text != current.Clean)
+            restoration ??= new(current.Sequence, DateTimeOffset.UtcNow);
+        Request();
+    }
+    public async Task RestoreBeforeQuit()
+    {
+        paused = true;
+        RestoreClean();
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+        while (restoration is not null && DateTimeOffset.UtcNow < deadline) await Task.Delay(50);
     }
     public void Dispose()
     {
         retry.Stop();
-        RestoreClean();
         Native.UnhookWinEvent(hook);
         Native.RemoveClipboardFormatListener(window.Handle);
         window.Dispose();

@@ -14,7 +14,13 @@ public sealed record AppRule(string Id, string Name, string[] BundleIDs, string[
 public sealed record Trackers(ParamSet Everywhere, Site[] Sites);
 public sealed record SkipHost(string Host, bool Subdomains)
 {
-    public static string Canonical(string host) => host.ToLowerInvariant().TrimEnd('.');
+    public static string Canonical(string host)
+    {
+        var canonical = host.ToLowerInvariant().TrimEnd('.');
+        // Compare IDNs in one form, without ever round-tripping the copied URL.
+        try { return new System.Globalization.IdnMapping().GetAscii(canonical).ToLowerInvariant(); }
+        catch (ArgumentException) { return canonical; }
+    }
     public bool Covers(string host) => Canonical(host) == Canonical(Host)
         || (Subdomains && Canonical(host).EndsWith("." + Canonical(Host), StringComparison.Ordinal));
 }

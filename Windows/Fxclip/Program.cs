@@ -16,6 +16,7 @@ internal static class Program
     private static WelcomeWindow? welcome;
     private static Forms.NotifyIcon? tray;
     private static readonly CancellationTokenSource shutdown = new();
+    private static bool quitting;
     private static string pipeName = "";
     public static string Version => typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.0.0-dev";
 
@@ -128,10 +129,17 @@ internal static class Program
         menu.Items.Add("Settings…", null, (_, _) => ShowSettings());
         menu.Items.Add("About", null, (_, _) => MessageBox.Show($"fxclip {Version}\n\nClean links, better previews.\nNo network, no account, no analytics.\nLinks are never saved.", "About fxclip"));
         menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add("Quit", null, (_, _) => app.Shutdown());
+        menu.Items.Add("Quit", null, (_, _) => _ = Quit());
         var old = tray.ContextMenuStrip;
         tray.ContextMenuStrip = menu;
         old?.Dispose();
+    }
+    private static async Task Quit()
+    {
+        if (quitting) return;
+        quitting = true;
+        if (clipboard is not null) await clipboard.RestoreBeforeQuit();
+        app.Shutdown();
     }
     private static void ShowSettings()
     {

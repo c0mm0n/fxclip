@@ -33,7 +33,7 @@ public sealed class Engine(Rules rules)
         var beforeHash = hash < 0 ? url : url[..hash];
         var q = beforeHash.IndexOf('?');
         var basis = q < 0 ? beforeHash : beforeHash[..q];
-        string[] segments = q < 0 || q == beforeHash.Length - 1 ? [] : beforeHash[(q + 1)..].Split('&');
+        string[] segments = q < 0 ? [] : beforeHash[(q + 1)..].Split('&');
         var sites = Rules.Trackers.Sites.Where(s => s.Hosts.Any(d => host == d || host.EndsWith("." + d, StringComparison.Ordinal))).ToArray();
         var changedPath = sites.Any(s => s.StripRefPath == true) && RefPath.IsMatch(basis);
         if (changedPath) basis = RefPath.Replace(basis, "");

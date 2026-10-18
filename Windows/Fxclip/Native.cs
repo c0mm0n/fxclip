@@ -5,6 +5,9 @@ namespace Fxclip;
 
 internal static class Native
 {
+    internal delegate bool EnumWindowProc(nint hwnd, nint parameter);
+    [DllImport("user32.dll")] internal static extern bool EnumChildWindows(nint parent, EnumWindowProc callback, nint parameter);
+    [DllImport("user32.dll")] internal static extern nint GetClipboardOwner();
     internal delegate void WinEventProc(nint hook, uint evt, nint hwnd, int idObject, int idChild, uint thread, uint time);
     [DllImport("user32.dll", SetLastError = true)] internal static extern bool AddClipboardFormatListener(nint hwnd);
     [DllImport("user32.dll")] internal static extern bool RemoveClipboardFormatListener(nint hwnd);
