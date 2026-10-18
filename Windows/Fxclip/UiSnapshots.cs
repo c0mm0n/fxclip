@@ -40,9 +40,18 @@ internal static class UiSnapshots
     {
         await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         window.UpdateLayout();
-        var content = (FrameworkElement)window.Content;
-        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth), (int)Math.Ceiling(content.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(content);
+        var width = (int)Math.Ceiling(window.ActualWidth);
+        var height = (int)Math.Ceiling(window.ActualHeight);
+        var visual = new DrawingVisual();
+        using (var drawing = visual.RenderOpen())
+        {
+            var bounds = new Rect(0, 0, width, height);
+            drawing.DrawRectangle(window.Background, null, bounds);
+            // Capture the full window visual, including its background and content margins.
+            drawing.DrawRectangle(new VisualBrush(window) { Stretch = Stretch.Fill }, null, bounds);
+        }
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(path);

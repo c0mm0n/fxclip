@@ -99,6 +99,7 @@ internal static class Ui
     }
     public static void Setup(Window window)
     {
+        window.SetResourceReference(FrameworkElement.StyleProperty, typeof(Window));
         window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
         window.Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/Assets/fxclip.ico"));
         window.SourceInitialized += (_, _) => Theme.TitleBar(window);
