@@ -40,6 +40,7 @@ jobs:
           mkdir package
           cp Linux/.build/release/fxclip package/
           strip package/fxclip
+          python3 Linux/scripts/sanitize-runtime-paths.py package/fxclip
           cp Shared/rules.json package/fxclip.rules.json
           cp Linux/dist/* package/
           chmod +x package/install.sh
