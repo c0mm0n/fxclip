@@ -68,6 +68,22 @@ final class UserSettingsTests: XCTestCase {
         XCTAssertEqual(moved.preview("https://x.com/a", forBundleID: telegram), "https://x.com/a")
     }
 
+    /// Shared/settings_vectors.json: the cases every port (Linux, Windows) must pass too.
+    func testSharedSettingsVectors() throws {
+        struct Case: Decodable { let input: String; let app: String?; let output: String }
+        struct Group: Decodable { let name: String; let settings: UserSettings; let cases: [Case] }
+        struct File: Decodable { let groups: [Group] }
+        let file = try JSONDecoder().decode(File.self, from: Data(contentsOf: VectorTests.shared.appendingPathComponent("settings_vectors.json")))
+        XCTAssertGreaterThan(file.groups.count, 5)
+        for g in file.groups {
+            let e = Engine(rules: builtins.applying(g.settings))
+            for c in g.cases {
+                let clean = e.clean(c.input).text
+                XCTAssertEqual(c.app.map { e.preview(clean, forBundleID: $0) } ?? clean, c.output, "\(g.name): \(c.input) in \(c.app ?? "-")")
+            }
+        }
+    }
+
     func testSettingsRoundTrip() throws {
         var s = UserSettings()
         s.disabledSites = ["reddit"]

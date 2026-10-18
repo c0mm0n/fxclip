@@ -46,12 +46,25 @@ public struct Rules: Codable, Sendable {
     public struct App: Codable, Equatable, Sendable {
         public var id: String
         public var name: String
+        /// macOS bundle IDs, matched exactly.
         public var bundleIDs: [String]
+        /// Linux Wayland app_id / X11 WM_CLASS, matched ignoring case.
+        public var linux: [String]?
+        /// Windows exe names ("Telegram.exe"), matched ignoring case.
+        public var windows: [String]?
 
-        public init(id: String, name: String, bundleIDs: [String]) {
+        public init(id: String, name: String, bundleIDs: [String], linux: [String]? = nil, windows: [String]? = nil) {
             self.id = id
             self.name = name
             self.bundleIDs = bundleIDs
+            self.linux = linux
+            self.windows = windows
+        }
+
+        /// The front app's identifier on any platform: bundle ID, app_id/WM class or exe name.
+        public func matches(_ identifier: String) -> Bool {
+            bundleIDs.contains(identifier)
+                || ((linux ?? []) + (windows ?? [])).contains { $0.caseInsensitiveCompare(identifier) == .orderedSame }
         }
     }
 

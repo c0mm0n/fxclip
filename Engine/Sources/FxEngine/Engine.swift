@@ -53,9 +53,10 @@ public struct Engine: Sendable {
 
     // MARK: preview links
 
-    /// The rewrites that apply in the app with this bundle ID.
+    /// The rewrites that apply in the front app. `bundleID` is the platform's identifier
+    /// for it: macOS bundle ID, Linux app_id / WM class, or Windows exe name (see `Rules.App.matches`).
     public func previews(forBundleID bundleID: String) -> [Rules.Preview] {
-        let appIDs = Set(rules.apps.filter { $0.bundleIDs.contains(bundleID) }.map(\.id))
+        let appIDs = Set(rules.apps.filter { $0.matches(bundleID) }.map(\.id))
         return rules.previews.filter { !appIDs.isDisjoint(with: $0.apps) }
     }
 

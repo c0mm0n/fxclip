@@ -46,6 +46,8 @@
   ],
   "apps": [
     { "id": "telegram", "name": "Telegram",
-      "bundleIDs": ["ru.keepcoder.Telegram", "org.telegram.desktop", "com.tdesktop.Telegram"] }
+      "bundleIDs": ["ru.keepcoder.Telegram", "org.telegram.desktop", "com.tdesktop.Telegram"],
+      "linux": ["org.telegram.desktop", "TelegramDesktop", "telegram-desktop"],
+      "windows": ["Telegram.exe"] }
   ]
 }

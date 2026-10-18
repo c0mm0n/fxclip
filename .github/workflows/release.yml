@@ -1,5 +1,6 @@
 # Push a tag (git tag v0.2.0 && git push origin v0.2.0) with release-notes/v0.2.0.md
-# committed: GitHub tests, builds the DMG and publishes the release.
+# committed: GitHub tests and builds every platform, then publishes one release.
+# Each platform job uploads its files as an artifact named release-<platform>.
 name: Release
 
 on:
@@ -10,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  mac:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,10 +31,27 @@ jobs:
       - name: Build DMG
         run: tools/make_dmg.sh "${GITHUB_REF_NAME#v}" "$GITHUB_RUN_NUMBER"
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-mac
+          path: build/fxclip.dmg
+
+  publish:
+    needs: [mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat "release-notes/$GITHUB_REF_NAME.md" release-notes/install.md > notes.md
-          gh release create "$GITHUB_REF_NAME" build/fxclip.dmg \
+          gh release create "$GITHUB_REF_NAME" dist/* \
             --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag

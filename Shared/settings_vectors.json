@@ -1,0 +1,216 @@
+{
+  "about": "User settings layered over rules.json. Each group's settings is a (possibly partial) settings.json; missing keys take their defaults. output = preview(clean(input).text, app) when app is set, else clean(input).text. Every port must pass these.",
+  "groups": [
+    {
+      "name": "defaults",
+      "settings": {},
+      "cases": [
+        {
+          "input": "https://x.com/a?s=1&utm_source=b",
+          "app": null,
+          "output": "https://x.com/a"
+        },
+        {
+          "input": "https://x.com/a?s=1&utm_source=b",
+          "app": "ru.keepcoder.Telegram",
+          "output": "https://fxtwitter.com/a"
+        },
+        {
+          "input": "https://x.com/a",
+          "app": "Telegram.exe",
+          "output": "https://fxtwitter.com/a"
+        },
+        {
+          "input": "https://x.com/a",
+          "app": "telegram.EXE",
+          "output": "https://fxtwitter.com/a"
+        },
+        {
+          "input": "https://x.com/a",
+          "app": "TelegramDesktop",
+          "output": "https://fxtwitter.com/a"
+        },
+        {
+          "input": "https://instagram.com/p/a",
+          "app": "org.telegram.desktop",
+          "output": "https://zzinstagram.com/p/a"
+        },
+        {
+          "input": "https://x.com/a",
+          "app": "firefox",
+          "output": "https://x.com/a"
+        },
+        {
+          "input": "https://x.com/a",
+          "app": "ru.keepcoder.telegram",
+          "output": "https://x.com/a"
+        }
+      ]
+    },
+    {
+      "name": "everywhere off",
+      "settings": {
+        "trackersEverywhere": false
+      },
+      "cases": [
+        {
+          "input": "https://example.com/?utm_source=a&fbclid=b",
+          "app": null,
+          "output": "https://example.com/?utm_source=a&fbclid=b"
+        },
+        {
+          "input": "https://youtu.be/x?si=1",
+          "app": null,
+          "output": "https://youtu.be/x"
+        }
+      ]
+    },
+    {
+      "name": "sites off",
+      "settings": {
+        "disabledSites": [
+          "youtube",
+          "amazon"
+        ]
+      },
+      "cases": [
+        {
+          "input": "https://youtu.be/x?si=1&utm_source=a",
+          "app": null,
+          "output": "https://youtu.be/x?si=1"
+        },
+        {
+          "input": "https://www.amazon.fr/dp/B0/ref=sr_1?tag=a",
+          "app": null,
+          "output": "https://www.amazon.fr/dp/B0/ref=sr_1?tag=a"
+        }
+      ]
+    },
+    {
+      "name": "never clean",
+      "settings": {
+        "neverClean": [
+          {
+            "host": "example.com",
+            "subdomains": false
+          },
+          {
+            "host": "corp.io",
+            "subdomains": true
+          },
+          {
+            "host": "dot.org.",
+            "subdomains": false
+          }
+        ]
+      },
+      "cases": [
+        {
+          "input": "https://example.com/?utm_source=a",
+          "app": null,
+          "output": "https://example.com/?utm_source=a"
+        },
+        {
+          "input": "https://www.example.com/?utm_source=a",
+          "app": null,
+          "output": "https://www.example.com/"
+        },
+        {
+          "input": "https://intra.corp.io/?utm_source=a",
+          "app": null,
+          "output": "https://intra.corp.io/?utm_source=a"
+        },
+        {
+          "input": "https://notcorp.io/?utm_source=a",
+          "app": null,
+          "output": "https://notcorp.io/"
+        },
+        {
+          "input": "https://EXAMPLE.com/?utm_source=a",
+          "app": null,
+          "output": "https://EXAMPLE.com/?utm_source=a"
+        },
+        {
+          "input": "https://dot.org/?utm_source=a",
+          "app": null,
+          "output": "https://dot.org/?utm_source=a"
+        }
+      ]
+    },
+    {
+      "name": "preview off",
+      "settings": {
+        "previews": {
+          "x": {
+            "enabled": false,
+            "apps": [
+              "telegram"
+            ]
+          }
+        }
+      },
+      "cases": [
+        {
+          "input": "https://x.com/a",
+          "app": "ru.keepcoder.Telegram",
+          "output": "https://x.com/a"
+        },
+        {
+          "input": "https://instagram.com/p/a",
+          "app": "ru.keepcoder.Telegram",
+          "output": "https://zzinstagram.com/p/a"
+        }
+      ]
+    },
+    {
+      "name": "preview moved to an added app",
+      "settings": {
+        "addedApps": [
+          {
+            "id": "discord",
+            "name": "Discord",
+            "bundleIDs": [
+              "com.hnc.Discord"
+            ],
+            "linux": [
+              "discord"
+            ],
+            "windows": [
+              "Discord.exe"
+            ]
+          }
+        ],
+        "previews": {
+          "x": {
+            "enabled": true,
+            "apps": [
+              "discord"
+            ]
+          }
+        }
+      },
+      "cases": [
+        {
+          "input": "https://x.com/a",
+          "app": "com.hnc.Discord",
+          "output": "https://fxtwitter.com/a"
+        },
+        {
+          "input": "https://x.com/a",
+          "app": "discord",
+          "output": "https://fxtwitter.com/a"
+        },
+        {
+          "input": "https://x.com/a",
+          "app": "Discord.exe",
+          "output": "https://fxtwitter.com/a"
+        },
+        {
+          "input": "https://x.com/a",
+          "app": "ru.keepcoder.Telegram",
+          "output": "https://x.com/a"
+        }
+      ]
+    }
+  ]
+}
