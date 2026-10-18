@@ -32,6 +32,8 @@ final class MainWindow {
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+        // Open with nothing focused: no ring on the first button of the page.
+        DispatchQueue.main.async { [weak self] in self?.window?.makeFirstResponder(nil) }
     }
 }
 

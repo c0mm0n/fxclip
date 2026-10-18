@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 version=${1:?version, e.g. 0.2.0}
 build=${2:-1}
 
+mkdir -p build
 xcodegen generate >/dev/null
 xcodebuild -project FxClip.xcodeproj -scheme FxClip -configuration Release \
   -derivedDataPath build/dmg \
