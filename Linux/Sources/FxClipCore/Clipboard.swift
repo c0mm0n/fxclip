@@ -17,17 +17,9 @@ public struct ClipboardSnapshot: Equatable {
     public var eligible: Bool {
         guard Self.allows(types) else { return false }
         let rich = !types.isDisjoint(with: ["text/html", "text/rtf", "application/rtf"])
-        return !rich || Self.isBareURL(text)
+        return !rich || FxEngine.isBareURL(text)
     }
 
-    public static func isBareURL(_ text: String) -> Bool {
-        let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !s.contains(where: { $0.isWhitespace }),
-              let u = URLComponents(string: s),
-              ["http", "https"].contains(u.scheme?.lowercased() ?? ""),
-              let host = u.host, !host.isEmpty else { return false }
-        return true
-    }
 }
 
 /// Only holds the current selection in memory. No clipboard history or logging.
@@ -44,7 +36,7 @@ public final class ClipboardController {
         if current != seen {
             // wl-copy offers plain text under several compatible MIME aliases.
             // Recognize its value without feeding our mirror back into the engine.
-            if current.text != ownWrite || current.types.contains("text/html") {
+            if current.text != ownWrite || !current.types.isDisjoint(with: ["text/html", "text/rtf", "application/rtf"]) {
                 original = current.text
             }
             ownWrite = nil

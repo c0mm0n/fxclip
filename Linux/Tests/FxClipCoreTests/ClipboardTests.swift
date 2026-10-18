@@ -45,6 +45,14 @@ final class ClipboardTests: XCTestCase {
         XCTAssertEqual(written, "https://zzinstagram.com/p/123/")
     }
 
+    func testRichTextUsesTheSharedBareURLPolicy() throws {
+        let e = try engine()
+        for text in ["https://example.org/<tag>?utm_source=test", "https://example.org/'quoted'?utm_source=test", "See https://example.org/?utm_source=test"] {
+            let clip = ClipboardSnapshot(types: ["text/plain", "text/html"], text: text)
+            ClipboardController().tick(engine: e, app: nil, read: { clip }, write: { _ in XCTFail("Must preserve rich text"); return true })
+        }
+    }
+
     func testNewerCopyWinsImmediatelyBeforeWrite() throws {
         let controller = ClipboardController()
         let first = plain("https://x.com/example?utm_source=test")
