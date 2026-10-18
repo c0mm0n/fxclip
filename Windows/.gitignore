@@ -2,3 +2,7 @@
 **/obj/
 publish/
 TestResults/
+.dotnet/
+dotnet-install.local.sh
+*.zip
+ui-snapshots/

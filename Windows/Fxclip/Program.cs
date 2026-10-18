@@ -52,6 +52,13 @@ internal static class Program
                 app.Shutdown(1);
                 return;
             }
+            var capture = Array.IndexOf(args, "--capture-ui");
+            if (capture >= 0)
+            {
+                if (capture + 1 >= args.Length) { app.Shutdown(2); return; }
+                _ = UiSnapshots.Capture(store, args[capture + 1]);
+                return;
+            }
             _ = Listen();
             if (store.FirstRun && !args.Contains("--no-welcome"))
             {

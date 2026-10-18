@@ -65,6 +65,7 @@ internal sealed class SettingsWindow : Window
         navigation[name] = button;
         return button;
     }
+    internal void SelectPage(string name) { selected = name; Refresh(); }
     public void Refresh()
     {
         foreach (var (name, button) in navigation)

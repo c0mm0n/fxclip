@@ -38,8 +38,8 @@ dotnet publish Windows/Fxclip -c Release -r win-x64 --self-contained true -o Win
 python3 Windows/tools/make_icon.py
 ```
 
-The engine tests run on macOS and Windows and read **all** cases directly from `Shared/vectors.json` and `Shared/settings_vectors.json`. The WPF app must be built with a Windows Desktop SDK; the Homebrew source-built SDK can run the engine tests but may omit the desktop build targets.
+The engine tests run on macOS and Windows and read **all** cases directly from `Shared/vectors.json` and `Shared/settings_vectors.json`. The WPF app needs the Windows Desktop build targets (included in the official Microsoft SDK); the Homebrew source-built SDK can run the engine tests but may omit the desktop build targets.
 
 `build-windows.yml` builds on pushes to `windows` and can be called by the release workflow with a `version` input. It uploads `release-windows`, containing only `fxclip-windows-x64.zip` (the executable and this README as README.txt).
 
-The CI clipboard smoke test launches the published executable with an isolated temporary APPDATA and `--no-welcome`. This flag only skips first-run setup; it doesn't enable login startup. It probes desktop/clipboard access and reports the exact result in the job summary. That step is best-effort because hosted runners may lack a usable desktop. It cannot replace checking foreground switching, tray interaction, all settings pages, first-run controls, login startup, and light/dark appearance on a real Windows desktop.
+The CI clipboard smoke test launches the published executable with an isolated temporary APPDATA and `--no-welcome`. This flag only skips first-run setup; it doesn't enable login startup. It probes desktop/clipboard access and reports the exact result in the job summary. That step is best-effort because hosted runners may lack a usable desktop. It cannot replace checking foreground switching, tray interaction, all settings pages, first-run controls, login startup, and light/dark appearance on a real Windows desktop. CI also captures all five settings pages, the app picker, and the welcome screen in the separate `windows-ui-check` artifact.

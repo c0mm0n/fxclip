@@ -44,6 +44,20 @@ jobs:
         id: clipboard
         continue-on-error: true
         run: ./Windows/tools/clipboard-smoke.ps1 -Executable Windows/publish/fxclip.exe
+      - name: Capture settings and welcome screens (best effort)
+        continue-on-error: true
+        run: |
+          $env:APPDATA = Join-Path $env:RUNNER_TEMP 'fxclip-ui'
+          $capture = Start-Process -FilePath (Resolve-Path Windows/publish/fxclip.exe) -ArgumentList '--capture-ui', (Join-Path $pwd 'Windows/ui-snapshots') -PassThru
+          if (!$capture.WaitForExit(30000)) { Stop-Process -Id $capture.Id -Force; throw 'UI capture timed out' }
+          if ($capture.ExitCode -ne 0) { throw "UI capture exit code: $($capture.ExitCode)" }
+          if ((Get-ChildItem Windows/ui-snapshots/*.png).Count -ne 7) { throw 'Missing UI snapshots' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-ui-check
+          path: Windows/ui-snapshots/
+          if-no-files-found: warn
       - name: Package Windows download
         run: |
           Copy-Item Windows/README.md Windows/publish/README.txt
