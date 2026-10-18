@@ -66,10 +66,13 @@ same selection, and a copy in the tiny interval after the final read can race.
 Clipboard managers may record temporary preview rewrites; Wayland has no portable
 macOS transient-selection marker. Avoid running multiple clipboard cleaners.
 
-If your compositor does not activate `graphical-session.target`, arrange for your
-session to import its Wayland/focus environment and start that target. The
-installer imports the current session environment; on later sessions the desktop
-must import it again (especially `SWAYSOCK` or `HYPRLAND_INSTANCE_SIGNATURE`).
+The desktop session must import its Wayland/focus environment into the systemd
+user manager on each login (especially `SWAYSOCK` or
+`HYPRLAND_INSTANCE_SIGNATURE`). The installer imports the current environment.
+If your compositor does not manage `graphical-session.target`, use a session
+manager such as uwsm, or add a compositor startup command that imports those
+variables with `systemctl --user import-environment` and then runs
+`systemctl --user restart fxclip.service`.
 
 Uninstall using `./install.sh --uninstall`. Settings are preserved.
 

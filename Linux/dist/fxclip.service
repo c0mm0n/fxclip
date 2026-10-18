@@ -1,7 +1,6 @@
 [Unit]
 Description=fxclip Wayland clipboard link cleaner
 PartOf=graphical-session.target
-After=graphical-session.target
 StartLimitIntervalSec=30
 StartLimitBurst=3
 
