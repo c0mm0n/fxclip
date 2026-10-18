@@ -16,9 +16,17 @@ internal static class Theme
         <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
           <Style TargetType="Window"><Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI"/><Setter Property="FontSize" Value="14"/><Setter Property="Background" Value="{DynamicResource Surface}"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Style>
           <Style TargetType="Button">
-            <Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="Background" Value="{DynamicResource Control}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="Background" Value="{DynamicResource Control}"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/><Setter Property="BorderThickness" Value="1"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/><Setter Property="Padding" Value="14,7"/><Setter Property="Margin" Value="3"/><Setter Property="Cursor" Value="Hand"/><Setter Property="MinHeight" Value="32"/>
-            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="body" CornerRadius="6" Background="{TemplateBinding Background}" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="body" Property="Opacity" Value="0.78"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="body" Property="BorderBrush" Value="#438EE8"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter TargetName="body" Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="body" CornerRadius="6" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="body" Property="Opacity" Value="0.78"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="body" Property="BorderBrush" Value="#438EE8"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter TargetName="body" Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+          </Style>
+          <Style x:Key="Navigation" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="body" CornerRadius="10" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="body" Property="Background" Value="{DynamicResource Hover}"/></Trigger><Trigger Property="Tag" Value="Selected"><Setter TargetName="body" Property="Background" Value="{DynamicResource Selection}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+          </Style>
+          <Style x:Key="InfoButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/><Setter Property="Background" Value="Transparent"/><Setter Property="Padding" Value="4"/><Setter Property="MinHeight" Value="24"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Foreground" Value="#438EE8"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
           </Style>
           <Style TargetType="CheckBox"><Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="Margin" Value="4,8"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
           <Style x:Key="Switch" TargetType="CheckBox">
@@ -26,7 +34,7 @@ internal static class Theme
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox"><Border x:Name="track" Width="42" Height="22" Background="{DynamicResource Muted}" CornerRadius="11" BorderBrush="{DynamicResource Line}" BorderThickness="1"><Ellipse x:Name="thumb" Width="14" Height="14" Fill="White" HorizontalAlignment="Left" Margin="3"/></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="track" Property="Background" Value="#1675DC"/><Setter TargetName="thumb" Property="HorizontalAlignment" Value="Right"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="track" Property="BorderBrush" Value="#65A9FF"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
           </Style>
           <Style TargetType="TextBox"><Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="Background" Value="{DynamicResource Control}"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/><Setter Property="Padding" Value="10,8"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="CaretBrush" Value="{DynamicResource Ink}"/></Style>
-          <Style TargetType="ToolTip"><Setter Property="MaxWidth" Value="320"/></Style>
+          <Style TargetType="ToolTip"><Setter Property="MaxWidth" Value="320"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="Background" Value="{DynamicResource Card}"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/></Style>
         </ResourceDictionary>
         """);
         Application.Current.Resources.MergedDictionaries.Add(styles);
@@ -34,15 +42,19 @@ internal static class Theme
         SystemEvents.UserPreferenceChanged += Changed;
     }
     private static void Changed(object sender, UserPreferenceChangedEventArgs e) => Application.Current.Dispatcher.BeginInvoke(Refresh);
+    private static bool? captureDark;
+    internal static void CaptureTheme(bool dark) { captureDark = dark; Refresh(); }
     private static void Refresh()
     {
         using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-        Dark = key?.GetValue("AppsUseLightTheme") is int value && value == 0;
+        Dark = captureDark ?? (key?.GetValue("AppsUseLightTheme") is int value && value == 0);
         var colors = new Dictionary<string, string>
         {
             ["Surface"] = Dark ? "#202020" : "#F7F7F7", ["Sidebar"] = Dark ? "#292929" : "#EEEEEE",
             ["Card"] = Dark ? "#2C2C2C" : "#FFFFFF", ["Control"] = Dark ? "#363636" : "#FAFAFA",
             ["Ink"] = Dark ? "#F3F3F3" : "#202020", ["Secondary"] = Dark ? "#B7B7B7" : "#626262",
+            ["Hover"] = Dark ? "#363636" : "#E0E0E0", ["Selection"] = Dark ? "#234B72" : "#CDE3FA",
+            ["Chip"] = Dark ? "#252525" : "#F5F5F5",
             ["Line"] = Dark ? "#454545" : "#DEDEDE", ["Muted"] = Dark ? "#656565" : "#999999"
         };
         foreach (var (name, hex) in colors) Application.Current.Resources[name] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
@@ -65,7 +77,7 @@ internal static class Ui
     public static TextBlock Text(string text, double size = 14, bool bold = false, bool secondary = false)
     {
         var view = new TextBlock { Text = text, FontSize = size, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-        if (secondary) view.SetResourceReference(TextBlock.ForegroundProperty, "Secondary");
+        view.SetResourceReference(TextBlock.ForegroundProperty, secondary ? "Secondary" : "Ink");
         return view;
     }
     public static Button Button(string text, Action click)
@@ -89,6 +101,19 @@ internal static class Ui
         border.SetResourceReference(Border.BackgroundProperty, "Card");
         border.SetResourceReference(Border.BorderBrushProperty, "Line");
         return border;
+    }
+    public static Border RowsCard(IEnumerable<UIElement> rows)
+    {
+        var panel = new StackPanel();
+        var items = rows.ToArray();
+        for (var i = 0; i < items.Length; i++)
+        {
+            var row = new Border { Child = items[i], Padding = new Thickness(0, 4, 0, 4), BorderThickness = new Thickness(0, 0, 0, i == items.Length - 1 ? 0 : 1) };
+            row.SetResourceReference(Border.BorderBrushProperty, "Line");
+            panel.Children.Add(row);
+        }
+        var card = Card(panel); card.Padding = new Thickness(16, 4, 16, 4);
+        return card;
     }
     public static DockPanel Row(UIElement label, params UIElement[] right)
     {

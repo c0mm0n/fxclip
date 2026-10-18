@@ -45,6 +45,8 @@ internal sealed class ChooseAppsWindow : Window
         foreach (var app in candidates)
         {
             var check = Ui.Toggle(app.Name, selected.Contains(app.Id), on => { if (on) selected.Add(app.Id); else selected.Remove(app.Id); }, false);
+            var label = new StackPanel { Orientation = Orientation.Horizontal };
+            label.Children.Add(AppIcons.View(app)); label.Children.Add(Ui.Text(app.Name)); check.Content = label;
             check.ToolTip = string.Join(", ", app.Windows ?? []);
             list.Children.Add(check);
         }
@@ -56,6 +58,7 @@ internal sealed class ChooseAppsWindow : Window
         var exe = Path.GetFileName(dialog.FileName);
         var app = candidates.Concat(AppDiscovery.Suggestions).FirstOrDefault(a => (a.Windows ?? []).Contains(exe, StringComparer.OrdinalIgnoreCase))
             ?? new AppRule(exe.ToLowerInvariant(), Path.GetFileNameWithoutExtension(exe), [], Windows: [exe]);
+        AppDiscovery.RememberPath(app, dialog.FileName);
         if (!candidates.Any(a => a.Id == app.Id)) candidates.Add(app);
         selected.Add(app.Id); Refresh();
     }
@@ -69,26 +72,54 @@ internal static class AppDiscovery
         new("slack", "Slack", [], Windows: ["Slack.exe"]),
         new("signal", "Signal", [], Windows: ["Signal.exe"])
     ];
-    public static bool Installed(AppRule app)
+    private static readonly Dictionary<string, string> chosenPaths = [];
+    public static void RememberPath(AppRule app, string path) => chosenPaths[app.Id] = path;
+    public static bool Installed(AppRule app) => ExecutablePath(app) is not null || StoreInstalled(app);
+    public static string? ExecutablePath(AppRule app)
     {
-        var exe = app.Windows![0];
+        if (chosenPaths.TryGetValue(app.Id, out var chosen) && File.Exists(chosen)) return chosen;
+        foreach (var exe in app.Windows ?? [])
+        {
+            var path = FindExecutable(app, exe);
+            if (path is not null) return path;
+        }
+        return null;
+    }
+    private static string? FindExecutable(AppRule app, string exe)
+    {
         foreach (var hive in new[] { Registry.CurrentUser, Registry.LocalMachine })
         {
             using var key = hive.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\App Paths\" + exe);
-            if (key?.GetValue("") is string path && File.Exists(path.Trim('"'))) return true;
+            if (key?.GetValue("") is string path && File.Exists(path.Trim('"'))) return path.Trim('"');
         }
         var processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exe));
-        var running = processes.Length > 0;
-        foreach (var process in processes) process.Dispose();
-        if (running) return true;
+        try
+        {
+            foreach (var process in processes)
+            {
+                try { if (process.MainModule?.FileName is string path && File.Exists(path)) return path; }
+                catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or NotSupportedException) { }
+            }
+        }
+        finally { foreach (var process in processes) process.Dispose(); }
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var roots = new[] { Path.Combine(local, app.Name), Path.Combine(local, "Programs", app.Name), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), app.Name), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), app.Name) };
+        var roots = new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), app.Name + " Desktop"), Path.Combine(local, app.Name), Path.Combine(local, "Programs", app.Name), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), app.Name), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), app.Name) };
         foreach (var root in roots)
         {
-            if (File.Exists(Path.Combine(root, exe))) return true;
-            try { if (Directory.Exists(root) && Directory.GetDirectories(root, "app-*").Any(d => File.Exists(Path.Combine(d, exe)))) return true; }
+            if (File.Exists(Path.Combine(root, exe))) return Path.Combine(root, exe);
+            try
+            {
+                if (Directory.Exists(root))
+                    foreach (var directory in Directory.GetDirectories(root, "app-*"))
+                        if (File.Exists(Path.Combine(directory, exe))) return Path.Combine(directory, exe);
+            }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
+        return null;
+    }
+    private static bool StoreInstalled(AppRule app)
+    {
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         // Store-distributed WhatsApp exposes its executable under a package directory.
         if (app.Id == "whatsapp")
         {

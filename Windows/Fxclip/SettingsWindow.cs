@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Shapes;
 using System.Windows.Input;
 using System.Windows.Media;
 using Fxclip.Engine;
@@ -25,19 +27,21 @@ internal sealed class SettingsWindow : Window
         root.ColumnDefinitions.Add(new ColumnDefinition());
         var sidebar = new DockPanel { LastChildFill = true };
         sidebar.SetResourceReference(BackgroundProperty, "Sidebar");
-        var logo = Ui.Text("fxclip", 24, true);
+        var logo = new StackPanel { Orientation = Orientation.Horizontal };
+        logo.Children.Add(new Image { Source = Icon, Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) });
+        logo.Children.Add(Ui.Text("fxclip", 24, true));
         logo.Margin = new Thickness(24, 24, 20, 26);
         DockPanel.SetDock(logo, Dock.Top);
         sidebar.Children.Add(logo);
-        var settings = Nav("Settings", "⚙", "#777E8C");
+        var settings = Nav("Settings", "\uE713", "#777E8C");
         settings.Margin = new Thickness(12, 10, 12, 20);
         DockPanel.SetDock(settings, Dock.Bottom);
         sidebar.Children.Add(settings);
         var links = new StackPanel();
-        links.Children.Add(Nav("Overview", "◉", "#E98A28"));
-        links.Children.Add(Nav("Preview links", "↗", "#1684EF"));
-        links.Children.Add(Nav("Trackers", "⊘", "#EF5464"));
-        links.Children.Add(Nav("Never clean", "✋", "#7B72EE"));
+        links.Children.Add(Nav("Overview", "\uE9D9", "#E98A28"));
+        links.Children.Add(Nav("Preview links", "\uE71B", "#1684EF"));
+        links.Children.Add(Nav("Trackers", "\uE72E", "#EF5464"));
+        links.Children.Add(Nav("Never clean", "\uE8F8", "#7B72EE"));
         sidebar.Children.Add(links);
         root.Children.Add(sidebar);
         var scroll = new ScrollViewer { Content = page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(30, 25, 30, 24), HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
@@ -53,11 +57,12 @@ internal sealed class SettingsWindow : Window
     {
         var label = new StackPanel { Orientation = Orientation.Horizontal };
         var tile = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(5), Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)), Margin = new Thickness(0, 0, 10, 0) };
-        var icon = Ui.Text(glyph, 15, true); icon.Foreground = Brushes.White; icon.HorizontalAlignment = HorizontalAlignment.Center;
+        var icon = Ui.Text(glyph, 15); icon.FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"); icon.Foreground = Brushes.White; icon.HorizontalAlignment = HorizontalAlignment.Center;
         tile.Child = icon;
         label.Children.Add(tile); label.Children.Add(Ui.Text(name, 14, true));
         var button = Ui.Button(name, () => { selected = name; Refresh(); });
         button.Content = label;
+        button.SetResourceReference(StyleProperty, "Navigation");
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
         button.Margin = new Thickness(12, 3, 12, 3);
         button.Padding = new Thickness(10, 7, 10, 7);
@@ -68,9 +73,7 @@ internal sealed class SettingsWindow : Window
     internal void SelectPage(string name) { selected = name; Refresh(); }
     public void Refresh()
     {
-        foreach (var (name, button) in navigation)
-            if (selected == name) button.Background = new SolidColorBrush(Color.FromArgb(65, 40, 133, 236));
-            else button.SetResourceReference(BackgroundProperty, "Sidebar");
+        foreach (var (name, button) in navigation) button.Tag = selected == name ? "Selected" : "";
         page.Children.Clear();
         switch (selected)
         {
@@ -85,9 +88,14 @@ internal sealed class SettingsWindow : Window
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 26) };
         row.Children.Add(Ui.Text(title, 30, true));
-        var tip = Ui.Button("ⓘ", () => MessageBox.Show(this, info, title));
+        var tip = new Button { Content = "ⓘ", FontSize = 17, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        tip.SetResourceReference(StyleProperty, "InfoButton");
+        System.Windows.Automation.AutomationProperties.SetName(tip, "About " + title);
+        var explanation = Ui.Text(info); explanation.MaxWidth = 280;
+        var bubble = Ui.Card(explanation); bubble.Margin = new Thickness(0);
+        var flyout = new Popup { PlacementTarget = tip, Placement = PlacementMode.Bottom, StaysOpen = false, AllowsTransparency = true, Child = bubble, VerticalOffset = 6 };
+        tip.Click += (_, _) => flyout.IsOpen = !flyout.IsOpen;
         tip.ToolTip = new TextBlock { Text = info, TextWrapping = TextWrapping.Wrap, MaxWidth = 280 };
-        tip.Margin = new Thickness(10, 0, 0, 0); tip.Padding = new Thickness(5, 0, 5, 0);
         row.Children.Add(tip);
         page.Children.Add(row);
     }
@@ -100,9 +108,12 @@ internal sealed class SettingsWindow : Window
     private void Overview()
     {
         Header("Overview", "fxclip watches what you copy. Trackers are removed from every link, and in the apps you choose, X and Instagram links become preview-friendly mirrors. Nothing leaves your PC.");
-        var status = new StackPanel();
-        status.Children.Add(Ui.Text(clipboard.Status, 15, true));
-        if (clipboard.SkipNext) status.Children.Add(Ui.Text("The next copy will be left as is", 12, secondary: true));
+        var status = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        status.Children.Add(new Ellipse { Width = 9, Height = 9, Fill = new SolidColorBrush(clipboard.Paused ? Color.FromRgb(232, 153, 50) : Color.FromRgb(41, 190, 92)), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
+        var statusText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        statusText.Children.Add(Ui.Text(clipboard.Status, 15, true));
+        if (clipboard.SkipNext) statusText.Children.Add(Ui.Text("The next copy will be left as is", 12, secondary: true));
+        status.Children.Add(statusText);
         page.Children.Add(Ui.Card(Ui.Row(status,
             Ui.Button(clipboard.SkipNext ? "Don't skip" : "Skip next copy", clipboard.ToggleSkip),
             Ui.Button(clipboard.Paused ? "Resume" : "Pause", clipboard.TogglePause))));
@@ -118,19 +129,26 @@ internal sealed class SettingsWindow : Window
         Section("Preview links in use");
         var active = store.Effective.Previews.Where(p => p.Apps.Length > 0).ToArray();
         if (active.Length == 0) page.Children.Add(Ui.Card(Ui.Text("No preview links on.", secondary: true)));
-        foreach (var p in active)
+        if (active.Length > 0) page.Children.Add(Ui.RowsCard(active.Select(p =>
         {
-            var content = new StackPanel(); content.Children.Add(Ui.Text(p.Name + " → " + p.To, 15, true)); content.Children.Add(Chips(p.Apps)); page.Children.Add(Ui.Card(content));
-        }
+            var label = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            label.Children.Add(Ui.Text(p.Name, bold: true));
+            var target = Ui.Text("→ " + p.To, secondary: true); target.Margin = new Thickness(12, 0, 12, 0); label.Children.Add(target);
+            var chips = Chips(p.Apps); chips.MaxWidth = 250;
+            return Ui.Row(label, chips);
+        })));
     }
     private WrapPanel Chips(IEnumerable<string> ids)
     {
-        var panel = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var panel = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
         foreach (var id in ids)
         {
             var app = store.KnownApps.FirstOrDefault(a => a.Id == id);
             if (app is null) continue;
-            var chip = new Border { CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(0, 0, 6, 4), Child = Ui.Text(app.Name, 12) };
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            content.Children.Add(AppIcons.View(app)); content.Children.Add(Ui.Text(app.Name, 12));
+            var chip = new Border { CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(9, 4, 9, 4), Margin = new Thickness(0, 2, 6, 2), VerticalAlignment = VerticalAlignment.Center, Child = content };
+            chip.SetResourceReference(Border.BackgroundProperty, "Chip");
             chip.SetResourceReference(Border.BorderBrushProperty, "Line");
             panel.Children.Add(chip);
         }
@@ -146,8 +164,10 @@ internal sealed class SettingsWindow : Window
             var label = new StackPanel(); label.Children.Add(Ui.Text(p.Name, 17, true));
             label.Children.Add(Ui.Text(string.Join(", ", p.From.Where(h => !h.StartsWith("www.") && !h.StartsWith("mobile."))) + " → " + p.To, 13, secondary: true));
             panel.Children.Add(Ui.Row(label, Ui.Toggle("Enable " + p.Name + " preview links", setting.Enabled, on => { store.User.Previews[p.Id] = store.Setting(p) with { Enabled = on }; store.Save(); })));
-            var apps = Chips(setting.Apps);
-            apps.Children.Add(Ui.Button(setting.Apps.Length == 0 ? "Choose apps…" : "＋ Change apps", () => new ChooseAppsWindow(store, p) { Owner = this }.ShowDialog()));
+            var apps = Chips(setting.Apps); apps.Margin = new Thickness(0, 10, 0, 0);
+            var change = Ui.Button(setting.Apps.Length == 0 ? "Choose apps…" : "＋ Change apps", () => new ChooseAppsWindow(store, p) { Owner = this }.ShowDialog());
+            change.Padding = new Thickness(10, 3, 10, 3); change.MinHeight = 28; change.VerticalAlignment = VerticalAlignment.Center;
+            apps.Children.Add(change);
             panel.Children.Add(apps);
             page.Children.Add(Ui.Card(panel));
         }
@@ -156,12 +176,13 @@ internal sealed class SettingsWindow : Window
     {
         Header("Trackers", "What fxclip removes from the links you copy. Useful parts of a link (a YouTube timestamp, an Amazon size or colour, a search) are always kept.");
         var rules = store.Builtins.Trackers;
+        var rows = new List<UIElement>();
         void Tracker(string name, int count, string detail, bool on, Action<bool> change)
         {
             var countLabel = Ui.Text($"{count} trackers", 12, secondary: true); countLabel.Margin = new Thickness(12, 0, 8, 0); countLabel.ToolTip = detail;
             var row = Ui.Row(Ui.Text(name, bold: name == "All websites"), countLabel, Ui.Toggle("Clean " + name, on, change));
             row.ToolTip = new TextBlock { Text = detail, MaxWidth = 280, TextWrapping = TextWrapping.Wrap };
-            var card = Ui.Card(row); card.Margin = new Thickness(0, 0, 0, 6); card.Padding = new Thickness(14, 5, 10, 5); page.Children.Add(card);
+            rows.Add(row);
         }
         Tracker("All websites", rules.Everywhere.Params.Length + rules.Everywhere.Prefixes.Length,
             string.Join(", ", rules.Everywhere.Prefixes.Select(p => p + "*").Concat(rules.Everywhere.Params)), store.User.TrackersEverywhere,
@@ -169,6 +190,7 @@ internal sealed class SettingsWindow : Window
         foreach (var site in rules.Sites)
             Tracker(site.Name, site.Params.Length + (site.StripRefPath == true ? 1 : 0), string.Join(", ", site.Params) + (site.StripRefPath == true ? ", /ref=… at the end of the address" : ""),
                 !store.User.DisabledSites.Contains(site.Id), on => { if (on) store.User.DisabledSites.Remove(site.Id); else store.User.DisabledSites.Add(site.Id); store.Save(); });
+        page.Children.Add(Ui.RowsCard(rows));
     }
     private void NeverClean()
     {

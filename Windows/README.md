@@ -17,10 +17,10 @@ Windows 10/11, x64. The app stays in the system tray. Double-click its icon for 
 - In Telegram by default, X links become fxtwitter.com and Instagram links become zzinstagram.com. The clean links return when you switch to another app. Pick different apps for each preview in Settings.
 - Preview mirrors are third-party services. fxclip never contacts them; opening or sharing a mirror link lets that service handle the link.
 - Preview writes are marked to stay out of Windows clipboard history and cloud clipboard. External clipboard managers may implement their own behaviour.
-- Leaves files, images, objects, and unknown non-text formats alone. HTML/RTF is touched only when its text is one bare URL.
+- Leaves files and images alone. Copies with HTML, RTF, URL formats, or browser metadata are touched only when their text is one bare URL. Sources that opt out of clipboard monitoring stay untouched; history and cloud opt-outs survive every derived copy.
 - Pause/Resume, Skip next copy, per-site tracker switches, website exclusions with optional subdomains, a local counter, and Open at login.
 - Follows the Windows light/dark setting. You can hide the tray icon and reopen the executable to return to Settings.
-- Quitting or pausing restores a clean link if the clipboard still contains fxclip's preview. A newer copy is never overwritten.
+- Quitting or pausing retries restoration of a clean link if the clipboard still contains fxclip's preview. Pause stays responsive while the clipboard is busy; quitting waits up to ten seconds. A newer copy is never overwritten.
 
 ## Settings and privacy
 
@@ -42,4 +42,4 @@ The engine tests run on macOS and Windows and read **all** cases directly from `
 
 `build-windows.yml` builds on pushes to `windows` and can be called by the release workflow with a `version` input. It uploads `release-windows`, containing only `fxclip-windows-x64.zip` (the executable and this README as README.txt).
 
-The CI clipboard smoke test launches the published executable with an isolated temporary APPDATA and `--no-welcome`. This flag only skips first-run setup; it doesn't enable login startup. It probes desktop/clipboard access and reports the exact result in the job summary. That step is best-effort because hosted runners may lack a usable desktop. It cannot replace checking foreground switching, tray interaction, all settings pages, first-run controls, login startup, and light/dark appearance on a real Windows desktop. CI also captures all five settings pages, the app picker, and the welcome screen in the separate `windows-ui-check` artifact.
+The CI clipboard smoke test launches the published executable with an isolated temporary APPDATA and `--no-welcome`. This flag only skips first-run setup; it doesn't enable login startup. It probes desktop/clipboard access and reports the exact result in the job summary. That step is best-effort because hosted runners may lack a usable desktop. It cannot replace checking foreground switching, tray interaction, all settings pages, first-run controls, login startup, and light/dark appearance on a real Windows desktop. CI also captures all five settings pages, the paused overview, the app picker, and the welcome screen in both light and dark themes in the separate `windows-ui-check` artifact.

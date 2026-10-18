@@ -14,20 +14,33 @@ internal static class UiSnapshots
         {
             Directory.CreateDirectory(directory);
             using var clipboard = new ClipboardService(store);
-            var window = new SettingsWindow(store, clipboard);
-            window.Show();
-            foreach (var name in new[] { "Overview", "Preview links", "Trackers", "Never clean", "Settings" })
+            foreach (var dark in new[] { false, true })
             {
-                window.SelectPage(name);
-                await Save(window, Path.Combine(directory, name.ToLowerInvariant().Replace(' ', '-') + ".png"));
+                Theme.CaptureTheme(dark);
+                var themeDirectory = Path.Combine(directory, dark ? "dark" : "light");
+                Directory.CreateDirectory(themeDirectory);
+                var window = new SettingsWindow(store, clipboard);
+                window.Show();
+                foreach (var name in new[] { "Overview", "Preview links", "Trackers", "Never clean", "Settings" })
+                {
+                    window.SelectPage(name);
+                    await Save(window, Path.Combine(themeDirectory, name.ToLowerInvariant().Replace(' ', '-') + ".png"));
+                }
+                window.SelectPage("Overview");
+                clipboard.TogglePause();
+                await Save(window, Path.Combine(themeDirectory, "overview-paused.png"));
+                clipboard.TogglePause();
+                var chooser = new ChooseAppsWindow(store, store.Builtins.Previews[0]) { Owner = window };
+                chooser.Show();
+                await Save(chooser, Path.Combine(themeDirectory, "choose-apps.png"));
+                chooser.Close();
+                var welcome = new WelcomeWindow(store, () => { });
+                welcome.Show();
+                await Save(welcome, Path.Combine(themeDirectory, "welcome.png"));
+                // Welcome cannot close before Start; hide this capture-only window.
+                welcome.Hide();
+                window.Close();
             }
-            var chooser = new ChooseAppsWindow(store, store.Builtins.Previews[0]) { Owner = window };
-            chooser.Show();
-            await Save(chooser, Path.Combine(directory, "choose-apps.png"));
-            chooser.Close();
-            var welcome = new WelcomeWindow(store, () => { });
-            welcome.Show();
-            await Save(welcome, Path.Combine(directory, "welcome.png"));
             Application.Current.Shutdown();
         }
         catch (Exception e)
