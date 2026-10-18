@@ -5,7 +5,7 @@
 
 **Windows** (10/11, x64): unzip `fxclip-windows-x64.zip` and run `fxclip.exe`. It isn't signed, so SmartScreen may warn: click **More info › Run anyway**. fxclip lives in the tray.
 
-**Linux** (Wayland: Sway, Hyprland, KDE Plasma; GNOME isn't supported): install `wl-clipboard` (and `kdotool` on KDE for previews), then
+**Linux** (Wayland: Sway, Hyprland, KDE Plasma; GNOME isn't supported): wl-clipboard is bundled; on KDE install `kdotool` for previews, then
 ```shell
 tar xzf fxclip-linux-x86_64.tar.gz && cd fxclip-linux-x86_64 && ./install.sh
 ```

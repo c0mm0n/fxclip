@@ -47,7 +47,7 @@ fxclip isn't notarized by Apple yet, so macOS blocks the first launch: open **Sy
 Unzip `fxclip-windows-x64.zip` and run `fxclip.exe`; it lives in the tray, with the same settings window as on the Mac. It isn't signed yet, so SmartScreen may warn: click **More info › Run anyway**. Rewritten preview links stay out of Win+V history. Details: [Windows/README.md](Windows/README.md).
 
 ### Linux (Wayland)
-Works on Sway, Hyprland and KDE Plasma (GNOME Wayland doesn't let background apps watch the clipboard). Install `wl-clipboard` (plus `kdotool` on KDE for previews), then:
+Works on Sway, Hyprland and KDE Plasma (GNOME Wayland doesn't let background apps watch the clipboard). wl-clipboard comes bundled (2.3, with KDE's newer clipboard protocol); on KDE, install `kdotool` for previews. Then:
 ```shell
 tar xzf fxclip-linux-x86_64.tar.gz && cd fxclip-linux-x86_64 && ./install.sh
 fxclip check
