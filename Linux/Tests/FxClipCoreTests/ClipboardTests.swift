@@ -85,6 +85,20 @@ final class ClipboardTests: XCTestCase {
         XCTAssertEqual(clip.text, "https://x.com/example")
     }
 
+    func testRejectedFocusWriteKeepsOriginalForNextTick() throws {
+        let controller = ClipboardController(), e = try engine()
+        var clip = plain("https://x.com/example?utm_source=test")
+        let write: (String, ClipboardSnapshot) -> Bool = { text, _ in clip = self.plain(text); return true }
+        controller.tick(engine: e, app: "org.telegram.desktop", read: { clip }, write: write)
+        XCTAssertEqual(clip.text, "https://fxtwitter.com/example")
+        // Focus returned to Telegram during the final read: reject the restore.
+        controller.tick(engine: e, app: "other", read: { clip }, write: { _, _ in false })
+        controller.tick(engine: e, app: "org.telegram.desktop", read: { clip }, write: { _, _ in XCTFail("Preview already selected"); return false })
+        // Leaving again must still restore the original clean link.
+        controller.tick(engine: e, app: "other", read: { clip }, write: write)
+        XCTAssertEqual(clip.text, "https://x.com/example")
+    }
+
     func testSettingsReloadMissingInvalidAndReplacement() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

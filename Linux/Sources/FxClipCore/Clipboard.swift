@@ -48,7 +48,9 @@ public final class ClipboardController {
         guard desired != current.text else { return }
         // A fresh type + text read protects newer copies, including images/files.
         guard read() == current else { reset(); return }
-        if write(desired, current) { ownWrite = desired } else { reset() }
+        // A rejected write (for example a focus change during the final read)
+        // leaves the current selection alone. Keep its original for the next tick.
+        if write(desired, current) { ownWrite = desired }
     }
 
     private func reset() { seen = nil; original = nil; ownWrite = nil }
