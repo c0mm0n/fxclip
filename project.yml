@@ -23,12 +23,15 @@ targets:
       properties:
         LSUIElement: true
         CFBundleDisplayName: fxclip
-        CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSApplicationCategoryType: public.app-category.utilities
     settings:
       base:
         PRODUCT_NAME: fxclip
+        # Releases override both from the tag (tools/make_dmg.sh).
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
         PRODUCT_BUNDLE_IDENTIFIER: io.github.c0mm0n.fxclip
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Manual
