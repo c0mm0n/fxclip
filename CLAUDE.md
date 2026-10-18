@@ -40,6 +40,12 @@ tools/make_dmg.sh 0.2.0                   # ad-hoc signed DMG in build/fxclip.dm
 
 The DMG is **ad-hoc signed and not notarized** (owner's choice for now): users click System Settings › Privacy & Security › Open Anyway once. Developer ID, notarization and Sparkle wait for the signing-identity decision.
 
+## Contributing and protection (GitHub rulesets)
+
+- `main` changes only through a pull request: one approval (not from the last pusher), and the `PR checks` workflow (`.github/workflows/pr.yml`: `mac`, `linux / linux`, `windows / windows`) must pass. No force-push or deletion.
+- Release tags `v*` can only be created by admins, so only the owner publishes releases.
+- The owner (admin) bypasses both. Merge a PR by fast-forwarding `main` locally and pushing, not with GitHub's merge button, so the commit keeps the noreply identity.
+
 ## Privacy: nothing personal in the repo
 
 The owner's name, e-mail, company and Apple team ID must never reach git (history included). The public history was started fresh for this reason; the pre-publish history stays local only.
