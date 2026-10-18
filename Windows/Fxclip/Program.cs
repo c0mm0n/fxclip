@@ -29,11 +29,16 @@ internal static class Program
         {
             try
             {
-                using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.Out, PipeOptions.CurrentUserOnly);
+                using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 client.Connect(5000);
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var processId = new byte[4];
+                client.ReadExactlyAsync(processId, timeout.Token).AsTask().GetAwaiter().GetResult();
+                // The user launched this second process: grant the running instance foreground access.
+                Native.AllowSetForegroundWindow(BitConverter.ToUInt32(processId));
                 client.WriteByte(1);
             }
-            catch (Exception e) when (e is IOException or TimeoutException) { }
+            catch (Exception e) when (e is IOException or TimeoutException or OperationCanceledException) { }
             return;
         }
         app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -77,11 +82,12 @@ internal static class Program
         {
             try
             {
-                using var server = new NamedPipeServerStream(pipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                using var server = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 await server.WaitForConnectionAsync(shutdown.Token);
                 var buffer = new byte[1];
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token);
                 timeout.CancelAfter(TimeSpan.FromSeconds(3));
+                await server.WriteAsync(BitConverter.GetBytes(Environment.ProcessId), timeout.Token);
                 if (await server.ReadAsync(buffer, timeout.Token) > 0) app.Dispatcher.Invoke(ShowSettings);
             }
             catch (OperationCanceledException) { }

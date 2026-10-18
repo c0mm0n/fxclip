@@ -28,6 +28,7 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(nint hwnd, out uint process);
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(nint hwnd);
+    [DllImport("user32.dll")] internal static extern bool AllowSetForegroundWindow(uint process);
     [DllImport("user32.dll")] internal static extern int GetWindowLong(nint hwnd, int index);
     [DllImport("user32.dll")] internal static extern int SetWindowLong(nint hwnd, int index, int value);
     [DllImport("dwmapi.dll")] internal static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
