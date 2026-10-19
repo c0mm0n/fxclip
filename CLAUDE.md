@@ -45,7 +45,7 @@ The DMG is **ad-hoc signed and not notarized** (owner's choice for now): users c
 ## Contributing and protection (GitHub rulesets)
 
 - `main` changes only through a pull request: one approval (not from the last pusher), and the `PR checks` workflow (`.github/workflows/pr.yml`: `mac`, `linux / linux`, `windows / windows`, `android`) must pass. No force-push or deletion.
-- Release tags `v*` are protected. Automatic publication requires an explicit creation exception for the release workflow; existing tags remain admin-only for updates and deletion.
+- Release tags `v*` are protected. Automatic publication requires a dedicated deploy key (`FXCLIP_RELEASE_TAG_SSH_KEY`) with a creation-only ruleset exception; existing tags remain admin-only for updates and deletion.
 - The owner (admin) bypasses both. Merge a PR by fast-forwarding `main` locally and pushing, not with GitHub's merge button, so the commit keeps the noreply identity.
 
 ## Privacy: nothing personal in the repo

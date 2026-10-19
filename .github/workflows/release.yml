@@ -145,7 +145,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          FXCLIP_RELEASE_TAG_SSH_KEY: ${{ secrets.FXCLIP_RELEASE_TAG_SSH_KEY }}
         run: |
+          if [ -n "$FXCLIP_RELEASE_TAG_SSH_KEY" ]; then
+            trap 'rm -f "$RUNNER_TEMP/fxclip-release-tags" "$RUNNER_TEMP/fxclip-known-hosts"' EXIT
+            python3 - <<'PYKEY'
+          import os
+          from pathlib import Path
+          key = Path(os.environ['RUNNER_TEMP']) / 'fxclip-release-tags'
+          key.write_text(os.environ['FXCLIP_RELEASE_TAG_SSH_KEY'] + '\n')
+          key.chmod(0o600)
+          PYKEY
+            gh api meta --jq '.ssh_keys[] | "github.com " + .' > "$RUNNER_TEMP/fxclip-known-hosts"
+            export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/fxclip-release-tags -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/fxclip-known-hosts -o StrictHostKeyChecking=yes"
+            git show-ref --verify --quiet "refs/tags/$RELEASE_TAG" || git tag "$RELEASE_TAG" "$GITHUB_SHA"
+            git push "git@github.com:$GITHUB_REPOSITORY.git" "refs/tags/$RELEASE_TAG"
+          else
+            # Explicit tags created by the owner still work without the automation key.
+            gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null || {
+              echo "::error::Automatic tag creation requires the dedicated release key and its creation-only ruleset exception."
+              exit 1
+            }
+          fi
           if [ -f "release-notes/$RELEASE_TAG.md" ]; then
             cat "release-notes/$RELEASE_TAG.md" > notes.md
           else
