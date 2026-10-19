@@ -1132,7 +1132,7 @@ private:
             [this, enabled](int code, const QString &, const QString &err) {
                 loginBusy_ = false;
                 if (code != 0) showError(QStringLiteral("Could not change login startup: %1").arg(err.trimmed()));
-                loginEnabled_ = code == 0 && enabled;
+                if (code == 0) loginEnabled_ = enabled;
                 if (loginCheckBox_) {
                     const QSignalBlocker blocker(loginCheckBox_);
                     loginCheckBox_->setChecked(loginEnabled_);

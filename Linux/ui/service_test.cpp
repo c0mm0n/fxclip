@@ -53,6 +53,8 @@ int main(int argc, char **argv) {
         login->click();
         awaitService([&] { return login->isEnabled() && login->isChecked(); });
         requireService(systemctlResult("is-enabled") == "enabled", "UI did not enable login startup");
+        // processEvents alone does not flush DeferredDelete outside app.exec().
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
         QCoreApplication::processEvents();
         const auto capture = qEnvironmentVariable("FXCLIP_UI_SERVICE_CAPTURE");
         if (!capture.isEmpty()) requireService(window.grab().save(capture), "Service screenshot failed");
