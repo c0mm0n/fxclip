@@ -64,7 +64,22 @@ public struct Rules: Codable, Sendable {
         /// The front app's identifier on any platform: bundle ID, app_id/WM class or exe name.
         public func matches(_ identifier: String) -> Bool {
             bundleIDs.contains(identifier)
-                || ((linux ?? []) + (windows ?? [])).contains { $0.caseInsensitiveCompare(identifier) == .orderedSame }
+                || (linux ?? []).contains { linuxIdentifier($0, matches: identifier) }
+                || (windows ?? []).contains { $0.caseInsensitiveCompare(identifier) == .orderedSame }
+        }
+
+        private func linuxIdentifier(_ configured: String, matches identifier: String) -> Bool {
+            if configured.caseInsensitiveCompare(identifier) == .orderedSame { return true }
+
+            // KDE app_id values for Telegram may append a generated 32-hex window token.
+            // Accept only that observed form, and only when the canonical app_id is configured.
+            guard configured.caseInsensitiveCompare("org.telegram.desktop") == .orderedSame else { return false }
+            let prefix = configured + "._"
+            guard identifier.count == prefix.count + 32,
+                  identifier.prefix(prefix.count).caseInsensitiveCompare(prefix) == .orderedSame else { return false }
+            return identifier.dropFirst(prefix.count).unicodeScalars.allSatisfy { scalar in
+                (48...57).contains(scalar.value) || (65...70).contains(scalar.value) || (97...102).contains(scalar.value)
+            }
         }
     }
 

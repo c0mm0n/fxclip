@@ -27,6 +27,25 @@ final class ClipboardTests: XCTestCase {
         XCTAssertEqual(writes, ["https://x.com/example/status/123", "https://fxtwitter.com/example/status/123", "https://x.com/example/status/123"])
     }
 
+    func testKDETelegramTokenPreviewsUserLinkAndRestoresItOutsideTelegram() throws {
+        let e = try engine(), controller = ClipboardController()
+        let telegram = "org.telegram.desktop._bf9659469f87789ad9ca692ee16de825"
+        let original = "https://x.com/CerfiaFR/status/2103787353680851028"
+        var clip = plain(original)
+        var writes: [String] = []
+        let write: (String, ClipboardSnapshot) -> Bool = { value, _ in
+            writes.append(value)
+            clip = self.plain(value)
+            return true
+        }
+
+        controller.tick(engine: e, app: telegram, read: { clip }, write: write)
+        XCTAssertEqual(clip.text, "https://fxtwitter.com/CerfiaFR/status/2103787353680851028")
+        controller.tick(engine: e, app: "org.mozilla.firefox", read: { clip }, write: write)
+        XCTAssertEqual(clip.text, original)
+        XCTAssertEqual(writes, ["https://fxtwitter.com/CerfiaFR/status/2103787353680851028", original])
+    }
+
     func testUnsafeTypesAndRichProseRemainUntouched() throws {
         let e = try engine()
         for types: Set<String> in [["text/plain", "image/png"], ["text/plain", "text/uri-list"], ["text/plain", "application/octet-stream"], ["text/plain", "text/html"], ["text/plain", "application/rtf"]] {
