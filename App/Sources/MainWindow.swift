@@ -8,17 +8,22 @@ final class MainWindow {
     private let store: SettingsStore
     private let stats: Stats
     private let watcher: ClipboardWatcher
+    private let updates: AppUpdater
+    private let initialPage: Page
 
-    init(store: SettingsStore, stats: Stats, watcher: ClipboardWatcher) {
+    init(store: SettingsStore, stats: Stats, watcher: ClipboardWatcher, updates: AppUpdater, initialPage: Page = .overview) {
         self.store = store
         self.stats = stats
         self.watcher = watcher
+        self.updates = updates
+        self.initialPage = initialPage
     }
 
     func show() {
         if window == nil {
-            let root = MainView()
+            let root = MainView(page: initialPage)
                 .environmentObject(store).environmentObject(stats).environmentObject(watcher)
+                .environmentObject(updates)
                 .frame(width: 950).frame(minHeight: 620)
             let w = NSWindow(contentViewController: NSHostingController(rootView: root))
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
@@ -74,6 +79,8 @@ enum Page: String, CaseIterable, Identifiable {
 
 struct MainView: View {
     @State private var page: Page = .overview
+
+    init(page: Page = .overview) { _page = State(initialValue: page) }
 
     var body: some View {
         HStack(spacing: 0) {

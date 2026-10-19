@@ -66,10 +66,19 @@ jobs:
           FXCLIP_VERSION: ${{ needs.version.outputs.number }}
         run: tools/make_dmg.sh "$FXCLIP_VERSION" "$GITHUB_RUN_NUMBER"
 
+      - name: Sign Mac update feed
+        env:
+          FXCLIP_VERSION: ${{ needs.version.outputs.number }}
+          FXCLIP_SPARKLE_PRIVATE_KEY: ${{ secrets.FXCLIP_SPARKLE_PRIVATE_KEY }}
+        run: tools/make_appcast.sh "$FXCLIP_VERSION"
+
       - uses: actions/upload-artifact@v4
         with:
           name: release-mac
-          path: build/fxclip.dmg
+          path: |
+            build/fxclip.dmg
+            build/appcast.xml
+          if-no-files-found: error
 
   android:
     needs: [version]
@@ -147,6 +156,9 @@ jobs:
           RELEASE_TAG: ${{ needs.version.outputs.tag }}
           FXCLIP_RELEASE_TAG_SSH_KEY: ${{ secrets.FXCLIP_RELEASE_TAG_SSH_KEY }}
         run: |
+          for file in fxclip.dmg appcast.xml fxclip-windows-x64.zip fxclip-linux-x86_64.tar.gz fxclip-android.apk; do
+            test -s "dist/$file" || { echo "::error::Missing release asset: $file"; exit 1; }
+          done
           if [ -n "$FXCLIP_RELEASE_TAG_SSH_KEY" ]; then
             trap 'rm -f "$RUNNER_TEMP/fxclip-release-tags" "$RUNNER_TEMP/fxclip-known-hosts"' EXIT
             python3 - <<'PYKEY'

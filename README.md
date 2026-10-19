@@ -5,7 +5,7 @@
 
   ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Android-brightgreen)
   ![Swift](https://img.shields.io/badge/Swift-native-orange)
-  ![Offline](https://img.shields.io/badge/works-100%25%20offline-blue)
+  ![Offline cleaning](https://img.shields.io/badge/link_cleaning-100%25%20offline-blue)
 
   <a href="https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip.dmg"><img src="https://img.shields.io/badge/macOS-Download-blue?style=for-the-badge&logo=apple" alt="Download for macOS"/></a>
   <a href="https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-windows-x64.zip"><img src="https://img.shields.io/badge/Windows-Download-blue?style=for-the-badge&logo=windows" alt="Download for Windows"/></a>
@@ -28,7 +28,8 @@ As an optional extra, fxclip can adapt links for better previews in the destinat
 - ⏸️ **Pause or skip**: pause cleaning, or leave just the next copy as is
 - 🖥️ **Your choice of presence**: menu bar icon, Dock icon, open at login
 - 🔗 **Optional app previews**: adapt X and Instagram links for better previews in the destination apps you choose, such as Telegram. Other apps get the clean original
-- 🔒 **Private**: no network, no account, no analytics. Everything happens on your device
+- 🔒 **Private**: link cleaning stays offline, with no account or analytics. On Mac, optional update checks contact GitHub; links are never sent
+- ⬆️ **Mac updates**: check from the app menu, menu bar or Settings, download an update, then install and relaunch. Automatic checks are off until you enable them; downloads and installation always ask
 - 🙈 **Polite with clipboard managers**: the preview rewrites are marked transient, so they don't pile up in your clipboard history
 
 <table>
@@ -44,6 +45,8 @@ As an optional extra, fxclip can adapt links for better previews in the destinat
 Grab `fxclip.dmg` from the [latest release](https://github.com/c0mm0n/fxclip/releases/latest), open it and drag fxclip to Applications.
 
 fxclip isn't notarized by Apple yet, so macOS blocks the first launch: open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
+
+From version 0.4.0, use **Check for Updates…** in fxclip or **Settings › Updates**. Automatic checks are optional and run once a day when enabled. Downloading and installing always require confirmation. If you have an older version, install the new DMG once to get the updater. Install the app in a writable Applications folder before updating; running it directly from the DMG cannot replace the app.
 
 ### Windows (10/11, x64)
 Unzip `fxclip-windows-x64.zip` and run `fxclip.exe`; it lives in the tray, with the same settings window as on the Mac. It isn't signed yet, so SmartScreen may warn: click **More info › Run anyway**. Rewritten preview links stay out of Win+V history. Details: [Windows/README.md](Windows/README.md).
