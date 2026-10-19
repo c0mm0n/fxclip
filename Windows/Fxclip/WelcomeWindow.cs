@@ -22,13 +22,13 @@ internal sealed class WelcomeWindow : Window
         };
         Closing += (_, e) => { if (!started) e.Cancel = true; };
         var panel = new StackPanel { Margin = new Thickness(28) };
-        panel.Children.Add(Ui.Text("Clean links, better previews", 24, true));
+        panel.Children.Add(Ui.Text("Clean links, ready to share", 24, true));
         var intro = Ui.Text("fxclip removes trackers (utm_*, fbclid, YouTube si…) from every link you copy. Nothing leaves your PC.");
         intro.Margin = new Thickness(0, 16, 0, 12);
         panel.Children.Add(intro);
-        var previews = new CheckBox { Content = "Better previews in Telegram", IsChecked = true };
+        var previews = new CheckBox { Content = "Also adapt links for Telegram previews", IsChecked = true };
         panel.Children.Add(previews);
-        var detail = Ui.Text("While Telegram is in front, x.com becomes fxtwitter.com and instagram.com becomes zzinstagram.com, so posts show a full preview. The clean link comes back in any other app. These mirrors are run by third parties.", 12, secondary: true);
+        var detail = Ui.Text("Optional: use preview-friendly versions of X and Instagram links in Telegram. Other apps get the clean original. Choose other destination apps in App previews. Preview mirrors are run by third parties.", 12, secondary: true);
         detail.Margin = new Thickness(23, 0, 0, 14);
         panel.Children.Add(detail);
         var login = new CheckBox { Content = "Open fxclip at login", IsChecked = true };

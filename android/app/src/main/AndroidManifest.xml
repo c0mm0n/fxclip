@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- No INTERNET permission: fxclip never goes on the network. -->
+
+    <!-- To name the apps you re-share to most often (Android 11+). Not a runtime permission. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="text/plain" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Fxclip">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!-- Share a link to fxclip: the share sheet opens again with the clean link,
+             and Telegram receives the preview link. -->
+        <activity
+            android:name=".ShareActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/share_label"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Fxclip.Dialog">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- Text selection menu: replaces the selected link in place, or copies it. -->
+        <activity
+            android:name=".ProcessTextActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/process_text_label"
+            android:theme="@style/Theme.Fxclip.Invisible">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name=".ProcessTextPreview"
+            android:exported="true"
+            android:label="@string/process_preview_label"
+            android:targetActivity=".ProcessTextActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Cleans the link on the clipboard. Android lets only the app in front read the
+             clipboard, so the tile and the shortcut open this invisible window for a moment. -->
+        <activity
+            android:name=".CleanClipboardActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:noHistory="true"
+            android:label="@string/clean_clipboard_label"
+            android:theme="@style/Theme.Fxclip.Invisible" />
+
+        <service
+            android:name=".CleanTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".ChosenTargetReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".CleanWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_clean_info" />
+        </receiver>
+    </application>
+</manifest>

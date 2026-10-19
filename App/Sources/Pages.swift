@@ -11,7 +11,7 @@ struct OverviewPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            PageHeader(title: "Overview", info: "fxclip watches what you copy. Trackers are removed from every link, and in the apps you choose, X and Instagram links become preview-friendly mirrors. Nothing leaves your Mac.")
+            PageHeader(title: "Overview", info: "fxclip cleans the links you copy, removing tracking parameters while keeping useful details. Optionally, adapt links for better previews in the destination apps you choose. Nothing leaves your Mac.")
             Card {
                 CardRow(first: true) {
                     Circle().fill(watcher.paused ? Color.orange : Color.green).frame(width: 8, height: 8)
@@ -35,11 +35,11 @@ struct OverviewPage: View {
                     }
                 }
             }
-            SectionTitle("Preview links in use")
+            SectionTitle("Optional app previews")
             let active = store.effective.previews.filter { !$0.apps.isEmpty }
             Card {
                 if active.isEmpty {
-                    CardRow(first: true) { Text("No preview links on.").foregroundStyle(.secondary) }
+                    CardRow(first: true) { Text("App previews are off. Link cleaning works independently.").foregroundStyle(.secondary) }
                 }
                 ForEach(Array(active.enumerated()), id: \.element.id) { i, p in
                     CardRow(first: i == 0) {
@@ -78,7 +78,7 @@ struct PreviewsPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            PageHeader(title: "Preview links", info: "In the apps you pick, links are swapped for a mirror that shows the full post in the chat preview. Switch to any other app and the clean link is put back. Mirrors are run by third parties: they see a link only when someone opens it.")
+            PageHeader(title: "App previews", info: "An optional extra to link cleaning: adapt X and Instagram links for better previews in the destination apps you choose. Other apps get the clean original. Mirrors are run by third parties: they see a link only when someone opens it.")
             ForEach(store.builtins.previews, id: \.id) { card($0) }
         }
         .sheet(item: $choosing) { c in
@@ -144,7 +144,7 @@ struct TrackersPage: View {
     var body: some View {
         let t = store.builtins.trackers
         VStack(alignment: .leading, spacing: 0) {
-            PageHeader(title: "Trackers", info: "What fxclip removes from the links you copy. Useful parts of a link (a YouTube timestamp, an Amazon size or colour, a search) are always kept.")
+            PageHeader(title: "Link cleaning", info: "What fxclip removes from the links you copy. Useful parts of a link (a YouTube timestamp, an Amazon size or colour, a search) are always kept.")
             Card {
                 CardRow(first: true) {
                     Text("All websites").fontWeight(.semibold)

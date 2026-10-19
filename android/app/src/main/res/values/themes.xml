@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="icon_background">#2F6FEB</color>
+
+    <style name="Theme.Fxclip" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.Fxclip.Invisible" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+    <style name="Theme.Fxclip.Dialog" parent="android:Theme.Material.Light.Dialog.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
+</resources>
