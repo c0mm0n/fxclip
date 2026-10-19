@@ -107,11 +107,27 @@ wait_version() {
     done
     return 1
 }
+installed_manifest() {
+    for file in "$HOME/.local/bin"/fxclip{,-ui,.rules.json,-icon.png,-tray.png} \
+        "$HOME/.local/lib/fxclip"/{wl-copy,wl-paste,LICENSE.wl-clipboard,wl-clipboard-source.tar.gz} \
+        "$HOME/.config/systemd/user/fxclip.service" \
+        "$HOME/.local/share/applications/io.github.fxclip.Fxclip.desktop" \
+        "$HOME/.local/share/icons/hicolor/512x512/apps/io.github.fxclip.png"; do
+        stat -c '%a %n' "$file"
+        sha256sum "$file"
+    done
+}
 for scenario in install relaunch-failure install-failure; do
     stop_ui
     sh "$work/1.0.0/install.sh"
-    # Updates must not turn login startup back on.
-    systemctl --user disable fxclip.service
+    startup=enabled; automatic=true
+    if [[ "$scenario" != install ]]; then
+        startup=disabled; automatic=false
+        systemctl --user disable fxclip.service
+    fi
+    printf '[General]\nautomaticChecks=%s\nlastCheck=%s\n' "$automatic" "$(date +%s)" > "$HOME/.config/fxclip/updates.ini"
+    manifest=$(installed_manifest)
+    before=$(wc -l < "$proof/requests.log")
     old_pid=$(systemctl --user show fxclip.service --property=MainPID --value)
     export FXCLIP_UPDATE_TEST_MODE=install FXCLIP_UPDATE_TEST_API="$base/normal/latest"
     export FXCLIP_UPDATE_TEST_OUTPUT="$proof/$scenario.json" FXCLIP_UPDATE_TEST_RELAUNCH_CAPTURE="$proof/$scenario-relaunched.png"
@@ -139,15 +155,23 @@ SH
     flock -n "$HOME/.local/lib/fxclip/update.lock" true
     [[ "$("$HOME/.local/bin/fxclip" --version)" == "fxclip $expected" ]]
     [[ "$settings_hash" == "$(sha256sum "$HOME/.config/fxclip/settings.json")" ]]
-    [[ "$(systemctl --user is-enabled fxclip.service || true)" == disabled ]]
+    [[ "$(systemctl --user is-enabled fxclip.service || true)" == "$startup" ]]
     systemctl --user is-active --quiet fxclip.service
     [[ "$old_pid" != "$(systemctl --user show fxclip.service --property=MainPID --value)" ]]
     "$ui" --updates
     [[ "$(pgrep -u "$(id -u)" -f "^$ui( |$)" | wc -l)" == 1 ]]
-    if [[ "$scenario" != install ]]; then [[ "$old_hash" == "$(sha256sum "$ui" "$HOME/.local/bin/fxclip")" ]]; fi
+    if [[ "$scenario" != install ]]; then [[ "$manifest" == "$(installed_manifest)" ]]; fi
     verify_cleaning
     sleep 1
     test -s "$proof/$scenario-relaunched.png"
+    python3 - "$proof/$scenario.json" "$HOME/.config/fxclip/updates.ini" "$automatic" "$proof/requests.log" "$before" <<'PY'
+import configparser,json,sys
+r=json.load(open(sys.argv[1])); assert r['passed'],r
+preferences=configparser.ConfigParser(); preferences.read(sys.argv[2])
+assert preferences.getboolean('General','automaticChecks') == (sys.argv[3]=='true')
+requests=open(sys.argv[4]).read().splitlines()[int(sys.argv[5]):]
+assert len(requests)==2 and requests[0].endswith('/latest') and requests[1].endswith('.tar.gz'),requests
+PY
     printf '%s\n' "$scenario: real GUI/service replacement, preferences, single instance and clipboard passed" | tee "$proof/$scenario-result.txt"
 done
 cp "$HOME/.local/state/fxclip/update.log" "$proof/installer.log"
