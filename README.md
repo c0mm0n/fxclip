@@ -46,6 +46,12 @@ fxclip isn't notarized by Apple yet, so macOS blocks the first launch: open **Sy
 ### Windows (10/11, x64)
 Unzip `fxclip-windows-x64.zip` and run `fxclip.exe`; it lives in the tray, with the same settings window as on the Mac. It isn't signed yet, so SmartScreen may warn: click **More info › Run anyway**. Rewritten preview links stay out of Win+V history. Details: [Windows/README.md](Windows/README.md).
 
+### Android (8.0+)
+Sideload the APK. Android forbids watching the clipboard in the background, so cleaning is one tap:
+share a link to **Clean link**, pick it in the text selection menu, or use the quick-settings tile
+or the home-screen widget. Telegram still receives the preview link. No permission is requested,
+not even internet. Details: [android/README.md](android/README.md).
+
 ### Linux (Wayland)
 Works on Sway, Hyprland and KDE Plasma (GNOME Wayland doesn't let background apps watch the clipboard). wl-clipboard comes bundled (2.3, with KDE's newer clipboard protocol); on KDE, install `kdotool` for previews. Then:
 ```shell
@@ -72,6 +78,7 @@ Engine tests: `swift test --package-path Engine`.
 - `Engine/` is the cleaning engine (Foundation only), tested against `Shared/vectors.json`, a list of before/after links.
 - `App/` is the macOS menu bar app: it watches the clipboard, applies the engine, and swaps the preview link in and out as you change apps.
 - `Linux/` is the Wayland daemon; it reuses the same Swift engine.
+- `android/` is the Android app in Kotlin/Compose, with its own port of the engine held to the same test files.
 - `Windows/` is the tray app in C#, with its own port of the engine held to the same test files (`Shared/vectors.json`, `Shared/settings_vectors.json`).
 
 ## Releases

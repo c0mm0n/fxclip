@@ -1,0 +1,9 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+
+# The cloud port kept for reference, not part of the app.
+_portage_cloud/
