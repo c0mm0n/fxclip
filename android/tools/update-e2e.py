@@ -229,6 +229,16 @@ try:
         if version() == (101, '1.0.1'): break
         time.sleep(.2)
     else: raise AssertionError('Android did not install version 1.0.1')
+    # PackageManager exposes the new version before Package Installer has closed.
+    # A launcher intent during that gap can be delivered to the finishing installer
+    # instead of opening the app. Wait for the native surface to actually leave.
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        state = device('shell', 'dumpsys', 'activity', 'activities')
+        resumed = re.findall(r'(?:topResumedActivity|mResumedActivity)[:=][^\n]*', state)
+        if resumed and all('packageinstaller' not in line for line in resumed): break
+        time.sleep(.2)
+    else: raise AssertionError('Android installer did not close after replacement')
     assert not device('shell', 'pidof', package, check=False).strip(), 'Unexpected automatic relaunch'
     launch(); wait(strings['update_version'] % '1.0.1'); wait(strings['update_idle'])
     assert len(device('shell', 'pidof', package).split()) == 1
