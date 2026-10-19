@@ -9,8 +9,8 @@ Each version ships on its own. The sections below describe the full product; any
   - Today's engine and menu bar app (done), plus per-app preview links.
   - Settings window with a sidebar (replaced the 3 tabs, 2026-10-18), toggles only:
     - Overview: status, Pause / Skip next copy, counters, preview links in use.
-    - Preview links: on/off and apps per rewrite.
-    - Trackers: on/off per site. Never clean: websites left untouched.
+    - Link cleaning: on/off per site. Never clean: websites left untouched.
+    - App previews: optional, on/off and apps per rewrite.
     - Settings: menu bar, Dock, Open at login.
   - One first-run screen.
   - Distribution: ad-hoc signed DMG on GitHub Releases, built by CI from a tag (done). Notarization and Sparkle updates wait for the signing identity.
@@ -20,7 +20,7 @@ Each version ships on its own. The sections below describe the full product; any
 - **v2:** Windows, maybe the Mac App Store.
 
 ## Product
-**Lead with the per-app preview links** (market check 2026-10-18, `plan/r3_*.md`: no app does it; Unfurl, Clean Links and Pure Paste already clean links, so cleaning is table stakes). Tagline: "Links that preview right, in the app you paste them into. Trackers gone everywhere." Everything stays local: no history, no analytics, no network calls (except opt-in update checks).
+**Lead with link cleaning** (owner decision, 2026-10-19; replaces the preview-first positioning in `plan/r3_*.md`). Tagline: "Clean links, ready to share." The core is removing tracking parameters while preserving useful link details. Adapting links to their destination is an optional extra; Telegram previews are one example. Settings put Link cleaning before App previews. Everything stays local: no history, no analytics, no network calls (except opt-in update checks).
 
 ### Screens
 1. **First run** (one window, 3 steps)
