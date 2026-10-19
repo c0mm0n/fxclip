@@ -26,6 +26,7 @@ work = Path(tempfile.mkdtemp(prefix='fxclip-android-update-'))
 log = (proof / 'driver.log').open('w')
 server = None
 results = []
+session_opened = False
 strings = {item.attrib['name']: (item.text or '').replace("\\'", "'") for item in ET.parse('android/app/src/main/res/values/strings.xml').findall('string')}
 
 def command(args, *, text=None, cwd=None, timeout=180, allow_settings=False, check=True):
@@ -65,8 +66,15 @@ def version():
     return int(code[1]), name[1]
 
 def launch():
+    global session_opened
+    # Bind the UI driver once, before the first (default-off) case. Its open command
+    # adds CATEGORY_DEFAULT, which some Android versions refuse for this launcher.
+    # Later cold openings use one canonical launcher intent: a second Activity would
+    # replace a completed automatic-check result with a fresh ViewModel's idle status.
+    if not session_opened:
+        drive('open', package, '--foreground', '--no-test-ime')
+        session_opened = True
     device('shell', 'am', 'start', '-W', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.LAUNCHER', '-f', '0x10200000', '-n', activity)
-    drive('open', package, '--foreground', '--no-test-ime')
     wait('42')
     press('fxclip-updates-nav')
 
