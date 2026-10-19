@@ -34,11 +34,35 @@ This installs fxclip into `~/.local/bin`, the clipboard tools into
 next to `fxclip` when running directly from the extracted tarball. fxclip looks
 first in that adjacent `libexec/`, then in `~/.local/lib/fxclip/`, then on `PATH`.
 
+The package also installs the optional KDE-friendly Qt 6 desktop window as
+`~/.local/bin/fxclip-ui`. Open it from a terminal or your application launcher.
+It provides Overview, Link cleaning, App previews, Never clean and Settings
+pages, including app selection, Wayland diagnostics and controls for the
+existing user service. Qt 6 Widgets and a Qt Wayland platform plugin are runtime
+requirements for the window; the headless `fxclip` service does not depend on
+Qt. If a system tray is available, closing the window keeps it in the tray;
+otherwise it exits. The service continues running when the window closes.
+Start/stop and login startup are separate controls.
+
+The installer adds an application launcher and icon under your XDG data
+directory. Its `Exec` entry contains the absolute path to `~/.local/bin/fxclip-ui`,
+so launching it does not depend on that directory being in `PATH`. The window,
+tray and launcher use the original app icon artwork; the launcher icon is installed
+at 512×512 and the tray uses the 64×64 variant.
+
+The window edits the same `settings.json` used by the daemon and atomically saves
+changes. Unknown JSON fields are preserved. Invalid settings stay untouched and
+the controls remain read-only until the file is fixed.
+
 Use `~/.local/bin/fxclip check` to see the compositor, data-control availability,
 the selected clipboard tool paths and versions, focused application identifier,
 and config path. If a data-control probe fails, `check` also inspects advertised
 globals when `wayland-info` is installed. An older PATH fallback may need upgrading
 to wl-clipboard 2.3.0 for an ext-only desktop; reinstalling this release supplies it.
+To add a Linux app in App previews, choose **Add Linux app…**, select **Detect app**,
+then switch to the target app within five seconds. The detected identifier fills
+editable fields; review them and choose **Add** to save. You can also enter the
+identifier manually, and canceling the dialog does not change settings.
 Stop the service before running a second instance manually: `systemctl --user stop fxclip`.
 `journalctl --user -u fxclip` shows diagnostics; `fxclip --version` shows the build.
 `fxclip clean 'https://x.com/example/status/123?utm_source=test' --app org.telegram.desktop`
@@ -121,7 +145,15 @@ swift test --package-path Linux
 swift build --package-path Linux -c release --static-swift-stdlib
 cp Shared/rules.json Linux/.build/release/fxclip.rules.json
 Linux/.build/release/fxclip --version
+cmake -S Linux/ui -B Linux/ui/build -DCMAKE_BUILD_TYPE=Release
+cmake --build Linux/ui/build --parallel
+ctest --test-dir Linux/ui/build --output-on-failure
 ```
+
+Building the optional Qt window on Ubuntu 22.04 requires `cmake`, `g++`,
+`libgl-dev`, `qt6-base-dev`, `qt6-qpa-plugins` and `qt6-wayland`. The package
+needs the Qt 6 Widgets runtime and Qt Wayland platform plugin to run the window;
+the headless daemon does not require Qt.
 
 To build the bundled tools on Ubuntu 22.04, install `meson`, `ninja-build`,
 `libwayland-dev`, `pkg-config`, `gcc`, `git`, `curl`, `xz-utils` and `python3`, then run

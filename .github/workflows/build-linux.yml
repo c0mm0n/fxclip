@@ -27,7 +27,7 @@ jobs:
       - name: Build bundled wl-clipboard 2.3.0 with ext-data-control
         run: |
           sudo apt-get update
-          sudo apt-get install -y meson ninja-build libwayland-dev pkg-config curl xz-utils
+          sudo apt-get install -y meson ninja-build libwayland-dev pkg-config curl xz-utils cmake libgl-dev qt6-base-dev qt6-qpa-plugins qt6-wayland desktop-file-utils
           bash Linux/scripts/build-wl-clipboard.sh "$PWD/package/libexec"
       - name: Test shared engine on Linux Foundation
         run: swift test --package-path Engine
@@ -47,9 +47,22 @@ jobs:
           strip package/fxclip
           python3 Linux/scripts/sanitize-runtime-paths.py package/fxclip
           cp Shared/rules.json package/fxclip.rules.json
+          cmake -S Linux/ui -B Linux/ui/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build Linux/ui/build --parallel
+          ctest --test-dir Linux/ui/build --output-on-failure
+          cp Linux/ui/build/fxclip-ui package/fxclip-ui
+          cp Linux/ui/build/fxclip-icon.png package/fxclip-icon.png
+          cp Linux/ui/build/fxclip-tray.png package/fxclip-tray.png
+          cmp package/fxclip-icon.png App/Assets.xcassets/AppIcon.appiconset/icon_512x512.png
+          cmp package/fxclip-tray.png App/Assets.xcassets/AppIcon.appiconset/icon_32x32@2x.png
           cp Linux/dist/* package/
           chmod +x package/install.sh
           test "$(package/fxclip --version)" = "fxclip $VERSION"
+          ldd package/fxclip-ui | grep -q 'libQt6Widgets.so.6'
+          QT_QPA_PLATFORM=offscreen package/fxclip-ui --icon-check
+          mkdir -p "$RUNNER_TEMP/fxclip-home" "$RUNNER_TEMP/fxclip-config"
+          HOME="$RUNNER_TEMP/fxclip-home" XDG_CONFIG_HOME="$RUNNER_TEMP/fxclip-config" QT_QPA_PLATFORM=offscreen FXCLIP_UI_SCREENSHOT="$RUNNER_TEMP/fxclip-ui.png" package/fxclip-ui --smoke-pages
+          test -s "$RUNNER_TEMP/fxclip-ui.png"
           if ldd package/fxclip | grep -Ei 'libswift|libFoundation|libdispatch|libBlocksRuntime'; then
             echo 'Unexpected dynamic Swift dependency' >&2
             exit 1
@@ -86,13 +99,14 @@ jobs:
           tar xzf fxclip-linux-x86_64.tar.gz -C "$archive_dir"
           test "$(find "$archive_dir" -mindepth 1 -maxdepth 1 -printf '%f\n')" = fxclip-linux-x86_64
           cd "$archive_dir/fxclip-linux-x86_64"
-          for file in fxclip fxclip.rules.json fxclip.service install.sh README.md libexec/wl-copy libexec/wl-paste libexec/LICENSE.wl-clipboard libexec/wl-clipboard-source.tar.gz; do test -f "$file"; done
-          test "$(find . -type f | wc -l)" -eq 9
+          for file in fxclip fxclip-ui fxclip-icon.png fxclip-tray.png fxclip.rules.json fxclip.service install.sh README.md libexec/wl-copy libexec/wl-paste libexec/LICENSE.wl-clipboard libexec/wl-clipboard-source.tar.gz; do test -f "$file"; done
+          test "$(find . -type f | wc -l)" -eq 12
           for tool in wl-copy wl-paste; do
             test -x "libexec/$tool"
             test "$("libexec/$tool" --version | sed -n "1p")" = "wl-clipboard 2.3.0"
           done
           test -x ./install.sh
+          test -x ./fxclip-ui
           test "$(./fxclip --version)" = "fxclip $VERSION"
       - uses: actions/upload-artifact@v4
         with:

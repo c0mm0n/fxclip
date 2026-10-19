@@ -60,7 +60,7 @@ Works on Sway, Hyprland and KDE Plasma (GNOME Wayland doesn't let background app
 tar xzf fxclip-linux-x86_64.tar.gz && cd fxclip-linux-x86_64 && ./install.sh
 fxclip check
 ```
-It runs as a systemd user service with no window; settings live in `~/.config/fxclip/settings.json`, same format as the other platforms. Details: [Linux/dist/README.md](Linux/dist/README.md).
+It runs as a systemd user service with an optional Qt 6 desktop window (`fxclip-ui`) for settings, service state and Wayland diagnostics. Settings live in `~/.config/fxclip/settings.json`, shared with the other platforms. Details: [Linux/dist/README.md](Linux/dist/README.md).
 
 ### Build from source
 Requires Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
@@ -79,7 +79,7 @@ Engine tests: `swift test --package-path Engine`.
 - `Shared/rules.json` holds every rule: tracker parameters, site rules and preview mirrors. No code change is needed to add a site.
 - `Engine/` is the cleaning engine (Foundation only), tested against `Shared/vectors.json`, a list of before/after links.
 - `App/` is the macOS menu bar app: it watches the clipboard, applies the engine, and swaps the preview link in and out as you change apps.
-- `Linux/` is the Wayland daemon; it reuses the same Swift engine.
+- `Linux/` is the Wayland daemon and optional Qt desktop UI; the daemon reuses the same Swift engine.
 - `android/` is the Android app in Kotlin/Compose, with its own port of the engine held to the same test files.
 - `Windows/` is the tray app in C#, with its own port of the engine held to the same test files (`Shared/vectors.json`, `Shared/settings_vectors.json`).
 

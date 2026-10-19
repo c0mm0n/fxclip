@@ -1,0 +1,34 @@
+cmake_minimum_required(VERSION 3.16)
+project(fxclip-ui VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Widgets)
+
+add_library(fxclip-settings settings_store.cpp)
+target_link_libraries(fxclip-settings PUBLIC Qt6::Core)
+target_include_directories(fxclip-settings PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_library(fxclip-focus-helper focus_detector.cpp)
+target_link_libraries(fxclip-focus-helper PUBLIC Qt6::Core)
+target_include_directories(fxclip-focus-helper PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(fxclip-ui main.cpp)
+target_link_libraries(fxclip-ui PRIVATE fxclip-settings fxclip-focus-helper Qt6::Widgets)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../../Shared/rules.json ${CMAKE_CURRENT_BINARY_DIR}/fxclip.rules.json COPYONLY)
+set(FXCLIP_MAC_ICON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../App/Assets.xcassets/AppIcon.appiconset)
+configure_file(${FXCLIP_MAC_ICON_DIR}/icon_512x512.png ${CMAKE_CURRENT_BINARY_DIR}/fxclip-icon.png COPYONLY)
+configure_file(${FXCLIP_MAC_ICON_DIR}/icon_32x32@2x.png ${CMAKE_CURRENT_BINARY_DIR}/fxclip-tray.png COPYONLY)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(fxclip-ui-tests tests.cpp)
+    target_link_libraries(fxclip-ui-tests PRIVATE fxclip-settings fxclip-focus-helper Qt6::Core)
+    target_compile_definitions(fxclip-ui-tests PRIVATE FXCLIP_RULES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../Shared/rules.json")
+    add_test(NAME fxclip-ui-tests COMMAND fxclip-ui-tests)
+    add_test(NAME fxclip-ui-pages COMMAND fxclip-ui --smoke-pages)
+    add_test(NAME fxclip-ui-icons COMMAND fxclip-ui --icon-check)
+    set_tests_properties(fxclip-ui-pages fxclip-ui-icons PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()
