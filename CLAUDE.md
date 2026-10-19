@@ -116,3 +116,4 @@ The window copies VoiceInk's layout from **measurements only** (VoiceInk is GPL-
 - Engine changes come with vectors/tests; behaviour differences between platforms must fail tests.
 - A change is done when tests pass, the app is built and installed, and the affected screens were looked at.
 - Commit messages: plain, no Co-Authored-By lines.
+- Use the human contributor's Git identity. Never add an AI as author, committer or co-author, or add generated-by credits to PR descriptions. Shared Claude settings disable automatic attribution; the required `commit-policy` check rejects co-author trailers and known AI noreply identities in every PR commit. Fix rejected commits with rebase/amend before merging.

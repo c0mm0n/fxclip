@@ -13,6 +13,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  commit-policy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test commit attribution policy
+        run: python3 -m unittest discover -s tools -p 'test_commit_policy.py'
+      - name: Check every commit in the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" > "$RUNNER_TEMP/pr-commits.json"
+          python3 tools/check_commit_policy.py "$RUNNER_TEMP/pr-commits.json"
+
   mac:
     runs-on: macos-latest
     steps:
