@@ -74,6 +74,12 @@ internal sealed class SettingsWindow : Window
         navigation[name] = button;
         return button;
     }
+    internal void ShowUpdates()
+    {
+        SelectPage("Settings");
+        UpdateLayout();
+        ((ScrollViewer)((Grid)Content).Children[1]).ScrollToBottom();
+    }
     internal void SelectPage(string name) { selected = name; Refresh(); }
     public void Refresh()
     {

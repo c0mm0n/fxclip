@@ -136,7 +136,7 @@ internal static class Program
         menu.Items.Add(clipboard.Paused ? "Resume" : "Pause", null, (_, _) => clipboard.TogglePause());
         menu.Items.Add(clipboard.SkipNext ? "Don't skip next copy" : "Skip next copy", null, (_, _) => clipboard.ToggleSkip());
         menu.Items.Add("Settings…", null, (_, _) => ShowSettings());
-        menu.Items.Add("Check for Updates…", null, (_, _) => { ShowSettings(); settings?.SelectPage("Settings"); _ = updates.Check(); });
+        menu.Items.Add("Check for Updates…", null, (_, _) => { ShowSettings(); settings?.ShowUpdates(); _ = updates.Check(); });
         menu.Items.Add("About", null, (_, _) => MessageBox.Show($"fxclip {Version}\n\nClean links, ready to share.\nCleaning stays local. Optional updates contact GitHub.\nNo account or analytics.\nLinks are never saved.", "About fxclip"));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Quit", null, (_, _) => _ = Quit());

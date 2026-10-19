@@ -41,8 +41,14 @@ internal static class UpdateTest
                 if (store.Preferences.LastUpdateCheck != checkedAt) throw new Exception("Checked more than daily");
                 updater.SetAutomatic(false);
             }
+            else if (phase == "migrate-login")
+            {
+                SettingsStore.MigrateLoginPath();
+                if (!SettingsStore.OpenAtLogin) throw new Exception("Login path not migrated");
+            }
             else if (phase == "verify")
             {
+                if (Process.GetProcessesByName("fxclip").Length != 1) throw new Exception("Duplicate app instances");
                 if (Program.Version != "1.0.1" || manager.UpdatePendingRestart is not null) throw new Exception("Update was not installed");
                 if (await manager.CheckForUpdatesAsync() is not null) throw new Exception("Equal version offered again");
             }

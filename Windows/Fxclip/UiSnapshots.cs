@@ -26,6 +26,8 @@ internal static class UiSnapshots
                     window.SelectPage(name);
                     await Save(window, Path.Combine(themeDirectory, name.ToLowerInvariant().Replace(' ', '-') + ".png"));
                 }
+                window.ShowUpdates();
+                await Save(window, Path.Combine(themeDirectory, "settings-updates.png"));
                 window.SelectPage("Overview");
                 clipboard.TogglePause();
                 await Save(window, Path.Combine(themeDirectory, "overview-paused.png"));

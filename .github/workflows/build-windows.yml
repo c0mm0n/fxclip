@@ -50,7 +50,7 @@ jobs:
           $capture = Start-Process -FilePath (Resolve-Path Windows/publish/fxclip.exe) -ArgumentList '--capture-ui', (Join-Path $pwd 'Windows/ui-snapshots') -PassThru
           if (!$capture.WaitForExit(30000)) { Stop-Process -Id $capture.Id -Force; throw 'UI capture timed out' }
           if ($capture.ExitCode -ne 0) { throw "UI capture exit code: $($capture.ExitCode)" }
-          if ((Get-ChildItem Windows/ui-snapshots -Filter *.png -Recurse).Count -ne 16) { throw 'Missing UI snapshots' }
+          if ((Get-ChildItem Windows/ui-snapshots -Filter *.png -Recurse).Count -ne 18) { throw 'Missing UI snapshots' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

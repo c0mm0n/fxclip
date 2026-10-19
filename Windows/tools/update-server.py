@@ -4,12 +4,13 @@ from pathlib import Path
 import json
 import sys
 import time
+from urllib.parse import urlsplit
 root, log, port_file = map(Path, sys.argv[1:])
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         with log.open('a') as stream:
             stream.write(self.path + '\n')
-        mode, name = self.path.strip('/').split('/', 1)
+        mode, name = urlsplit(self.path).path.strip('/').split('/', 1)
         if Path(name).name != name or not (root / name).is_file():
             self.send_error(404); return
         data = (root / name).read_bytes()

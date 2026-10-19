@@ -59,7 +59,27 @@ try {
     if ((Get-Content (Join-Path $proof 'installed-and-relaunched.json') -Raw | ConvertFrom-Json).version -ne '1.0.1') { throw 'New version not running' }
     $running = @(Get-Process fxclip -ErrorAction SilentlyContinue | Where-Object { $_.Path.StartsWith($root) })
     if ($running.Count -gt 1) { throw 'Duplicate instances after update' }
-    Add-Content $env:GITHUB_STEP_SUMMARY 'Real Velopack portable 1.0.0 → 1.0.1 replacement and relaunch passed; AppData preserved; opt-in, decline, cancellation, corrupt archive, pending restart and older-version checks passed.'
+    # Exercise the real per-user setup, including an enabled login entry left by the legacy ZIP.
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $priorLogin = (Get-ItemProperty -Path $runKey -Name fxclip -ErrorAction SilentlyContinue).fxclip
+    try {
+        New-Item $runKey -Force | Out-Null
+        Set-ItemProperty $runKey -Name fxclip -Value ('"' + $exe + '"')
+        $installed = Join-Path $root 'setup-install'
+        $setup = (Get-ChildItem (Join-Path $root 'release-1.0.0') -Filter '*-Setup.exe').FullName
+        $result = Join-Path $proof 'setup-login-migration.json'
+        $process = Start-Process $setup -ArgumentList '--silent', '--installto', $installed, '--', '--update-test', 'migrate-login', "$base/normal", $result -PassThru
+        if (!$process.WaitForExit(120000) -or $process.ExitCode -ne 0) { throw 'Per-user setup failed' }
+        for ($i=0; $i -lt 150 -and !(Test-Path $result); $i++) { Start-Sleep -Milliseconds 200 }
+        if (!(Test-Path $result) -or (Get-Content $result -Raw | ConvertFrom-Json).status -ne 'passed') { throw 'Setup launch/login migration failed' }
+        $installedExe = Join-Path $installed 'current/fxclip.exe'
+        Run-Phase $installedExe 'download' "$base/normal" 'setup-download'
+        Run-Phase $installedExe 'pending' "$base/normal" 'setup-installed-and-relaunched'
+    } finally {
+        if ($priorLogin) { Set-ItemProperty $runKey -Name fxclip -Value $priorLogin }
+        else { Remove-ItemProperty $runKey -Name fxclip -ErrorAction SilentlyContinue }
+    }
+    Add-Content $env:GITHUB_STEP_SUMMARY 'Real Velopack portable and per-user setup 1.0.0 → 1.0.1 replacement and relaunch passed; AppData preserved; opt-in, decline, cancellation, corrupt archive, pending restart and older-version checks passed.'
 } finally {
     if ($server -and !$server.HasExited) { Stop-Process -Id $server.Id -Force }
     $env:APPDATA = $priorAppData
