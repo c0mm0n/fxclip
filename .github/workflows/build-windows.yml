@@ -7,7 +7,7 @@ on:
         description: Version to bake into the executable
         type: string
         required: false
-        default: "0.0.0-dev"
+        default: "0.1.0-dev"
   push:
     branches: [windows]
 
@@ -24,7 +24,7 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_NOLOGO: 1
-      FXCLIP_VERSION: ${{ inputs.version || '0.0.0-dev' }}
+      FXCLIP_VERSION: ${{ inputs.version || '0.1.0-dev' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
