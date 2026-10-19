@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Real Qt / Swift / systemd replacements on a disposable Linux runner only.
-set -euo pipefail
+set -Eeuo pipefail
+trap 'printf "Updater verification failed at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 [[ "${GITHUB_ACTIONS:-}" == true ]] || { echo 'Requires a disposable GitHub Actions Linux user.' >&2; exit 1; }
 package=$(realpath "$1")
 fixtures=$(realpath "$2")
@@ -100,8 +101,10 @@ verify_cleaning() {
     return 1
 }
 wait_version() {
-    local expected=$1
-    for _ in {1..45}; do
+    # Allow the installer's bounded launch check, termination and rollback to finish.
+    # 45 × 0.3s could expire while the old files were still being restored.
+    local expected=$1 deadline=$((SECONDS + 60))
+    while ((SECONDS < deadline)); do
         if [[ "$("$ui" --probe 2>/dev/null || true)" == "$expected" ]]; then return 0; fi
         sleep .3
     done
