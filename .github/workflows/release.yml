@@ -120,7 +120,7 @@ jobs:
           FXCLIP_VERSION: ${{ needs.version.outputs.number }}
           FXCLIP_VERSION_CODE: ${{ github.run_number }}
         run: |
-          ./gradlew :engine:test :app:testReleaseUnitTest :app:assembleRelease --console=plain \
+          ./gradlew :engine:test :app:testReleaseUnitTest :app:testUpdateTestUnitTest :app:assembleRelease --console=plain \
             "-PfxclipVersion=$FXCLIP_VERSION" "-PfxclipVersionCode=$FXCLIP_VERSION_CODE"
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk dist/fxclip-android.apk
@@ -135,8 +135,13 @@ jobs:
           path: android/dist/fxclip-android.apk
           if-no-files-found: error
 
+  android-updates:
+    needs: [version]
+    if: needs.version.outputs.publish == 'true'
+    uses: ./.github/workflows/android-updates.yml
+
   publish:
-    needs: [version, mac, linux, windows, android]
+    needs: [version, mac, linux, windows, android, android-updates]
     if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:

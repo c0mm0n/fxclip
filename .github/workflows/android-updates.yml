@@ -1,0 +1,66 @@
+name: Verify Android updates
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  updates:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install the pinned native UI driver
+        run: npm install --prefix "$RUNNER_TEMP/fxclip-device" --no-audit --no-fund --save-exact agent-device@0.21.25
+      - name: Test public and QA metadata policies
+        working-directory: android
+        run: |
+          ./gradlew :engine:test :app:testReleaseUnitTest :app:testUpdateTestUnitTest :app:assembleRelease --console=plain
+          if unzip -p app/build/outputs/apk/release/app-release.apk 'classes*.dex' | strings | grep -F 'http://127.0.0.1:48637'; then
+            echo 'The local update fixture endpoint leaked into the public APK' >&2
+            exit 1
+          fi
+          if "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/release/app-release.apk | grep -F 'application-debuggable'; then
+            echo 'The public APK must not be debuggable' >&2
+            exit 1
+          fi
+      - name: Enable KVM on the disposable runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Real Android installer and failure scenarios
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          avd-name: fxclip-update-${{ matrix.api }}
+          emulator-port: 5554
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: python3 android/tools/update-e2e.py emulator-5554 "$RUNNER_TEMP/fxclip-device/node_modules/.bin/agent-device" "$GITHUB_WORKSPACE/android/update-proof" "$GITHUB_WORKSPACE/android/app/build/outputs/apk/release/app-release.apk"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-update-proof-${{ matrix.api }}
+          path: android/update-proof/
+          if-no-files-found: warn

@@ -56,6 +56,9 @@ jobs:
   windows:
     uses: ./.github/workflows/build-windows.yml
 
+  android-updates:
+    uses: ./.github/workflows/android-updates.yml
+
   android:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -73,7 +76,7 @@ jobs:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
       - name: Test engines, history and build APK
-        run: ./gradlew :engine:test :app:testReleaseUnitTest :app:assembleRelease --console=plain
+        run: ./gradlew :engine:test :app:testReleaseUnitTest :app:testUpdateTestUnitTest :app:assembleRelease --console=plain
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk

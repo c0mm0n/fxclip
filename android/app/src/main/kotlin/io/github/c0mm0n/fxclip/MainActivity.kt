@@ -2,6 +2,9 @@ package io.github.c0mm0n.fxclip
 
 import android.app.StatusBarManager
 import android.content.ComponentName
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
@@ -14,6 +17,8 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,11 +28,15 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,19 +67,26 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import io.github.c0mm0n.fxclip.engine.Engine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.ViewModelProvider
 import io.github.c0mm0n.fxclip.engine.PreviewRule
 import io.github.c0mm0n.fxclip.engine.PreviewSetting
 import io.github.c0mm0n.fxclip.engine.SkipHost
@@ -78,12 +94,13 @@ import io.github.c0mm0n.fxclip.engine.UserSettings
 
 /** Settings: the same choices as the desktop apps, laid out the way Android does settings. */
 class MainActivity : ComponentActivity() {
+    private val updates by lazy { ViewModelProvider(this)[AppUpdater::class.java] }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val store = SettingsStore(this)
         val loaded = store.load()
-        setContent { FxclipTheme { SettingsScreen(store, loaded, resumes.intValue) } }
+        setContent { FxclipTheme { SettingsScreen(store, loaded, resumes.intValue, updates) } }
     }
 
     /** Bumped on every return, so the tile button matches what the panel now holds. */
@@ -92,6 +109,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         resumes.intValue++
+        updates.onOpen()
     }
 
     private var cleanedThisOpen = false
@@ -133,9 +151,9 @@ private fun FxclipTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = scheme, content = content)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-private fun SettingsScreen(store: SettingsStore, loaded: SettingsStore.Loaded, resumes: Int) {
+private fun SettingsScreen(store: SettingsStore, loaded: SettingsStore.Loaded, resumes: Int, updates: AppUpdater) {
     var settings by remember { mutableStateOf(loaded.settings) }
     var unreadable by remember { mutableStateOf(loaded.recovered) }
     fun update(s: UserSettings) {
@@ -146,6 +164,8 @@ private fun SettingsScreen(store: SettingsStore, loaded: SettingsStore.Loaded, r
     val context = LocalContext.current
     var tour by remember { mutableStateOf(!Tutorial.seen(context)) }
     val appBar = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val listState = rememberLazyListState()
+    val navigationScope = rememberCoroutineScope()
 
     if (tour) {
         TutorialDialog {
@@ -155,15 +175,24 @@ private fun SettingsScreen(store: SettingsStore, loaded: SettingsStore.Loaded, r
     }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize().nestedScroll(appBar.nestedScrollConnection),
+        modifier = Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }.nestedScroll(appBar.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
+                actions = {
+                    TextButton(modifier = Modifier.testTag("fxclip-updates-nav"), onClick = { navigationScope.launch {
+                        listState.animateScrollToItem(if (unreadable) 8 else 7)
+                        appBar.state.heightOffset = appBar.state.heightOffsetLimit
+                    } }) {
+                        Text(stringResource(R.string.update_title))
+                    }
+                },
                 scrollBehavior = appBar,
             )
         },
     ) { padding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize().imePadding(),
             contentPadding = PaddingValues(
                 start = 16.dp, end = 16.dp,
@@ -218,12 +247,95 @@ private fun SettingsScreen(store: SettingsStore, loaded: SettingsStore.Loaded, r
             item { MyRules(settings, ::update) }
             item { NeverClean(settings) { update(settings.copy(neverClean = it)) } }
             item { ClipboardOptions() }
+            item { Updates(updates) }
             item { LinkHistory() }
             item { SettingsFile(store, settings, ::update) }
             item { TryLink(settings) }
             item { Privacy() }
         }
     }
+}
+
+@Composable
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+private fun Updates(updates: AppUpdater) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var downloadQuestion by remember { mutableStateOf(false) }
+    var installQuestion by remember { mutableStateOf(false) }
+    var permissionQuestion by remember { mutableStateOf(false) }
+    var notes by remember { mutableStateOf(false) }
+    val dialogModifier = Modifier.semantics { testTagsAsResourceId = true }
+    val installer = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { updates.installerClosed() }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (context.packageManager.canRequestPackageInstalls()) updates.permissionGranted() else updates.permissionNeeded()
+    }
+    SettingsCard(stringResource(R.string.update_title), R.drawable.ic_file) {
+        Note(stringResource(R.string.update_version, BuildConfig.VERSION_NAME))
+        Note(updates.status)
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            OutlinedButton(onClick = updates::check, enabled = !updates.busy, modifier = Modifier.testTag("fxclip-update-check")) { Text(stringResource(R.string.update_check)) }
+        }
+        if (updates.release != null) {
+            if (!updates.release!!.notes.isBlank()) TextButton(onClick = { notes = true }, modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text(stringResource(R.string.update_notes))
+            }
+            if (updates.downloading) LinearProgressIndicator(progress = { updates.progress / 100f }, modifier = Modifier.fillMaxWidth().padding(16.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                if (updates.ready) FilledTonalButton(enabled = !updates.busy, modifier = Modifier.testTag("fxclip-update-install"), onClick = {
+                    if (context.packageManager.canRequestPackageInstalls()) installQuestion = true else permissionQuestion = true
+                }) { Text(stringResource(R.string.update_install)) }
+                else FilledTonalButton(enabled = !updates.busy, modifier = Modifier.testTag("fxclip-update-download"), onClick = { downloadQuestion = true }) { Text(stringResource(R.string.update_download)) }
+            }
+            if (updates.downloading) TextButton(onClick = updates::cancelDownload, modifier = Modifier.padding(horizontal = 16.dp).testTag("fxclip-update-cancel")) {
+                Text(stringResource(R.string.update_cancel))
+            }
+        }
+        SwitchItem(stringResource(R.string.update_automatic), updates.automatic, Modifier.testTag("fxclip-update-auto"), updates::setAutomaticChecks)
+        Note(stringResource(R.string.update_privacy))
+    }
+    if (downloadQuestion && updates.release != null) AlertDialog(
+        modifier = dialogModifier,
+        onDismissRequest = { downloadQuestion = false },
+        title = { Text(stringResource(R.string.update_download)) },
+        text = { Text(stringResource(R.string.update_download_question, updates.release!!.version)) },
+        confirmButton = { TextButton(modifier = Modifier.testTag("fxclip-update-download-confirm"), onClick = { downloadQuestion = false; updates.download() }) { Text(stringResource(R.string.update_download)) } },
+        dismissButton = { TextButton(modifier = Modifier.testTag("fxclip-update-download-decline"), onClick = { downloadQuestion = false }) { Text(stringResource(R.string.update_cancel)) } },
+    )
+    if (installQuestion) AlertDialog(
+        modifier = dialogModifier,
+        onDismissRequest = { installQuestion = false },
+        title = { Text(stringResource(R.string.update_install)) },
+        text = { Text(stringResource(R.string.update_install_question)) },
+        confirmButton = { TextButton(modifier = Modifier.testTag("fxclip-update-install-confirm"), onClick = {
+            installQuestion = false
+            scope.launch {
+                try { updates.installationIntent()?.let { installer.launch(it) } }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { updates.cannotOpenInstaller() }
+            }
+        }) { Text(stringResource(R.string.update_install)) } },
+        dismissButton = { TextButton(modifier = Modifier.testTag("fxclip-update-install-decline"), onClick = { installQuestion = false }) { Text(stringResource(R.string.update_cancel)) } },
+    )
+    if (permissionQuestion) AlertDialog(
+        modifier = dialogModifier,
+        onDismissRequest = { permissionQuestion = false },
+        title = { Text(stringResource(R.string.update_unknown_title)) },
+        text = { Text(stringResource(R.string.update_unknown_note)) },
+        confirmButton = { TextButton(modifier = Modifier.testTag("fxclip-update-permission-open"), onClick = {
+            permissionQuestion = false; updates.permissionNeeded()
+            try { permission.launch(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + context.packageName))) }
+            catch (_: Exception) { updates.cannotOpenInstaller() }
+        }) { Text(stringResource(R.string.update_open_settings)) } },
+        dismissButton = { TextButton(modifier = Modifier.testTag("fxclip-update-permission-decline"), onClick = { permissionQuestion = false }) { Text(stringResource(R.string.update_cancel)) } },
+    )
+    if (notes && updates.release != null) AlertDialog(
+        modifier = dialogModifier,
+        onDismissRequest = { notes = false },
+        title = { Text(stringResource(R.string.update_notes)) },
+        text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) { Text(updates.release!!.notes) } },
+        confirmButton = { TextButton(onClick = { notes = false }) { Text("OK") } },
+    )
 }
 
 /** What fxclip has done so far, in the colours of the theme. */
@@ -336,10 +448,10 @@ private fun SettingsCard(title: String, @DrawableRes icon: Int, content: @Compos
 }
 
 @Composable
-private fun SwitchItem(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun SwitchItem(label: String, checked: Boolean, modifier: Modifier = Modifier, onChange: (Boolean) -> Unit) {
     ListItem(
         headlineContent = { Text(label) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onChange) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = onChange, modifier = modifier) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
 }

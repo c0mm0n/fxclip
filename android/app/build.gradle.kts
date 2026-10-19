@@ -14,6 +14,7 @@ android {
         targetSdk = 35
         versionCode = providers.gradleProperty("fxclipVersionCode").orElse("2").get().toInt()
         versionName = providers.gradleProperty("fxclipVersion").orElse("0.3.0").get()
+        buildConfigField("String", "UPDATE_API", "\"https://api.github.com/repos/c0mm0n/fxclip/releases/latest\"")
     }
 
     val releaseKeystore = System.getenv("FXCLIP_ANDROID_KEYSTORE")
@@ -27,6 +28,12 @@ android {
     }
 
     buildTypes {
+        create("updateTest") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".updatetest"
+            matchingFallbacks += listOf("debug")
+            buildConfigField("String", "UPDATE_API", "\"http://127.0.0.1:48637/latest\"")
+        }
         release {
             // Published APKs use the persistent release key; local/PR builds use the debug key.
             // Not debuggable, so Compose runs at full speed; scrolling is visibly smoother.
@@ -40,7 +47,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
 }
 
 dependencies {
@@ -51,4 +58,5 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.core:core-ktx:1.13.1")
 }

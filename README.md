@@ -28,7 +28,7 @@ As an optional extra, fxclip can adapt links for better previews in the destinat
 - ⏸️ **Pause or skip**: pause cleaning, or leave just the next copy as is
 - 🖥️ **Your choice of presence**: menu bar icon, Dock icon, open at login
 - 🔗 **Optional app previews**: adapt X and Instagram links for better previews in the destination apps you choose, such as Telegram. Other apps get the clean original
-- 🔒 **Private**: link cleaning stays offline, with no account or analytics. On Mac, Windows and Linux, optional update checks contact GitHub; links are never sent
+- 🔒 **Private**: link cleaning stays offline, with no account or analytics. On Mac, Windows, Linux and Android, optional update checks contact GitHub; links are never sent
 - ⬆️ **Mac updates**: check from the app menu, menu bar or Settings, download an update, then install and relaunch. Automatic checks are off until you enable them; downloads and installation always ask
 - 🙈 **Polite with clipboard managers**: the preview rewrites are marked transient, so they don't pile up in your clipboard history
 
@@ -52,10 +52,11 @@ From version 0.4.0, use **Check for Updates…** in fxclip or **Settings › Upd
 Unzip `fxclip-windows-x64.zip` and run `fxclip.exe`; it lives in the tray, with the same settings window as on the Mac. It isn't signed yet, so SmartScreen may warn: click **More info › Run anyway**. Rewritten preview links stay out of Win+V history. Details: [Windows/README.md](Windows/README.md).
 
 ### Android (8.0+)
+
+Android 0.7.0 adds **Updates** in the settings toolbar: check, confirm the download, then **Install Update** through Android’s installer. Optional daily checks run when the app opens. The APK’s digest, package, newer version code and signing certificate are verified; existing data is kept. Install the new APK manually once to get the updater.
 Download `fxclip-android.apk` from the [latest release](https://github.com/c0mm0n/fxclip/releases/latest) and install it. Android forbids watching the clipboard in the background, so cleaning is one tap:
 share a link to **Clean link**, pick it in the text selection menu, or use the quick-settings tile
-or the home-screen widget. Optional preview links adapt to Telegram. No permission is requested,
-not even internet. Details: [android/README.md](android/README.md).
+or the home-screen widget. Optional preview links adapt to Telegram. Cleaning stays local. Only authorized updates use network access and Android’s install permission. Details: [android/README.md](android/README.md).
 
 ### Linux (Wayland)
 
