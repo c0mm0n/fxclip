@@ -9,3 +9,5 @@ __pycache__/
 Windows/releases/
 Windows/vpk/
 Windows/update-proof/
+Linux/ui-snapshots/
+Linux/ui/build/

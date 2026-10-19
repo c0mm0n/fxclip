@@ -138,3 +138,21 @@ wait "$daemon_pid"
 daemon_pid=''
 [[ "$(timeout 2 wl-paste --no-newline)" == 'https://instagram.com/p/123/' ]]
 printf '%s\n' 'Headless Sway e2e passed: clean, preview, restore, own writes, files/images, settings, shutdown.'
+
+# Run the actual Qt helper against the actual compositor/fxclip check, with no fake focus command.
+if [[ "${FXCLIP_E2E_UI:-0}" == 1 ]]; then
+    ui="$(dirname "$binary")/fxclip-ui"
+    proof=${FXCLIP_UI_HELPER_CAPTURE_DIR:?UI proof directory required}
+    mkdir -p "$proof"
+    before=$(sha256sum "$XDG_CONFIG_HOME/fxclip/settings.json" | cut -d' ' -f1)
+    QT_QPA_PLATFORM=wayland QT_WAYLAND_DISABLE_WINDOWDECORATION=1 timeout 20 "$ui" --helper-shot >"$proof/helper.log" 2>&1 &
+    ui_pid=$!
+    sleep 2
+    foot --app-id=org.fxclip.QaChat sh -c 'sleep 30' >"$work/qa-chat.log" 2>&1 &
+    assert_focus org.fxclip.QaChat
+    wait "$ui_pid"
+    test "$(cat "$proof/detected-id.txt")" = org.fxclip.QaChat
+    test "$before" = "$(sha256sum "$XDG_CONFIG_HOME/fxclip/settings.json" | cut -d' ' -f1)"
+    for shot in initial countdown detected; do test -s "$proof/$shot.png"; done
+    printf '%s\n' 'Qt helper real-focus detection and cancel passed; settings unchanged.'
+fi

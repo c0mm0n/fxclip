@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QFile>
 #include <QFileInfo>
 #include <QFont>
 #include <QFrame>
@@ -381,6 +382,11 @@ public:
                         const auto directory = qEnvironmentVariable("FXCLIP_UI_HELPER_CAPTURE_DIR");
                         if (!modal || directory.isEmpty()) return;
                         modal->grab().save(QDir(directory).filePath(stage + QStringLiteral(".png")));
+                        if (stage == QStringLiteral("detected")) {
+                            auto *field = modal->findChild<QLineEdit *>(QStringLiteral("linuxAppIdentifier"));
+                            QFile proof(QDir(directory).filePath(QStringLiteral("detected-id.txt")));
+                            if (field && proof.open(QIODevice::WriteOnly)) proof.write(field->text().toUtf8());
+                        }
                     };
                     QTimer::singleShot(150, this, [this, capture] {
                         QTimer::singleShot(350, this, [capture] { capture(QStringLiteral("initial")); });
@@ -1172,6 +1178,7 @@ private:
     bool statusBusy_ = false, loginBusy_ = false, loginEnabled_ = false;
 };
 
+#ifndef FXCLIP_UI_TESTING
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("fxclip"));
@@ -1196,3 +1203,5 @@ int main(int argc, char **argv) {
     window.show();
     return app.exec();
 }
+
+#endif

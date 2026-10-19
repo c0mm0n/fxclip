@@ -61,8 +61,11 @@ jobs:
           ldd package/fxclip-ui | grep -q 'libQt6Widgets.so.6'
           QT_QPA_PLATFORM=offscreen package/fxclip-ui --icon-check
           mkdir -p "$RUNNER_TEMP/fxclip-home" "$RUNNER_TEMP/fxclip-config"
-          HOME="$RUNNER_TEMP/fxclip-home" XDG_CONFIG_HOME="$RUNNER_TEMP/fxclip-config" QT_QPA_PLATFORM=offscreen FXCLIP_UI_SCREENSHOT="$RUNNER_TEMP/fxclip-ui.png" package/fxclip-ui --smoke-pages
-          test -s "$RUNNER_TEMP/fxclip-ui.png"
+          mkdir -p Linux/ui-snapshots
+          for page in 0 1 2 3 4; do
+            HOME="$RUNNER_TEMP/fxclip-home" XDG_CONFIG_HOME="$RUNNER_TEMP/fxclip-config" QT_QPA_PLATFORM=offscreen FXCLIP_UI_PAGE="$page" FXCLIP_UI_SCREENSHOT="$PWD/Linux/ui-snapshots/page-$page.png" package/fxclip-ui --page-shot
+            test -s "Linux/ui-snapshots/page-$page.png"
+          done
           if ldd package/fxclip | grep -Ei 'libswift|libFoundation|libdispatch|libBlocksRuntime'; then
             echo 'Unexpected dynamic Swift dependency' >&2
             exit 1
@@ -90,7 +93,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y sway foot dbus-x11 jq fonts-dejavu-core
       - name: End-to-end under headless Sway
-        run: dbus-run-session -- bash Linux/scripts/e2e.sh "$PWD/package/fxclip"
+        run: FXCLIP_E2E_UI=1 FXCLIP_UI_HELPER_CAPTURE_DIR="$PWD/Linux/ui-snapshots/helper" dbus-run-session -- bash Linux/scripts/e2e.sh "$PWD/package/fxclip"
+      - name: Qt controls against a real systemd user service
+        run: bash Linux/scripts/ui-service-e2e.sh "$PWD/package" "$PWD/Linux/ui/build/fxclip-ui-service-test" "$PWD/Linux/ui-snapshots/service"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-ui-check
+          path: Linux/ui-snapshots/
+          if-no-files-found: error
       - name: Package Linux release
         run: |
           mv package fxclip-linux-x86_64
