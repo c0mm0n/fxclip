@@ -57,7 +57,11 @@ try {
     Run-Phase $exe 'pending' "$base/normal" 'installed-and-relaunched'
     # Verify a real replacement: the current executable's version and unchanged AppData.
     if ((Get-Content (Join-Path $proof 'installed-and-relaunched.json') -Raw | ConvertFrom-Json).version -ne '1.0.1') { throw 'New version not running' }
-    $running = @(Get-Process fxclip -ErrorAction SilentlyContinue | Where-Object { $_.Path.StartsWith($root) })
+    $running = @(Get-Process fxclip -ErrorAction SilentlyContinue | Where-Object {
+        # A process can exit after enumeration; snapshot Path once before using it.
+        $processPath = $_.Path
+        $processPath -and $processPath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)
+    })
     if ($running.Count -gt 1) { throw 'Duplicate instances after update' }
     # Exercise the real per-user setup, including an enabled login entry left by the legacy ZIP.
     $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
