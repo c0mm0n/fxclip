@@ -17,6 +17,21 @@ xcodebuild -project FxClip.xcodeproj -scheme FxClip -configuration Release \
 
 app=build/dmg/Build/Products/Release/fxclip.app
 codesign --verify --deep --strict "$app"
+python3 - "$app" <<'PY'
+import plistlib
+import subprocess
+import sys
+
+app = sys.argv[1]
+entitlements = plistlib.loads(subprocess.check_output(
+    ["codesign", "-d", "--entitlements", ":-", app], stderr=subprocess.DEVNULL))
+if entitlements != {"com.apple.security.cs.disable-library-validation": True}:
+    raise SystemExit("Release signature must contain only the Sparkle library-validation exception; debugger access is forbidden")
+signature = subprocess.run(["codesign", "-d", "--verbose=4", app],
+                           capture_output=True, text=True, check=True).stderr
+if "Signature=adhoc" not in signature or "runtime" not in signature:
+    raise SystemExit("Release must remain ad-hoc signed with Hardened Runtime")
+PY
 [ "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$version" ]
 
 stage=$(mktemp -d)

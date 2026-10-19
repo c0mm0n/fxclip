@@ -60,3 +60,7 @@ targets:
         CODE_SIGN_IDENTITY: "Apple Development"
         ENABLE_HARDENED_RUNTIME: YES
         MACOSX_DEPLOYMENT_TARGET: "13.0"
+      configs:
+        Release:
+          # Xcode otherwise injects get-task-allow into ad-hoc signatures.
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
