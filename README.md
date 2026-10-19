@@ -1,7 +1,7 @@
 <div align="center">
   <img src="App/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png" width="160" height="160" />
   <h1>fxclip</h1>
-  <p>Copy a link, get it clean. Paste it in Telegram, get a real preview.</p>
+  <p>Clean links, ready to share.</p>
 
   ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-brightgreen)
   ![Swift](https://img.shields.io/badge/Swift-native-orange)
@@ -14,25 +14,26 @@
 
 ---
 
-fxclip sits in your menu bar (or tray) and watches what you copy. Every link loses its trackers (`utm_*`, `fbclid`, YouTube's `si`, Amazon's `ref`…) the moment you copy it. In the apps you choose, x.com and instagram.com links become their preview-friendly mirrors, so the chat shows the post instead of a bare link. Switch to any other app and the clean original is back.
+fxclip cleans the links you copy, removing tracking parameters (`utm_*`, `fbclid`, YouTube's `si`, Amazon's `ref`…) while keeping useful details like timestamps, searches and product options. It sits in your menu bar or tray, ready whenever you copy a link.
+
+As an optional extra, fxclip can adapt links for better previews in the destination apps you choose. For example, X and Instagram links can use preview-friendly mirrors in Telegram. Other apps get the clean original.
 
 ![fxclip](docs/images/overview.png)
 
 ## Features
 
 - 🧹 **Clean every link you copy**: trackers removed on all websites, plus site rules for X, YouTube, Instagram, TikTok, Spotify, Amazon, AliExpress, Facebook, LinkedIn and Reddit
-- 🔗 **Better previews where you want them**: x.com → fxtwitter.com and instagram.com → zzinstagram.com, only while an app you picked is in front (Telegram by default)
-- ↩️ **Clean link everywhere else**: leave that app and the clipboard holds the original, tracker-free link again
 - 🎛️ **You decide what gets trimmed**: switch sites on and off, and keep a list of websites to never touch
 - ⏸️ **Pause or skip**: pause cleaning, or leave just the next copy as is
 - 🖥️ **Your choice of presence**: menu bar icon, Dock icon, open at login
-- 🔒 **Private**: no network, no account, no analytics. Everything happens on your Mac
+- 🔗 **Optional app previews**: adapt X and Instagram links for better previews in the destination apps you choose, such as Telegram. Other apps get the clean original
+- 🔒 **Private**: no network, no account, no analytics. Everything happens on your device
 - 🙈 **Polite with clipboard managers**: the preview rewrites are marked transient, so they don't pile up in your clipboard history
 
 <table>
   <tr>
-    <td><img src="docs/images/preview-links.png" alt="Preview links" /></td>
-    <td><img src="docs/images/trackers.png" alt="Trackers" /></td>
+    <td><img src="docs/images/trackers.png" alt="Link cleaning" /></td>
+    <td><img src="docs/images/preview-links.png" alt="Optional app previews" /></td>
   </tr>
 </table>
 

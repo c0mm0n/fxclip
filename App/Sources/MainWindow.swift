@@ -38,14 +38,14 @@ final class MainWindow {
 }
 
 enum Page: String, CaseIterable, Identifiable {
-    case overview, previews, trackers, neverClean, settings
+    case overview, trackers, previews, neverClean, settings
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .overview: "Overview"
-        case .previews: "Preview links"
-        case .trackers: "Trackers"
+        case .previews: "App previews"
+        case .trackers: "Link cleaning"
         case .neverClean: "Never clean"
         case .settings: "Settings"
         }
@@ -99,7 +99,7 @@ struct MainView: View {
 
     private var sidebar: some View {
         VStack(spacing: 3) {
-            ForEach([Page.overview, .previews, .trackers, .neverClean]) { row($0) }
+            ForEach([Page.overview, .trackers, .previews, .neverClean]) { row($0) }
             Spacer()
             row(.settings)
         }

@@ -1,6 +1,6 @@
 # fxclip for Windows
 
-Links that preview right, in the app you paste them into. Trackers gone everywhere.
+Clean links, ready to share. Remove tracking parameters from copied links, with optional adaptations for better previews in the destination apps you choose.
 
 ## Install
 

@@ -39,8 +39,8 @@ internal sealed class SettingsWindow : Window
         sidebar.Children.Add(settings);
         var links = new StackPanel();
         links.Children.Add(Nav("Overview", "\uE9D9", "#E98A28"));
-        links.Children.Add(Nav("Preview links", "\uE71B", "#1684EF"));
-        links.Children.Add(Nav("Trackers", "\uE72E", "#EF5464"));
+        links.Children.Add(Nav("Link cleaning", "\uE72E", "#EF5464"));
+        links.Children.Add(Nav("App previews", "\uE71B", "#1684EF"));
         links.Children.Add(Nav("Never clean", "\uE8F8", "#7B72EE"));
         sidebar.Children.Add(links);
         root.Children.Add(sidebar);
@@ -78,8 +78,8 @@ internal sealed class SettingsWindow : Window
         switch (selected)
         {
             case "Overview": Overview(); break;
-            case "Preview links": Previews(); break;
-            case "Trackers": Trackers(); break;
+            case "App previews": Previews(); break;
+            case "Link cleaning": Trackers(); break;
             case "Never clean": NeverClean(); break;
             case "Settings": Settings(); break;
         }
@@ -107,7 +107,7 @@ internal sealed class SettingsWindow : Window
     }
     private void Overview()
     {
-        Header("Overview", "fxclip watches what you copy. Trackers are removed from every link, and in the apps you choose, X and Instagram links become preview-friendly mirrors. Nothing leaves your PC.");
+        Header("Overview", "fxclip cleans the links you copy, removing tracking parameters while keeping useful details. Optionally, adapt links for better previews in the destination apps you choose. Nothing leaves your PC.");
         var status = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         status.Children.Add(new Ellipse { Width = 9, Height = 9, Fill = new SolidColorBrush(clipboard.Paused ? Color.FromRgb(232, 153, 50) : Color.FromRgb(41, 190, 92)), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
         var statusText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -126,9 +126,9 @@ internal sealed class SettingsWindow : Window
         var total = Stat($"{store.Preferences.TrackersRemoved:N0}", "trackers removed"); total.Margin = new Thickness(0, 0, 6, 0); stats.Children.Add(total);
         var last = Stat(clipboard.LastClean?.ToShortTimeString() ?? "—", clipboard.LastClean is null ? "no link cleaned since fxclip started" : "last link cleaned"); last.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(last, 1); stats.Children.Add(last);
         page.Children.Add(stats);
-        Section("Preview links in use");
+        Section("Optional app previews");
         var active = store.Effective.Previews.Where(p => p.Apps.Length > 0).ToArray();
-        if (active.Length == 0) page.Children.Add(Ui.Card(Ui.Text("No preview links on.", secondary: true)));
+        if (active.Length == 0) page.Children.Add(Ui.Card(Ui.Text("App previews are off. Link cleaning works independently.", secondary: true)));
         if (active.Length > 0) page.Children.Add(Ui.RowsCard(active.Select(p =>
         {
             var label = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -156,7 +156,7 @@ internal sealed class SettingsWindow : Window
     }
     private void Previews()
     {
-        Header("Preview links", "In the apps you pick, links are swapped for a mirror that shows the full post in the chat preview. Switch to any other app and the clean link is put back. Mirrors are run by third parties: they see a link only when someone opens it.");
+        Header("App previews", "An optional extra to link cleaning: adapt X and Instagram links for better previews in the destination apps you choose. Other apps get the clean original. Mirrors are run by third parties: they see a link only when someone opens it.");
         foreach (var p in store.Builtins.Previews)
         {
             var setting = store.Setting(p);
@@ -174,7 +174,7 @@ internal sealed class SettingsWindow : Window
     }
     private void Trackers()
     {
-        Header("Trackers", "What fxclip removes from the links you copy. Useful parts of a link (a YouTube timestamp, an Amazon size or colour, a search) are always kept.");
+        Header("Link cleaning", "What fxclip removes from the links you copy. Useful parts of a link (a YouTube timestamp, an Amazon size or colour, a search) are always kept.");
         var rules = store.Builtins.Trackers;
         var rows = new List<UIElement>();
         void Tracker(string name, int count, string detail, bool on, Action<bool> change)

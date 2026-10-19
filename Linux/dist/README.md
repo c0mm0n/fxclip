@@ -1,8 +1,8 @@
 # fxclip for Linux (Wayland)
 
-fxclip removes tracking parameters from copied links. While Telegram is focused,
-X and Instagram links become fxtwitter and zzinstagram preview links; switching
-away restores the clean link. No network requests, account, analytics, clipboard
+fxclip cleans copied links by removing tracking parameters while keeping useful
+details. Optionally, it adapts X and Instagram links for better previews in chosen
+destination apps (Telegram by default); switching away restores the clean original. No network requests, account, analytics, clipboard
 history, or clipboard logging. Only the current text is held in memory.
 
 Supported desktops: Sway/wlroots and Hyprland; KDE Plasma with data-control enabled.
