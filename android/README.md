@@ -87,7 +87,7 @@ downloads, corrupt files, invalid digest/size, package/version/certificate refus
 reverification before install, permission guidance and native 1.0.0 → 1.0.1 install.
 Data hashes and an enabled automatic-check preference must survive replacement;
 the app is opened explicitly afterwards. Results and screenshots are kept as CI
-artifacts. Android 8 and 15 native jobs gate release publication.
+artifacts. The Android 15 native job gates release publication.
 
 From the repository root, with an isolated emulator already running:
 
