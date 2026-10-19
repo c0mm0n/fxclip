@@ -67,12 +67,11 @@ try {
         Set-ItemProperty $runKey -Name fxclip -Value ('"' + $exe + '"')
         $installed = Join-Path $root 'setup-install'
         $setup = (Get-ChildItem (Join-Path $root 'release-1.0.0') -Filter '*-Setup.exe').FullName
-        $result = Join-Path $proof 'setup-login-migration.json'
-        $process = Start-Process $setup -ArgumentList '--silent', '--installto', $installed, '--', '--update-test', 'migrate-login', "$base/normal", $result -PassThru
+        $process = Start-Process $setup -ArgumentList '--silent', '--installto', $installed -PassThru
         if (!$process.WaitForExit(120000) -or $process.ExitCode -ne 0) { throw 'Per-user setup failed' }
-        for ($i=0; $i -lt 150 -and !(Test-Path $result); $i++) { Start-Sleep -Milliseconds 200 }
-        if (!(Test-Path $result) -or (Get-Content $result -Raw | ConvertFrom-Json).status -ne 'passed') { throw 'Setup launch/login migration failed' }
+        # Silent setup deliberately does not launch the application (Velopack contract).
         $installedExe = Join-Path $installed 'current/fxclip.exe'
+        Run-Phase $installedExe 'migrate-login' "$base/normal" 'setup-login-migration'
         Run-Phase $installedExe 'download' "$base/normal" 'setup-download'
         Run-Phase $installedExe 'pending' "$base/normal" 'setup-installed-and-relaunched'
     } finally {
