@@ -122,7 +122,8 @@ try:
     # This old Google APIs image crashes its unrelated Messages RCS service at boot,
     # leaving a "Messages has stopped" dialog over the test app. Disable only that
     # preinstalled package on the disposable Android 8 emulator, before fixture builds.
-    if device('shell', 'getprop', 'ro.build.version.sdk').strip() == '26':
+    sdk_level = int(device('shell', 'getprop', 'ro.build.version.sdk').strip())
+    if sdk_level == 26:
         messaging = 'com.google.android.apps.messaging'
         if device('shell', 'pm', 'path', messaging, check=False).strip():
             device('shell', 'pm', 'disable-user', '--user', '0', messaging)
@@ -215,7 +216,14 @@ try:
     drive('alert', 'get'); drive('screenshot', str(proof / 'native-installer.png'))
     drive('alert', 'dismiss'); wait(strings['update_installer_closed'])
     assert version() == (100, '1.0.0') and hashes() == expected_hash
-    press('fxclip-update-install'); press('fxclip-update-install-confirm'); drive('alert', 'accept')
+    press('fxclip-update-install'); press('fxclip-update-install-confirm')
+    if sdk_level == 26:
+        # The old Package Installer's uppercase INSTALL is not an alert-accept alias.
+        # Press its observed native button rather than bypassing Android's installer.
+        wait('INSTALL')
+        drive('press', 'text="INSTALL"', '--settle')
+    else:
+        drive('alert', 'accept')
     deadline = time.monotonic() + 40
     while time.monotonic() < deadline:
         if version() == (101, '1.0.1'): break
