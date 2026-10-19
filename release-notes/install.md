@@ -10,3 +10,8 @@
 tar xzf fxclip-linux-x86_64.tar.gz && cd fxclip-linux-x86_64 && ./install.sh
 ```
 `fxclip check` shows what it detected. Settings live in `~/.config/fxclip/settings.json`.
+
+
+**Android** (8.0+): download `fxclip-android.apk`, open it and allow installation from your browser or file manager when Android asks. Share a link to **Clean link**, or use the text menu, tile or widget. No internet permission is requested.
+
+If you installed an earlier development APK, export your settings and uninstall that build first: published APKs use a dedicated signing key. Uninstalling removes the development app's local data. Future published APKs use the same key and update in place.

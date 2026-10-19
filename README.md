@@ -3,13 +3,14 @@
   <h1>fxclip</h1>
   <p>Clean links, ready to share.</p>
 
-  ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-brightgreen)
+  ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Android-brightgreen)
   ![Swift](https://img.shields.io/badge/Swift-native-orange)
   ![Offline](https://img.shields.io/badge/works-100%25%20offline-blue)
 
   <a href="https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip.dmg"><img src="https://img.shields.io/badge/macOS-Download-blue?style=for-the-badge&logo=apple" alt="Download for macOS"/></a>
   <a href="https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-windows-x64.zip"><img src="https://img.shields.io/badge/Windows-Download-blue?style=for-the-badge&logo=windows" alt="Download for Windows"/></a>
   <a href="https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-linux-x86_64.tar.gz"><img src="https://img.shields.io/badge/Linux-Download-blue?style=for-the-badge&logo=linux" alt="Download for Linux"/></a>
+  <a href="https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-android.apk"><img src="https://img.shields.io/badge/Android-Download-blue?style=for-the-badge&logo=android" alt="Download for Android"/></a>
 </div>
 
 ---
@@ -48,7 +49,7 @@ fxclip isn't notarized by Apple yet, so macOS blocks the first launch: open **Sy
 Unzip `fxclip-windows-x64.zip` and run `fxclip.exe`; it lives in the tray, with the same settings window as on the Mac. It isn't signed yet, so SmartScreen may warn: click **More info › Run anyway**. Rewritten preview links stay out of Win+V history. Details: [Windows/README.md](Windows/README.md).
 
 ### Android (8.0+)
-Sideload the APK. Android forbids watching the clipboard in the background, so cleaning is one tap:
+Download `fxclip-android.apk` from the [latest release](https://github.com/c0mm0n/fxclip/releases/latest) and install it. Android forbids watching the clipboard in the background, so cleaning is one tap:
 share a link to **Clean link**, pick it in the text selection menu, or use the quick-settings tile
 or the home-screen widget. Optional preview links adapt to Telegram. No permission is requested,
 not even internet. Details: [android/README.md](android/README.md).
@@ -84,7 +85,7 @@ Engine tests: `swift test --package-path Engine`.
 
 ## Releases
 
-Push a tag and GitHub does the rest: tests on all three platforms, builds, and one release with the DMG, the Windows zip and the Linux tarball.
+Push a tag and GitHub does the rest: tests on all four platforms, builds, and one release with the DMG, the Windows zip, the Linux tarball and the Android APK.
 
 ```shell
 # write release-notes/v0.2.0.md, commit it, then
@@ -93,6 +94,7 @@ git tag v0.2.0 && git push origin v0.2.0
 
 ## Requirements
 
+- Android 8.0 or later
 - macOS 13 Ventura or later
 - Windows 10/11 x64
 - Linux with a Wayland compositor that supports data-control (Sway, Hyprland, KDE Plasma) and `wl-clipboard`

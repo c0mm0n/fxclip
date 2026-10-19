@@ -45,5 +45,11 @@ The Android SDK is needed; `local.properties` points at it and is not in git.
 ./gradlew :app:assembleRelease  # app/build/outputs/apk/release/
 ```
 
-The APK is signed with the debug key for sideloading, like the ad-hoc signed DMG. A Play Store
-identity is the same open question as the Developer ID on macOS.
+Published APKs use a persistent release key held in GitHub Actions secrets. Local and PR builds
+use the debug key. Switching from a development APK to a published APK requires exporting
+settings and uninstalling the development build first; subsequent published versions update
+in place. A Play Store identity remains a separate decision.
+
+The release workflow sets `-PfxclipVersion` from the tag and `-PfxclipVersionCode` from its run
+number. Signing uses `FXCLIP_ANDROID_KEYSTORE` (path) and `FXCLIP_ANDROID_KEYSTORE_PASSWORD`;
+never commit a keystore or its password.

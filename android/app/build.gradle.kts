@@ -12,16 +12,26 @@ android {
         applicationId = "io.github.c0mm0n.fxclip"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.2.1"
+        versionCode = providers.gradleProperty("fxclipVersionCode").orElse("2").get().toInt()
+        versionName = providers.gradleProperty("fxclipVersion").orElse("0.3.0").get()
+    }
+
+    val releaseKeystore = System.getenv("FXCLIP_ANDROID_KEYSTORE")
+    if (!releaseKeystore.isNullOrBlank()) {
+        signingConfigs.create("release") {
+            storeFile = file(releaseKeystore)
+            storePassword = System.getenv("FXCLIP_ANDROID_KEYSTORE_PASSWORD")
+            keyAlias = "fxclip"
+            keyPassword = System.getenv("FXCLIP_ANDROID_KEYSTORE_PASSWORD")
+        }
     }
 
     buildTypes {
         release {
-            // Sideloaded like the Mac DMG: signed with the debug key for now, no store identity.
+            // Published APKs use the persistent release key; local/PR builds use the debug key.
             // Not debuggable, so Compose runs at full speed; scrolling is visibly smoother.
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (releaseKeystore.isNullOrBlank()) "debug" else "release")
         }
     }
 
