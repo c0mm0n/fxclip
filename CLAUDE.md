@@ -37,7 +37,7 @@ tools/make_dmg.sh 0.2.0                   # ad-hoc signed DMG in build/fxclip.dm
 
 1. Write `release-notes/v0.2.0.md` ("## What's New in fxclip 0.2.0" + emoji bullets), commit, push.
 2. `git tag v0.2.0 && git push origin v0.2.0`.
-3. `.github/workflows/release.yml` runs three platform jobs: `mac` (notes file check, engine tests, DMG), `linux` (`build-linux.yml`: engine tests on Linux Foundation, static binary, headless Sway e2e, tarball) and `windows` (`build-windows.yml`: all vectors, single-file exe, clipboard smoke test, zip). `publish` waits for all three and creates one release with `fxclip.dmg`, `fxclip-windows-x64.zip`, `fxclip-linux-x86_64.tar.gz`. GitHub adds the source archives itself.
+3. `.github/workflows/release.yml` runs three platform jobs: `mac` (notes file check, engine tests, DMG), `linux` (`build-linux.yml`: engine tests on Linux Foundation, static binary, headless Sway e2e, tarball) and `windows` (`build-windows.yml`: all vectors, single-file exe, clipboard smoke test, zip). `publish` waits for all four (including the signed `android` job) and creates one release with `fxclip.dmg`, `fxclip-windows-x64.zip`, `fxclip-linux-x86_64.tar.gz` and `fxclip-android.apk`. GitHub adds the source archives itself.
 4. `build-linux.yml` / `build-windows.yml` also run on pushes to the `linux` / `windows` branches: work on a port there, push the branch, read the run.
 
 The DMG is **ad-hoc signed and not notarized** (owner's choice for now): users click System Settings › Privacy & Security › Open Anyway once. Developer ID, notarization and Sparkle wait for the signing-identity decision.
@@ -101,7 +101,7 @@ The window copies VoiceInk's layout from **measurements only** (VoiceInk is GPL-
 - **v1.3 power users:** link tester, "cleaned" flash, rule editing, import/export.
 - **Windows (shipped 0.2.0):** C# WPF tray app, unsigned single-file exe. Left: test foreground switching, tray and settings on a real Windows desktop; code signing (Azure Trusted Signing) when the identity is decided.
 - **Linux (shipped 0.2.0):** Wayland daemon for Sway/Hyprland/KDE, no window (settings.json). GNOME Wayland can't work (no data-control; would need a Shell extension). Left: first real Hyprland/KDE session.
-- **Android (new):** share target, text menu, tile and widget; Material 3 settings, own rules, settings.json import/export, history, first-launch tour. Background watching is impossible (see `android/README.md`). Left: a release identity, and the Play Store question.
+- **Android:** share target, text menu, tile and widget; Material 3 settings, own rules, settings.json import/export, history, first-launch tour. Background watching is impossible (see `android/README.md`). Published APKs use a persistent signing key from repository secrets; local/PR builds stay debug-signed. Left: the Play Store question.
 - Not taken on desktop: cleaning on *open* (Velja's job), link warnings, link history. Android offers an explicitly opt-in local history and cleans on app open because it cannot watch the clipboard in the background.
 
 ## Ports: rules that keep them honest

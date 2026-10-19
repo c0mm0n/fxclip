@@ -56,8 +56,62 @@ jobs:
           name: release-mac
           path: build/fxclip.dmg
 
+  android:
+    needs: [version]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Prepare release signing key
+        env:
+          FXCLIP_ANDROID_KEYSTORE_B64: ${{ secrets.FXCLIP_ANDROID_KEYSTORE_B64 }}
+          FXCLIP_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.FXCLIP_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          python3 - <<'PYKEY'
+          import base64, os
+          from pathlib import Path
+          encoded = os.environ['FXCLIP_ANDROID_KEYSTORE_B64']
+          if not encoded or not os.environ['FXCLIP_ANDROID_KEYSTORE_PASSWORD']:
+              raise SystemExit('Android release signing secrets are missing')
+          key = Path(os.environ['RUNNER_TEMP']) / 'fxclip-android.p12'
+          key.write_bytes(base64.b64decode(encoded, validate=True))
+          key.chmod(0o600)
+          PYKEY
+      - name: Test and build signed APK
+        env:
+          FXCLIP_ANDROID_KEYSTORE: ${{ runner.temp }}/fxclip-android.p12
+          FXCLIP_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.FXCLIP_ANDROID_KEYSTORE_PASSWORD }}
+          FXCLIP_VERSION: ${{ needs.version.outputs.number }}
+          FXCLIP_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          ./gradlew :engine:test :app:testReleaseUnitTest :app:assembleRelease --console=plain \
+            "-PfxclipVersion=$FXCLIP_VERSION" "-PfxclipVersionCode=$FXCLIP_VERSION_CODE"
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk dist/fxclip-android.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose dist/fxclip-android.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/fxclip-android.apk | grep -F "versionName='$FXCLIP_VERSION'"
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/fxclip-android.p12"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: android/dist/fxclip-android.apk
+          if-no-files-found: error
+
   publish:
-    needs: [mac, linux, windows]
+    needs: [mac, linux, windows, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
