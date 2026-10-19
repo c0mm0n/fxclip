@@ -113,7 +113,10 @@ class MainActivity : ComponentActivity() {
         cleanedThisOpen = true
         val before = Fxclip.removedTotal(this)
         val message = Fxclip.cleanClipboard(this)
-        if (Fxclip.removedTotal(this) != before) Fxclip.toast(this, message)
+        if (Fxclip.removedTotal(this) != before) {
+            resumes.intValue++
+            Fxclip.toast(this, message)
+        }
     }
 }
 
@@ -169,7 +172,7 @@ private fun SettingsScreen(store: SettingsStore, loaded: SettingsStore.Loaded, r
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { Hero() }
+            item { Hero(resumes) }
             if (unreadable) item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
@@ -225,9 +228,9 @@ private fun SettingsScreen(store: SettingsStore, loaded: SettingsStore.Loaded, r
 
 /** What fxclip has done so far, in the colours of the theme. */
 @Composable
-private fun Hero() {
+private fun Hero(resumes: Int) {
     val context = LocalContext.current
-    val removed = remember { Fxclip.removedTotal(context) }
+    val removed = remember(resumes) { Fxclip.removedTotal(context) }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
         shape = RoundedCornerShape(28.dp),

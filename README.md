@@ -50,7 +50,7 @@ Unzip `fxclip-windows-x64.zip` and run `fxclip.exe`; it lives in the tray, with 
 ### Android (8.0+)
 Sideload the APK. Android forbids watching the clipboard in the background, so cleaning is one tap:
 share a link to **Clean link**, pick it in the text selection menu, or use the quick-settings tile
-or the home-screen widget. Telegram still receives the preview link. No permission is requested,
+or the home-screen widget. Optional preview links adapt to Telegram. No permission is requested,
 not even internet. Details: [android/README.md](android/README.md).
 
 ### Linux (Wayland)
