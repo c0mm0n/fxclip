@@ -21,7 +21,7 @@ internal static class UiSnapshots
                 Directory.CreateDirectory(themeDirectory);
                 var window = new SettingsWindow(store, clipboard);
                 window.Show();
-                foreach (var name in new[] { "Overview", "Preview links", "Trackers", "Never clean", "Settings" })
+                foreach (var name in new[] { "Overview", "Link cleaning", "App previews", "Never clean", "Settings" })
                 {
                     window.SelectPage(name);
                     await Save(window, Path.Combine(themeDirectory, name.ToLowerInvariant().Replace(' ', '-') + ".png"));
