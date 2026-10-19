@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Security.Principal;
 using System.Windows;
 using System.Windows.Interop;
+using Velopack;
 using Forms = System.Windows.Forms;
 
 namespace Fxclip;
@@ -13,6 +14,7 @@ internal static class Program
     private static SettingsStore store = null!;
     private static ClipboardService? clipboard;
     private static SettingsWindow? settings;
+    private static AppUpdater updates = null!;
     private static WelcomeWindow? welcome;
     private static Forms.NotifyIcon? tray;
     private static readonly CancellationTokenSource shutdown = new();
@@ -23,6 +25,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        VelopackApp.Build().SetAutoApplyOnStartup(false).Run();
         var sid = WindowsIdentity.GetCurrent().User!.Value;
         pipeName = "fxclip-" + sid;
         using var mutex = new Mutex(true, @"Local\" + pipeName, out var first);
@@ -58,6 +61,9 @@ internal static class Program
                 app.Shutdown(1);
                 return;
             }
+#if UPDATE_TESTING
+            if (args.Length == 4 && args[0] == "--update-test") { _ = UpdateTest.Run(store, args); return; }
+#endif
             var capture = Array.IndexOf(args, "--capture-ui");
             if (capture >= 0)
             {
@@ -65,6 +71,8 @@ internal static class Program
                 _ = UiSnapshots.Capture(store, args[capture + 1]);
                 return;
             }
+            SettingsStore.MigrateLoginPath();
+            updates = new AppUpdater(store);
             _ = Listen();
             if (store.FirstRun && !args.Contains("--no-welcome"))
             {
@@ -73,7 +81,7 @@ internal static class Program
             }
             else { if (store.FirstRun) store.Save(); Start(); }
         };
-        app.Exit += (_, _) => { shutdown.Cancel(); clipboard?.Dispose(); tray?.Dispose(); Theme.Dispose(); };
+        app.Exit += (_, _) => { shutdown.Cancel(); updates?.Stop(); clipboard?.Dispose(); tray?.Dispose(); Theme.Dispose(); };
         app.Run();
         mutex.ReleaseMutex();
     }
@@ -115,6 +123,7 @@ internal static class Program
             UpdateTray();
         };
         UpdateTray();
+        updates.Start();
     }
     private static void UpdateTray()
     {
@@ -127,7 +136,8 @@ internal static class Program
         menu.Items.Add(clipboard.Paused ? "Resume" : "Pause", null, (_, _) => clipboard.TogglePause());
         menu.Items.Add(clipboard.SkipNext ? "Don't skip next copy" : "Skip next copy", null, (_, _) => clipboard.ToggleSkip());
         menu.Items.Add("Settings…", null, (_, _) => ShowSettings());
-        menu.Items.Add("About", null, (_, _) => MessageBox.Show($"fxclip {Version}\n\nClean links, ready to share.\nNo network, no account, no analytics.\nLinks are never saved.", "About fxclip"));
+        menu.Items.Add("Check for Updates…", null, (_, _) => { ShowSettings(); settings?.SelectPage("Settings"); _ = updates.Check(); });
+        menu.Items.Add("About", null, (_, _) => MessageBox.Show($"fxclip {Version}\n\nClean links, ready to share.\nCleaning stays local. Optional updates contact GitHub.\nNo account or analytics.\nLinks are never saved.", "About fxclip"));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Quit", null, (_, _) => _ = Quit());
         var old = tray.ContextMenuStrip;
@@ -147,7 +157,7 @@ internal static class Program
         if (clipboard is null) return;
         if (settings is null)
         {
-            settings = new SettingsWindow(store, clipboard);
+            settings = new SettingsWindow(store, clipboard, updates);
             settings.Closed += (_, _) => settings = null;
         }
         settings.Show();

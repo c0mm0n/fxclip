@@ -12,13 +12,15 @@ internal sealed class SettingsWindow : Window
 {
     private readonly SettingsStore store;
     private readonly ClipboardService clipboard;
+    private readonly AppUpdater updates;
     private readonly StackPanel page = new();
     private readonly Dictionary<string, Button> navigation = [];
     private string selected = "Overview";
-    public SettingsWindow(SettingsStore store, ClipboardService clipboard)
+    public SettingsWindow(SettingsStore store, ClipboardService clipboard, AppUpdater updates)
     {
         this.store = store;
         this.clipboard = clipboard;
+        this.updates = updates;
         Title = "fxclip";
         Width = 950; Height = 700; MinWidth = 800; MinHeight = 560;
         Ui.Setup(this);
@@ -49,9 +51,11 @@ internal sealed class SettingsWindow : Window
         root.Children.Add(scroll);
         Content = root;
         clipboard.Changed += ClipboardChanged;
-        Closed += (_, _) => clipboard.Changed -= ClipboardChanged;
+        updates.Changed += UpdateChanged;
+        Closed += (_, _) => { clipboard.Changed -= ClipboardChanged; updates.Changed -= UpdateChanged; };
         Refresh();
     }
+    private void UpdateChanged() { if (selected == "Settings") Refresh(); }
     private void ClipboardChanged() { if (selected == "Overview") Refresh(); }
     private Button Nav(string name, string glyph, string color)
     {
@@ -107,7 +111,7 @@ internal sealed class SettingsWindow : Window
     }
     private void Overview()
     {
-        Header("Overview", "fxclip cleans the links you copy, removing tracking parameters while keeping useful details. Optionally, adapt links for better previews in the destination apps you choose. Nothing leaves your PC.");
+        Header("Overview", "fxclip cleans the links you copy, removing tracking parameters while keeping useful details. Optionally, adapt links for better previews in the destination apps you choose. Copied links stay on your PC.");
         var status = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         status.Children.Add(new Ellipse { Width = 9, Height = 9, Fill = new SolidColorBrush(clipboard.Paused ? Color.FromRgb(232, 153, 50) : Color.FromRgb(41, 190, 92)), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
         var statusText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -233,10 +237,20 @@ internal sealed class SettingsWindow : Window
         if (!store.Preferences.ShowTrayIcon) page.Children.Add(Ui.Text("Open fxclip again from Start or File Explorer to come back here.", 12, secondary: true));
         Section("Privacy");
         var privacy = new StackPanel();
-        privacy.Children.Add(Ui.Text("Links are cleaned on this PC. Nothing is stored or sent, apart from a count of trackers removed. No network, no account, no analytics.", secondary: true));
+        privacy.Children.Add(Ui.Text("Links are cleaned on this PC. Links are never sent. Settings and the tracker count stay here. Update checks contact GitHub only when requested or enabled. No account or analytics.", secondary: true));
         privacy.Children.Add(Ui.Row(Ui.Text($"{store.Preferences.TrackersRemoved:N0} trackers removed"), Ui.Button("Reset counter", () => { store.Preferences.TrackersRemoved = 0; store.SavePreferences(); })));
         page.Children.Add(Ui.Card(privacy));
-        Section("About");
-        page.Children.Add(Ui.Card(Ui.Row(Ui.Text("Version"), Ui.Text(Program.Version, secondary: true))));
+        Section("Updates");
+        var update = new StackPanel();
+        var check = Ui.Button("Check for Updates…", () => _ = updates.Check()); check.IsEnabled = !updates.Busy;
+        update.Children.Add(Ui.Row(Ui.Text("Version " + Program.Version), check));
+        update.Children.Add(Ui.Text(updates.Status, secondary: true));
+        if (!string.IsNullOrWhiteSpace(updates.Notes)) update.Children.Add(new ScrollViewer { Content = Ui.Text(updates.Notes, 12), MaxHeight = 160, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        if (updates.CanDownload) update.Children.Add(Ui.Button("Download Update", () => _ = updates.Download()));
+        if (updates.Downloading) update.Children.Add(Ui.Button("Cancel Download", updates.Cancel));
+        if (updates.Ready) update.Children.Add(Ui.Button("Restart to Update", () => _ = updates.Install(clipboard.RestoreBeforeQuit)));
+        update.Children.Add(Ui.Row(Ui.Text("Automatically check for updates"), Ui.Toggle("Automatically check for updates", store.Preferences.AutomaticUpdateChecks, updates.SetAutomatic)));
+        update.Children.Add(Ui.Text("Optional: check GitHub once a day. Downloading and restarting always ask for confirmation.", 12, secondary: true));
+        page.Children.Add(Ui.Card(update));
     }
 }

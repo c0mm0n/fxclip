@@ -23,7 +23,7 @@ internal sealed class WelcomeWindow : Window
         Closing += (_, e) => { if (!started) e.Cancel = true; };
         var panel = new StackPanel { Margin = new Thickness(28) };
         panel.Children.Add(Ui.Text("Clean links, ready to share", 24, true));
-        var intro = Ui.Text("fxclip removes trackers (utm_*, fbclid, YouTube si…) from every link you copy. Nothing leaves your PC.");
+        var intro = Ui.Text("fxclip removes trackers (utm_*, fbclid, YouTube si…) from every link you copy. Copied links stay on your PC. Optional update checks contact GitHub, as explained in Settings.");
         intro.Margin = new Thickness(0, 16, 0, 12);
         panel.Children.Add(intro);
         var previews = new CheckBox { Content = "Also adapt links for Telegram previews", IsChecked = true };

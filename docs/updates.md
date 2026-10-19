@@ -21,9 +21,9 @@ After building the exact DMG, `tools/make_appcast.sh` uses Sparkle's official to
 
 `UPDATE_TESTING` is only set by this test build command, never by release or PR packaging. These builds never start the clipboard watcher, skip login setup and keep JSON settings next to the installed test app; UserDefaults uses the dedicated QA bundle ID. `--welcome-test` displays the welcome window for screenshots only: do not click Start. Production builds have no test launch mode or HTTP feed override.
 
-## Windows: next
+## Windows: second delivery (0.5.0)
 
-Use Velopack before the mutex/WPF startup, with a per-user installer, a Velopack portable ZIP retaining the existing download filename, and native release packages/feed on public GitHub Releases. Keep AppData settings/counter and migrate an enabled login entry to the new location. Add checking, notes, progress and **Restart to Update** to the tray menu and Settings. Disable automatic application on exit. No paid signing certificate in this work.
+Velopack 1.2.161 runs before the mutex/WPF startup, with a per-user installer, a Velopack portable ZIP retaining the existing download filename, and native release packages/feed on public GitHub Releases. Keep AppData settings/counter and migrate an enabled login entry to the new location. Add checking, notes, progress and **Restart to Update** to the tray menu and Settings. Disable automatic application on exit. No paid signing certificate in this work.
 
 ## Linux: after Windows
 
@@ -32,3 +32,5 @@ First review/integrate Qt UI PR #8. Add the same update controls to its Settings
 ## Android: last
 
 Add update controls and an opt-in daily check at foreground entry. Add internet/install permissions with clear explanation. Download privately and verify digest, package ID, increasing versionCode and installed signing-certificate compatibility before handing over to Android's installer. Explain the unknown-source setting when needed and handle cancellation. Keep the existing APK signing key and all data; never uninstall a public build to update it. Do not promise silent installation or automatic relaunch.
+
+Windows verification: `Windows/tools/update-e2e.ps1` builds isolated 1.0.0 and 1.0.1 fixtures with `UPDATE_TESTING`, packages and extracts real Velopack portable installs, serves a local HTTP feed, then verifies replacement/relaunch and AppData preservation with the native updater. It covers default-off network behavior, declining, cancellation, digest failure, older/equal versions and leaving a downloaded update pending across a restart. This flag is absent from published builds. UI screenshots are rendered by the real WPF Settings/welcome windows on the Windows runner; a user desktop remains useful for SmartScreen and installer appearance.

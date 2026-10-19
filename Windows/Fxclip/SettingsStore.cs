@@ -63,6 +63,12 @@ internal sealed class SettingsStore
     {
         get { using var key = Registry.CurrentUser.OpenSubKey(RunKey); return key?.GetValue("fxclip") as string == "\"" + Environment.ProcessPath + "\""; }
     }
+    public static void MigrateLoginPath()
+    {
+        // An existing Run entry records the user's opt-in, even when the old ZIP moved.
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey);
+        if (key?.GetValue("fxclip") is string value && !string.IsNullOrWhiteSpace(value)) SetLogin(true);
+    }
     public static void SetLogin(bool enabled)
     {
         using var key = Registry.CurrentUser.CreateSubKey(RunKey);
@@ -73,5 +79,7 @@ internal sealed class SettingsStore
 internal sealed class Preferences
 {
     public bool ShowTrayIcon { get; set; } = true;
+    public bool AutomaticUpdateChecks { get; set; }
+    public DateTimeOffset LastUpdateCheck { get; set; } = DateTimeOffset.MinValue;
     public long TrackersRemoved { get; set; }
 }

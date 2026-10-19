@@ -28,7 +28,7 @@ As an optional extra, fxclip can adapt links for better previews in the destinat
 - ⏸️ **Pause or skip**: pause cleaning, or leave just the next copy as is
 - 🖥️ **Your choice of presence**: menu bar icon, Dock icon, open at login
 - 🔗 **Optional app previews**: adapt X and Instagram links for better previews in the destination apps you choose, such as Telegram. Other apps get the clean original
-- 🔒 **Private**: link cleaning stays offline, with no account or analytics. On Mac, optional update checks contact GitHub; links are never sent
+- 🔒 **Private**: link cleaning stays offline, with no account or analytics. On Mac and Windows, optional update checks contact GitHub; links are never sent
 - ⬆️ **Mac updates**: check from the app menu, menu bar or Settings, download an update, then install and relaunch. Automatic checks are off until you enable them; downloads and installation always ask
 - 🙈 **Polite with clipboard managers**: the preview rewrites are marked transient, so they don't pile up in your clipboard history
 
@@ -98,3 +98,5 @@ A new `release-notes/vX.Y.Z.md` selects that version (for example `v0.3.0`). Oth
 - macOS 13 Ventura or later
 - Windows 10/11 x64
 - Linux with a Wayland compositor that supports data-control (Sway, Hyprland, KDE Plasma) and `wl-clipboard`
+
+Windows 0.5.0 adds a per-user installer and in-app updates in Settings/the tray menu. Automatic checks are optional and off by default; downloading and restarting require confirmation. Cleaning stays local, while authorized updates contact GitHub. Install the complete new Windows download manually once.
