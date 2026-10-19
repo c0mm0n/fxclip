@@ -35,17 +35,17 @@ tools/make_dmg.sh 0.2.0                   # ad-hoc signed DMG in build/fxclip.dm
 
 ## Releases
 
-1. Write `release-notes/v0.2.0.md` ("## What's New in fxclip 0.2.0" + emoji bullets), commit, push.
-2. `git tag v0.2.0 && git push origin v0.2.0`.
-3. `.github/workflows/release.yml` runs three platform jobs: `mac` (notes file check, engine tests, DMG), `linux` (`build-linux.yml`: engine tests on Linux Foundation, static binary, headless Sway e2e, tarball) and `windows` (`build-windows.yml`: all vectors, single-file exe, clipboard smoke test, zip). `publish` waits for all four (including the signed `android` job) and creates one release with `fxclip.dmg`, `fxclip-windows-x64.zip`, `fxclip-linux-x86_64.tar.gz` and `fxclip-android.apk`. GitHub adds the source archives itself.
-4. `build-linux.yml` / `build-windows.yml` also run on pushes to the `linux` / `windows` branches: work on a port there, push the branch, read the run.
+1. Merging to `main` starts `.github/workflows/release.yml` automatically. A new `release-notes/vX.Y.Z.md` chooses a version; otherwise `tools/next_release.py` increments the latest published patch and GitHub generates the change list. A re-run of an already-published commit is a no-op.
+2. Four jobs test and build macOS, Linux, Windows and Android. Android release signing comes from repository secrets; local and PR builds use the debug key.
+3. Only after all builds pass, `publish` uploads all four downloads to a draft, creates the version tag at the tested commit, then publishes the complete release. Concurrent releases are serialized. Explicit `v*` tag pushes are still supported.
+4. `build-linux.yml` / `build-windows.yml` also run on pushes to the `linux` / `windows` branches for port work.
 
 The DMG is **ad-hoc signed and not notarized** (owner's choice for now): users click System Settings › Privacy & Security › Open Anyway once. Developer ID, notarization and Sparkle wait for the signing-identity decision.
 
 ## Contributing and protection (GitHub rulesets)
 
 - `main` changes only through a pull request: one approval (not from the last pusher), and the `PR checks` workflow (`.github/workflows/pr.yml`: `mac`, `linux / linux`, `windows / windows`, `android`) must pass. No force-push or deletion.
-- Release tags `v*` can only be created by admins, so only the owner publishes releases.
+- Release tags `v*` are protected. Automatic publication requires an explicit creation exception for the release workflow; existing tags remain admin-only for updates and deletion.
 - The owner (admin) bypasses both. Merge a PR by fast-forwarding `main` locally and pushing, not with GitHub's merge button, so the commit keeps the noreply identity.
 
 ## Privacy: nothing personal in the repo

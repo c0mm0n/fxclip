@@ -85,12 +85,9 @@ Engine tests: `swift test --package-path Engine`.
 
 ## Releases
 
-Push a tag and GitHub does the rest: tests on all four platforms, builds, and one release with the DMG, the Windows zip, the Linux tarball and the Android APK.
+Every merge to `main` automatically builds and tests all four platforms, then publishes the downloads together. The tag is created only after all builds pass.
 
-```shell
-# write release-notes/v0.2.0.md, commit it, then
-git tag v0.2.0 && git push origin v0.2.0
-```
+A new `release-notes/vX.Y.Z.md` selects that version (for example `v0.3.0`). Otherwise the patch version increments automatically and GitHub generates the change list. Re-running a published commit does not create another release. Explicit version tags are still supported.
 
 ## Requirements
 
