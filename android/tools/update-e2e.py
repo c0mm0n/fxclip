@@ -207,6 +207,18 @@ try:
     passed('native-install-preserves-data-and-consent', 2, new=True)
 except Exception as error:
     (proof / 'failure.txt').write_text(str(error))
+    # Preserve the Android cause as well as the UI-driver symptom (for example an ANR).
+    for name, args in [('logcat.txt', ['logcat', '-d', '-v', 'threadtime']),
+                       ('last-anr.txt', ['shell', 'dumpsys', 'activity', 'lastanr']),
+                       ('activity.txt', ['shell', 'dumpsys', 'activity', 'activities'])]:
+        try:
+            (proof / name).write_text(device(*args, timeout=30, check=False))
+        except Exception as diagnostic_error:
+            (proof / (name + '.error')).write_text(str(diagnostic_error))
+    try:
+        drive('screenshot', str(proof / 'failure.png'), timeout=30)
+    except Exception as diagnostic_error:
+        (proof / 'screenshot.error').write_text(str(diagnostic_error))
     raise
 finally:
     if server is not None:
