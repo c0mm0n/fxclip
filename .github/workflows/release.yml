@@ -1,43 +1,56 @@
-# Push a tag (git tag v0.2.0 && git push origin v0.2.0) with release-notes/v0.2.0.md
-# committed: GitHub tests and builds every platform, then publishes one release.
-# Each platform job uploads its files as an artifact named release-<platform>.
+# A main push builds and tests all four platforms, then publishes the next release.
+# New release-notes/vX.Y.Z.md files select a version; otherwise the patch increments.
 name: Release
 
 on:
   push:
+    branches: [main]
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   version:
     runs-on: ubuntu-latest
     outputs:
       number: ${{ steps.v.outputs.number }}
+      tag: ${{ steps.v.outputs.tag }}
+      publish: ${{ steps.v.outputs.publish }}
     steps:
+      - uses: actions/checkout@v4
       - id: v
-        run: echo "number=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          python3 tools/next_release.py --releases "$RUNNER_TEMP/releases.json" \
+            --ref-type "$GITHUB_REF_TYPE" --ref-name "$GITHUB_REF_NAME" --sha "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
   linux:
     needs: [version]
+    if: needs.version.outputs.publish == 'true'
     uses: ./.github/workflows/build-linux.yml
     with:
       version: ${{ needs.version.outputs.number }}
 
   windows:
     needs: [version]
+    if: needs.version.outputs.publish == 'true'
     uses: ./.github/workflows/build-windows.yml
     with:
       version: ${{ needs.version.outputs.number }}
 
   mac:
+    needs: [version]
+    if: needs.version.outputs.publish == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Notes for this tag
-        run: test -f "release-notes/$GITHUB_REF_NAME.md" || { echo "::error::release-notes/$GITHUB_REF_NAME.md is missing"; exit 1; }
 
       - uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -49,7 +62,9 @@ jobs:
         run: swift test --package-path Engine
 
       - name: Build DMG
-        run: tools/make_dmg.sh "${GITHUB_REF_NAME#v}" "$GITHUB_RUN_NUMBER"
+        env:
+          FXCLIP_VERSION: ${{ needs.version.outputs.number }}
+        run: tools/make_dmg.sh "$FXCLIP_VERSION" "$GITHUB_RUN_NUMBER"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -58,6 +73,7 @@ jobs:
 
   android:
     needs: [version]
+    if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -111,8 +127,11 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [mac, linux, windows, android]
+    needs: [version, mac, linux, windows, android]
+    if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -125,7 +144,19 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
         run: |
-          cat "release-notes/$GITHUB_REF_NAME.md" release-notes/install.md > notes.md
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+          if [ -f "release-notes/$RELEASE_TAG.md" ]; then
+            cat "release-notes/$RELEASE_TAG.md" > notes.md
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+              -f "tag_name=$RELEASE_TAG" -f "target_commitish=$GITHUB_SHA" --jq .body > notes.md
+          fi
+          cat release-notes/install.md >> notes.md
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* --draft --target "$GITHUB_SHA" \
+              --title "$RELEASE_TAG" --notes-file notes.md
+          fi
+          gh release edit "$RELEASE_TAG" --draft=false --latest --notes-file notes.md

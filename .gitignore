@@ -4,3 +4,5 @@ FxClip.xcodeproj/
 .DS_Store
 Local.xcconfig
 *.bak
+
+__pycache__/
