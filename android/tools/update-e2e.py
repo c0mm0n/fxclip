@@ -111,6 +111,13 @@ def passed(name, request_count, new=False):
     print(name + ': passed', flush=True)
 
 try:
+    # This old Google APIs image crashes its unrelated Messages RCS service at boot,
+    # leaving a "Messages has stopped" dialog over the test app. Disable only that
+    # preinstalled package on the disposable Android 8 emulator, before fixture builds.
+    if device('shell', 'getprop', 'ro.build.version.sdk').strip() == '26':
+        messaging = 'com.google.android.apps.messaging'
+        if device('shell', 'pm', 'path', messaging, check=False).strip():
+            device('shell', 'pm', 'disable-user', '--user', '0', messaging)
     # Build only unpublished fixtures. The production APK supplied by CI is never overwritten.
     for name, code in [('1.0.0', 100), ('1.0.1', 101), ('old-code', 100)]:
         release = '1.0.1' if name == 'old-code' else name
