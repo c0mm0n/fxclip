@@ -1127,6 +1127,7 @@ private:
     void setLoginEnabled(bool enabled) {
         if (!unitFound_ || loginBusy_) return;
         loginBusy_ = true;
+        updateServiceButtons();
         runCommand(QStringLiteral("systemctl"), {"--user", enabled ? "enable" : "disable", "fxclip.service"},
             [this, enabled](int code, const QString &, const QString &err) {
                 loginBusy_ = false;

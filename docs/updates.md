@@ -27,7 +27,7 @@ Velopack 1.2.161 runs before the mutex/WPF startup, with a per-user installer, a
 
 ## Linux: after Windows
 
-First review/integrate Qt UI PR #8. Add the same update controls to its Settings and tray, using Qt Network, the latest stable public GitHub release and its asset SHA-256 digest. Stage and verify the complete archive before closing the UI/service or replacing files. Extend the per-user installer with a previous-version backup and rollback on failed installation/restart. Restart both service and UI after confirmation. Automatic checks run only while the UI is open; the cleaner daemon stays offline.
+First review/integrate Qt UI PR #8 (0.5.1). Its Linux workflow builds Qt and runs CTest, captures all five pages, tests the real focus helper against a Wayland window under Sway, and exercises Start/Stop/login controls against a real systemd user service with an unchanged settings-file digest. `Linux/scripts/ui-service-e2e.sh` is restricted to the disposable GitHub Actions user and refuses to overwrite an existing installation. Add the same update controls to its Settings and tray, using Qt Network, the latest stable public GitHub release and its asset SHA-256 digest. Stage and verify the complete archive before closing the UI/service or replacing files. Extend the per-user installer with a previous-version backup and rollback on failed installation/restart. Restart both service and UI after confirmation. Automatic checks run only while the UI is open; the cleaner daemon stays offline.
 
 ## Android: last
 
