@@ -2,8 +2,10 @@
 
 fxclip cleans copied links by removing tracking parameters while keeping useful
 details. Optionally, it adapts X and Instagram links for better previews in chosen
-destination apps (Telegram by default); switching away restores the clean original. No network requests, account, analytics, clipboard
-history, or clipboard logging. Only the current text is held in memory.
+destination apps (Telegram by default); switching away restores the clean original.
+Link cleaning stays local, with no account, analytics, clipboard history or clipboard
+logging. Only the current text is held in memory. Authorized updates contact GitHub
+from the desktop interface; the cleaning service never makes network requests.
 
 Supported desktops: Sway/wlroots and Hyprland; KDE Plasma with data-control enabled.
 GNOME Wayland is unsupported and exits with an explanation. Other compositors with
@@ -38,7 +40,7 @@ The package also installs the optional KDE-friendly Qt 6 desktop window as
 `~/.local/bin/fxclip-ui`. Open it from a terminal or your application launcher.
 It provides Overview, Link cleaning, App previews, Never clean and Settings
 pages, including app selection, Wayland diagnostics and controls for the
-existing user service. Qt 6 Widgets and a Qt Wayland platform plugin are runtime
+existing user service. Qt 6 Widgets, Qt 6 Network and a Qt Wayland platform plugin are runtime
 requirements for the window; the headless `fxclip` service does not depend on
 Qt. If a system tray is available, closing the window keeps it in the tray;
 otherwise it exits. The service continues running when the window closes.
@@ -67,6 +69,26 @@ Stop the service before running a second instance manually: `systemctl --user st
 `journalctl --user -u fxclip` shows diagnostics; `fxclip --version` shows the build.
 `fxclip clean 'https://x.com/example/status/123?utm_source=test' --app org.telegram.desktop`
 runs the engine without accessing the clipboard.
+
+## Updates
+
+From version 0.6.0, choose **Check for Updates…** in the tray menu or **Settings →
+Updates**. Install this download manually once if your current version has no
+updater. The updater manages the standard user installation created by `install.sh`.
+
+Checks contact GitHub Releases for the latest stable Linux x86_64 download and
+release notes. Automatic checks are off until enabled, run at most once a day,
+and only run while the interface is open. Downloading and **Install and Restart**
+each require confirmation; you can cancel a download and keep cleaning. Links and
+clipboard contents are never sent. The headless service has no network activity.
+
+The download is verified against GitHub's SHA-256 digest before extraction. The
+installer keeps the previous files while replacing the interface and service,
+preserves settings and the existing login-startup preference, then relaunches both.
+If installation or relaunch fails, it restores the previous version and shows the
+result in Updates. The local installer log is at
+`$XDG_STATE_HOME/fxclip/update.log` (default `~/.local/state/fxclip/update.log`).
+If restoring files also fails, the message identifies the retained backup.
 
 ## Settings
 
@@ -152,7 +174,7 @@ ctest --test-dir Linux/ui/build --output-on-failure
 
 Building the optional Qt window on Ubuntu 22.04 requires `cmake`, `g++`,
 `libgl-dev`, `qt6-base-dev`, `qt6-qpa-plugins` and `qt6-wayland`. The package
-needs the Qt 6 Widgets runtime and Qt Wayland platform plugin to run the window;
+needs the Qt 6 Widgets and Network runtimes and Qt Wayland platform plugin to run the window;
 the headless daemon does not require Qt.
 
 To build the bundled tools on Ubuntu 22.04, install `meson`, `ninja-build`,
@@ -175,3 +197,11 @@ fail to watch while the bundled 2.3.0 and fxclip pass. The filter preserves Sway
 security filter and is never shipped in the release. Ubuntu 22.04's Sway 1.7
 continues to cover the older wlr protocol. Hyprland and KDE still need verification
 in real desktop sessions.
+
+The updater workflow separately builds unpublished 1.0.0 and 1.0.1 fixtures, drives
+the real Qt controls and HTTP downloads, and replaces the actual Swift daemon and
+Qt interface under systemd/headless Sway. It checks default-off/daily networking,
+refusals, interruption, corruption, offline errors, older/non-stable releases,
+settings and startup preservation, single-instance relaunch, and rollbacks after
+a partial install failure or failed interface relaunch. Clipboard checks use only
+the isolated compositor. Test endpoints and failure hooks are absent from releases.

@@ -58,7 +58,7 @@ The owner's name, e-mail, company and Apple team ID must never reach git (histor
 - No absolute home paths in docs or plans; refer to repo-relative paths.
 - Before any push: `git grep -i -E '<name>|<email>|<team id>|/Users/'` on what's about to leave, and `strings` on a release binary.
 
-Product privacy promise (README, Settings): link cleaning stays offline, no account or analytics; settings and the counter stay on the Mac. Mac update checks contact GitHub only on request or after enabling automatic checks (daily). No automatic download/install or system-profile reporting. Anything else that needs network access must say so in the UI where it's switched on.
+Product privacy promise (README, Settings): link cleaning stays offline, no account or analytics; settings and the counter stay on the Mac. Mac, Windows and Linux update checks contact GitHub only on request or after enabling automatic checks (daily). No automatic download/install or system-profile reporting. Anything else that needs network access must say so in the UI where it's switched on.
 
 ## Clipboard: what we learned
 

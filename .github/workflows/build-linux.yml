@@ -16,7 +16,7 @@ permissions:
 jobs:
   linux:
     runs-on: ubuntu-22.04
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       VERSION: ${{ inputs.version || '0.0.0-dev' }}
     steps:
@@ -47,7 +47,7 @@ jobs:
           strip package/fxclip
           python3 Linux/scripts/sanitize-runtime-paths.py package/fxclip
           cp Shared/rules.json package/fxclip.rules.json
-          cmake -S Linux/ui -B Linux/ui/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -S Linux/ui -B Linux/ui/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DFXCLIP_VERSION="$VERSION"
           cmake --build Linux/ui/build --parallel
           ctest --test-dir Linux/ui/build --output-on-failure
           cp Linux/ui/build/fxclip-ui package/fxclip-ui
@@ -96,6 +96,24 @@ jobs:
         run: FXCLIP_E2E_UI=1 FXCLIP_UI_HELPER_CAPTURE_DIR="$PWD/Linux/ui-snapshots/helper" dbus-run-session -- bash Linux/scripts/e2e.sh "$PWD/package/fxclip"
       - name: Qt controls against a real systemd user service
         run: bash Linux/scripts/ui-service-e2e.sh "$PWD/package" "$PWD/Linux/ui/build/fxclip-ui-service-test" "$PWD/Linux/ui-snapshots/service"
+      - name: Build isolated update fixtures (never published)
+        run: |
+          for version in 1.0.0 1.0.1; do
+            fixture="$RUNNER_TEMP/fxclip-update-fixtures/$version"
+            mkdir -p "$fixture"
+            printf 'enum Version { static let value = "%s" }\n' "$version" > Linux/Sources/fxclip/Version.swift
+            swift build --package-path Linux -c release --static-swift-stdlib -Xswiftc -gnone -Xswiftc -debug-prefix-map -Xswiftc "$PWD=."
+            cp Linux/.build/release/fxclip "$fixture/fxclip"
+            cmake -S Linux/ui -B "$fixture/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DFXCLIP_VERSION="$version" -DFXCLIP_UPDATE_TESTING=ON -DBUILD_TESTING=OFF
+            cmake --build "$fixture/build" --parallel
+            cp "$fixture/build/fxclip-ui" "$fixture/fxclip-ui"
+          done
+          if strings package/fxclip-ui | grep -E 'FXCLIP_UPDATE_TEST_(API|FAIL_RELAUNCH|MODE)'; then
+            echo 'Updater test hooks leaked into the public package' >&2
+            exit 1
+          fi
+      - name: Real Qt update, systemd restart and rollback
+        run: bash Linux/scripts/update-e2e.sh "$PWD/package" "$RUNNER_TEMP/fxclip-update-fixtures" "$PWD/Linux/ui-snapshots/updates"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

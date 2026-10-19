@@ -1,11 +1,13 @@
 #include "settings_store.h"
 #include "focus_detector.h"
+#include "app_updater.h"
 
 #include <QApplication>
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QCursor>
 #include <QDir>
+#include <QDebug>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFile>
@@ -26,6 +28,12 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QProcess>
+#include <QProgressBar>
+#include <QLocalServer>
+#include <QLocalSocket>
+#include <QLockFile>
+#include <QCryptographicHash>
+#include <iostream>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSet>
@@ -246,6 +254,9 @@ public:
             startupError_ = store_.error();
         }
 
+        updates_ = new AppUpdater(configPath(), this);
+        connect(updates_, &AppUpdater::changed, this, [this] { refreshUpdates(); });
+        connect(updates_, &AppUpdater::quitForUpdate, qApp, &QApplication::quit);
         auto *root = new QWidget(this);
         auto *rootLayout = new QHBoxLayout(root);
         rootLayout->setContentsMargins(0, 0, 0, 0);
@@ -353,6 +364,7 @@ public:
             tray_->setToolTip(QStringLiteral("fxclip link cleaner"));
             auto *menu = new QMenu(this);
             menu->addAction(QStringLiteral("Open fxclip"), this, [this] { showNormal(); raise(); activateWindow(); });
+            menu->addAction(QStringLiteral("Check for Updates…"), this, [this] { showUpdates(); updates_->check(); });
             startTrayAction_ = menu->addAction(QStringLiteral("Start service"), this, [this] { runServiceAction("start"); });
             stopTrayAction_ = menu->addAction(QStringLiteral("Stop service"), this, [this] { runServiceAction("stop"); });
             menu->addSeparator();
@@ -373,6 +385,7 @@ public:
         statusTimer_->start();
         refreshService();
         refreshLoginState();
+        if (!screenshotMode_) updates_->start();
         if (screenshotMode_) {
             if (qApp->arguments().contains(QStringLiteral("--helper-shot"))) {
                 QTimer::singleShot(350, this, [this] {
@@ -423,6 +436,17 @@ public:
         }
     }
 
+public:
+    ~MainWindow() override {
+        if (statusTimer_) statusTimer_->stop();
+        // QProcess can emit finished from its destructor. Stop callbacks before widgets disappear.
+        for (auto *process : findChildren<QProcess *>(QString(), Qt::FindDirectChildrenOnly)) {
+            disconnect(process, nullptr, this, nullptr);
+            process->kill(); process->waitForFinished(1000); delete process;
+        }
+    }
+    void showUpdates() { setPage(4); showNormal(); raise(); activateWindow(); }
+
 protected:
     void closeEvent(QCloseEvent *event) override {
         if (trayAvailable_ && !screenshotMode_) {
@@ -456,6 +480,9 @@ private:
         startButton_ = stopButton_ = settingsStartButton_ = settingsStopButton_ = nullptr;
         loginCheckBox_ = nullptr;
         diagnostics_ = nullptr;
+        updateStatus_ = nullptr; updateNotes_ = nullptr;
+        checkUpdate_ = downloadUpdate_ = cancelUpdate_ = installUpdate_ = nullptr;
+        automaticUpdate_ = nullptr; updateProgress_ = nullptr;
         while (auto *item = bodyLayout_->takeAt(0)) {
             if (item->widget()) item->widget()->deleteLater();
             delete item;
@@ -739,6 +766,39 @@ private:
     }
 
     void buildSettings() {
+        auto *update = card(body_);
+        auto *layout = new QVBoxLayout(update);
+        layout->setContentsMargins(16, 13, 16, 13);
+        auto *version = new QHBoxLayout;
+        version->addWidget(new QLabel(QStringLiteral("Updates · Version %1").arg(QCoreApplication::applicationVersion()), update));
+        version->addStretch();
+        checkUpdate_ = new QPushButton(QStringLiteral("Check for Updates…"), update);
+        checkUpdate_->setObjectName("checkForUpdates");
+        version->addWidget(checkUpdate_); layout->addLayout(version);
+        connect(checkUpdate_, &QPushButton::clicked, updates_, &AppUpdater::check);
+        updateStatus_ = new QLabel(update); updateStatus_->setWordWrap(true); layout->addWidget(updateStatus_);
+        updateNotes_ = new QTextEdit(update); updateNotes_->setReadOnly(true);
+        updateNotes_->setMaximumHeight(160); layout->addWidget(updateNotes_);
+        updateProgress_ = new QProgressBar(update); updateProgress_->setRange(0, 100); layout->addWidget(updateProgress_);
+        auto *updateActions = new QHBoxLayout;
+        downloadUpdate_ = new QPushButton(QStringLiteral("Download Update"), update); downloadUpdate_->setObjectName("downloadUpdate");
+        cancelUpdate_ = new QPushButton(QStringLiteral("Cancel Download"), update); cancelUpdate_->setObjectName("cancelUpdate");
+        installUpdate_ = new QPushButton(QStringLiteral("Install and Restart"), update); installUpdate_->setObjectName("installUpdate");
+        updateActions->addWidget(downloadUpdate_); updateActions->addWidget(cancelUpdate_); updateActions->addWidget(installUpdate_); updateActions->addStretch(); layout->addLayout(updateActions);
+        connect(downloadUpdate_, &QPushButton::clicked, this, [this] {
+            if (QMessageBox::question(this, "fxclip update", "Download this update from GitHub? Installation will wait for your confirmation.") == QMessageBox::Yes) updates_->download();
+        });
+        connect(cancelUpdate_, &QPushButton::clicked, updates_, &AppUpdater::cancel);
+        connect(installUpdate_, &QPushButton::clicked, this, [this] {
+            if (QMessageBox::question(this, "Install and Restart", "Install the verified update and restart the interface and cleaning service now?") == QMessageBox::Yes) updates_->install();
+        });
+        automaticUpdate_ = new QCheckBox(QStringLiteral("Automatically check for updates"), update);
+        automaticUpdate_->setObjectName("automaticUpdateChecks");
+        automaticUpdate_->setChecked(updates_->automatic()); layout->addWidget(automaticUpdate_);
+        connect(automaticUpdate_, &QCheckBox::toggled, updates_, &AppUpdater::setAutomatic);
+        auto *privacy = new QLabel(QStringLiteral("Optional: check GitHub once a day while this interface is running. Downloads and installation always ask for confirmation. Link cleaning stays local; the cleaning service never contacts GitHub."), update);
+        privacy->setWordWrap(true); layout->addWidget(privacy);
+        bodyLayout_->addWidget(update); refreshUpdates();
         auto *service = card(body_);
         auto *serviceLayout = new QVBoxLayout(service);
         serviceLayout->setContentsMargins(16, 13, 16, 13);
@@ -798,6 +858,18 @@ private:
             auto *output = new QTextEdit(body_); output->setReadOnly(true); output->setPlainText(diagnosticsText_); output->setMinimumHeight(150);
             bodyLayout_->addWidget(output);
         }
+    }
+
+    void refreshUpdates() {
+        if (!updateStatus_) return;
+        updateStatus_->setText(updates_->status());
+        updateNotes_->setPlainText(updates_->notes()); updateNotes_->setVisible(updates_->available() && !updates_->notes().isEmpty());
+        checkUpdate_->setEnabled(!updates_->busy());
+        downloadUpdate_->setVisible(updates_->available() && !updates_->ready()); downloadUpdate_->setEnabled(!updates_->busy());
+        cancelUpdate_->setVisible(updates_->downloading());
+        installUpdate_->setVisible(updates_->ready()); installUpdate_->setEnabled(!updates_->busy());
+        updateProgress_->setVisible(updates_->downloading()); updateProgress_->setValue(updates_->progress());
+        const QSignalBlocker blocker(automaticUpdate_); automaticUpdate_->setChecked(updates_->automatic());
     }
 
     void addLinuxApp() {
@@ -1158,6 +1230,12 @@ private:
         });
     }
 
+    AppUpdater *updates_ = nullptr;
+    QLabel *updateStatus_ = nullptr;
+    QTextEdit *updateNotes_ = nullptr;
+    QPushButton *checkUpdate_ = nullptr, *downloadUpdate_ = nullptr, *cancelUpdate_ = nullptr, *installUpdate_ = nullptr;
+    QCheckBox *automaticUpdate_ = nullptr;
+    QProgressBar *updateProgress_ = nullptr;
     SettingsStore store_;
     QString startupError_, serviceSummary_ = QStringLiteral("Checking service status…"), serviceState_, diagnosticsText_;
     QWidget *navigation_ = nullptr;
@@ -1179,12 +1257,22 @@ private:
     bool statusBusy_ = false, loginBusy_ = false, loginEnabled_ = false;
 };
 
+#ifdef FXCLIP_UPDATE_TESTING
+#include "update_test.h"
+#endif
 #ifndef FXCLIP_UI_TESTING
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("fxclip"));
+    app.setApplicationVersion(QStringLiteral(FXCLIP_VERSION));
     app.setOrganizationName(QStringLiteral("fxclip"));
     app.setDesktopFileName(QStringLiteral("io.github.fxclip.Fxclip"));
+    if (app.arguments().contains(QStringLiteral("--version"))) {
+        std::cout << "fxclip-ui " << app.applicationVersion().toStdString() << '\n'; return 0;
+    }
+#ifdef FXCLIP_UPDATE_TESTING
+    if (app.arguments().contains("--updates") && qEnvironmentVariable("FXCLIP_UPDATE_TEST_FAIL_RELAUNCH") == app.applicationVersion()) return 17;
+#endif
     const auto applicationIconPath = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("fxclip-icon.png"));
     const QIcon applicationIcon(applicationIconPath);
     if (!applicationIcon.isNull()) app.setWindowIcon(applicationIcon);
@@ -1200,8 +1288,48 @@ int main(int argc, char **argv) {
                                 app.arguments().contains(QStringLiteral("--smoke-pages")) ||
                                 app.arguments().contains(QStringLiteral("--page-shot")) ||
                                 app.arguments().contains(QStringLiteral("--helper-shot"));
+    const auto runtime = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+    QDir().mkpath(runtime);
+    const auto identity = QString::fromLatin1(QCryptographicHash::hash(configPath().toUtf8(), QCryptographicHash::Sha256).toHex().left(16));
+    const auto socketPath = QDir(runtime).filePath("fxclip-ui-" + identity);
+    auto contact = [&](const QByteArray &command) {
+        QLocalSocket socket; socket.connectToServer(socketPath);
+        if (!socket.waitForConnected(1000)) return QByteArray();
+        socket.write(command); socket.waitForBytesWritten(1000);
+        if (!socket.bytesAvailable() && !socket.waitForReadyRead(2000)) return QByteArray();
+        return socket.readAll().trimmed();
+    };
+    if (app.arguments().contains(QStringLiteral("--probe"))) {
+        const auto version = contact("version\n");
+        if (version != app.applicationVersion().toUtf8()) return 1;
+        std::cout << version.constData() << '\n'; return 0;
+    }
+    QLockFile lock(socketPath + ".instance-lock"); lock.setStaleLockTime(0);
+    if (!screenshotMode && !lock.tryLock(0)) return contact("activate\n").isEmpty() ? 1 : 0;
     MainWindow window(screenshotMode);
+    QLocalServer server;
+    if (!screenshotMode) {
+        QLocalServer::removeServer(socketPath); server.setSocketOptions(QLocalServer::UserAccessOption);
+        if (!server.listen(socketPath)) { qWarning().noquote() << "Could not start the local interface:" << server.errorString(); return 1; }
+        QObject::connect(&server, &QLocalServer::newConnection, &window, [&] {
+            while (auto *socket = server.nextPendingConnection()) {
+                QObject::connect(socket, &QLocalSocket::readyRead, &window, [&, socket] {
+                    if (socket->readAll().trimmed() != "version") { window.showNormal(); window.raise(); window.activateWindow(); }
+                    socket->write(app.applicationVersion().toUtf8() + "\n"); socket->flush(); socket->disconnectFromServer();
+                });
+                QObject::connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
+            }
+        });
+    }
     window.show();
+    if (app.arguments().contains(QStringLiteral("--updates"))) window.showUpdates();
+#ifdef FXCLIP_UPDATE_TESTING
+    if (app.arguments().contains("--update-test")) { window.showUpdates(); startUpdateTest(&window); }
+    if (app.arguments().contains("--updates") && !qEnvironmentVariable("FXCLIP_UPDATE_TEST_RELAUNCH_CAPTURE").isEmpty()) {
+        const auto path = qEnvironmentVariable("FXCLIP_UPDATE_TEST_RELAUNCH_CAPTURE");
+        QTimer::singleShot(1000, &window, [&window, path] { window.grab().save(path); });
+    }
+#endif
     return app.exec();
 }
 

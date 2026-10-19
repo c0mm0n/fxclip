@@ -24,6 +24,7 @@ static QString systemctlResult(const QString &command) {
 }
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
+    app.setApplicationVersion(QStringLiteral(FXCLIP_VERSION));
     try {
         MainWindow window(false); window.show();
         for (auto *button : window.findChildren<QPushButton *>())

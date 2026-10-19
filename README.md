@@ -28,7 +28,7 @@ As an optional extra, fxclip can adapt links for better previews in the destinat
 - ⏸️ **Pause or skip**: pause cleaning, or leave just the next copy as is
 - 🖥️ **Your choice of presence**: menu bar icon, Dock icon, open at login
 - 🔗 **Optional app previews**: adapt X and Instagram links for better previews in the destination apps you choose, such as Telegram. Other apps get the clean original
-- 🔒 **Private**: link cleaning stays offline, with no account or analytics. On Mac and Windows, optional update checks contact GitHub; links are never sent
+- 🔒 **Private**: link cleaning stays offline, with no account or analytics. On Mac, Windows and Linux, optional update checks contact GitHub; links are never sent
 - ⬆️ **Mac updates**: check from the app menu, menu bar or Settings, download an update, then install and relaunch. Automatic checks are off until you enable them; downloads and installation always ask
 - 🙈 **Polite with clipboard managers**: the preview rewrites are marked transient, so they don't pile up in your clipboard history
 
@@ -58,6 +58,8 @@ or the home-screen widget. Optional preview links adapt to Telegram. No permissi
 not even internet. Details: [android/README.md](android/README.md).
 
 ### Linux (Wayland)
+
+Linux 0.6.0 adds **Check for Updates…** in the Qt tray and Settings. Optional daily checks run only while the interface is open; downloading and installing require confirmation. Updates preserve settings and login startup, restart the interface and service, and restore the previous files if installation or relaunch fails. Install the new Linux download manually once to get the updater.
 Works on Sway, Hyprland and KDE Plasma (GNOME Wayland doesn't let background apps watch the clipboard). wl-clipboard comes bundled (2.3, with KDE's newer clipboard protocol); on KDE, install `kdotool` for previews. Then:
 ```shell
 tar xzf fxclip-linux-x86_64.tar.gz && cd fxclip-linux-x86_64 && ./install.sh
