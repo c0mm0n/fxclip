@@ -14,7 +14,7 @@
     </plurals>
     <string name="share_title">Envoyer le lien propre</string>
 
-    <string name="tagline">Retire les traqueurs des liens. Telegram reçoit des liens avec aperçu.</string>
+    <string name="tagline">Des liens propres, prêts à partager.</string>
     <string name="how_title">Utilisation</string>
     <string name="how_share">Partage un lien vers « Nettoyer le lien » : le menu de partage revient avec le lien propre. Telegram reçoit fxtwitter / zzinstagram.</string>
     <string name="how_select">Sélectionne un lien, puis « Nettoyer le lien » dans le menu du texte : il est remplacé sur place (par le lien avec aperçu dans Telegram).</string>
@@ -22,7 +22,7 @@
     <string name="add_tile">Ajouter la tuile</string>
     <string name="trackers_title">Traqueurs</string>
     <string name="everywhere">Tous les sites (utm_*, fbclid…)</string>
-    <string name="previews_title">Liens avec aperçu dans Telegram</string>
+    <string name="previews_title">Aperçus Telegram en option</string>
     <string name="never_title">Ne jamais nettoyer</string>
     <string name="never_add">Ajouter</string>
     <string name="never_remove">Retirer</string>

@@ -15,7 +15,7 @@
     </plurals>
     <string name="share_title">Send clean link</string>
 
-    <string name="tagline">Removes trackers from links. Telegram gets preview links.</string>
+    <string name="tagline">Clean links, ready to share.</string>
     <string name="how_title">How to use</string>
     <string name="how_share">Share a link to “Clean link”: the share sheet opens again with the clean link. Telegram gets fxtwitter / zzinstagram.</string>
     <string name="how_select">Select a link, then “Clean link” in the text menu: it is replaced in place (with the preview link in Telegram).</string>
@@ -23,7 +23,7 @@
     <string name="add_tile">Add the tile</string>
     <string name="trackers_title">Trackers</string>
     <string name="everywhere">All websites (utm_*, fbclid…)</string>
-    <string name="previews_title">Preview links in Telegram</string>
+    <string name="previews_title">Optional Telegram previews</string>
     <string name="preview_row">%1$s → %2$s</string>
     <string name="never_title">Never clean</string>
     <string name="never_hint">example.com</string>

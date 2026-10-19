@@ -25,6 +25,7 @@ Plan and decisions: `docs/00_app_plan.md` (the "Versions" section at the top win
 
 ```shell
 swift test --package-path Engine          # engine + settings tests (must stay green)
+(cd android && ./gradlew :engine:test :app:testReleaseUnitTest :app:assembleRelease)
 xcodegen generate                         # FxClip.xcodeproj and App/Info.plist come from project.yml
 xcodebuild -project FxClip.xcodeproj -scheme FxClip -configuration Release -derivedDataPath build build
 tools/make_dmg.sh 0.2.0                   # ad-hoc signed DMG in build/fxclip.dmg
@@ -43,7 +44,7 @@ The DMG is **ad-hoc signed and not notarized** (owner's choice for now): users c
 
 ## Contributing and protection (GitHub rulesets)
 
-- `main` changes only through a pull request: one approval (not from the last pusher), and the `PR checks` workflow (`.github/workflows/pr.yml`: `mac`, `linux / linux`, `windows / windows`) must pass. No force-push or deletion.
+- `main` changes only through a pull request: one approval (not from the last pusher), and the `PR checks` workflow (`.github/workflows/pr.yml`: `mac`, `linux / linux`, `windows / windows`, `android`) must pass. No force-push or deletion.
 - Release tags `v*` can only be created by admins, so only the owner publishes releases.
 - The owner (admin) bypasses both. Merge a PR by fast-forwarding `main` locally and pushing, not with GitHub's merge button, so the commit keeps the noreply identity.
 
@@ -101,7 +102,7 @@ The window copies VoiceInk's layout from **measurements only** (VoiceInk is GPL-
 - **Windows (shipped 0.2.0):** C# WPF tray app, unsigned single-file exe. Left: test foreground switching, tray and settings on a real Windows desktop; code signing (Azure Trusted Signing) when the identity is decided.
 - **Linux (shipped 0.2.0):** Wayland daemon for Sway/Hyprland/KDE, no window (settings.json). GNOME Wayland can't work (no data-control; would need a Shell extension). Left: first real Hyprland/KDE session.
 - **Android (new):** share target, text menu, tile and widget; Material 3 settings, own rules, settings.json import/export, history, first-launch tour. Background watching is impossible (see `android/README.md`). Left: a release identity, and the Play Store question.
-- Not taken: cleaning on *open* (Velja's job), link warnings, link history (contradicts "nothing stored").
+- Not taken on desktop: cleaning on *open* (Velja's job), link warnings, link history. Android offers an explicitly opt-in local history and cleans on app open because it cannot watch the clipboard in the background.
 
 ## Ports: rules that keep them honest
 
