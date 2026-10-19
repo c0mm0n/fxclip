@@ -1,7 +1,7 @@
 <div align="center">
   <img src="App/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png" width="160" height="160" />
   <h1>fxclip</h1>
-  <p>Copy a link, get it clean. Paste it in Telegram, get a real preview.</p>
+  <p>Clean links, ready to share.</p>
 
   ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-brightgreen)
   ![Swift](https://img.shields.io/badge/Swift-native-orange)
@@ -14,25 +14,26 @@
 
 ---
 
-fxclip sits in your menu bar (or tray) and watches what you copy. Every link loses its trackers (`utm_*`, `fbclid`, YouTube's `si`, Amazon's `ref`…) the moment you copy it. In the apps you choose, x.com and instagram.com links become their preview-friendly mirrors, so the chat shows the post instead of a bare link. Switch to any other app and the clean original is back.
+fxclip cleans the links you copy, removing tracking parameters (`utm_*`, `fbclid`, YouTube's `si`, Amazon's `ref`…) while keeping useful details like timestamps, searches and product options. It sits in your menu bar or tray, ready whenever you copy a link.
+
+As an optional extra, fxclip can adapt links for better previews in the destination apps you choose. For example, X and Instagram links can use preview-friendly mirrors in Telegram. Other apps get the clean original.
 
 ![fxclip](docs/images/overview.png)
 
 ## Features
 
 - 🧹 **Clean every link you copy**: trackers removed on all websites, plus site rules for X, YouTube, Instagram, TikTok, Spotify, Amazon, AliExpress, Facebook, LinkedIn and Reddit
-- 🔗 **Better previews where you want them**: x.com → fxtwitter.com and instagram.com → zzinstagram.com, only while an app you picked is in front (Telegram by default)
-- ↩️ **Clean link everywhere else**: leave that app and the clipboard holds the original, tracker-free link again
 - 🎛️ **You decide what gets trimmed**: switch sites on and off, and keep a list of websites to never touch
 - ⏸️ **Pause or skip**: pause cleaning, or leave just the next copy as is
 - 🖥️ **Your choice of presence**: menu bar icon, Dock icon, open at login
-- 🔒 **Private**: no network, no account, no analytics. Everything happens on your Mac
+- 🔗 **Optional app previews**: adapt X and Instagram links for better previews in the destination apps you choose, such as Telegram. Other apps get the clean original
+- 🔒 **Private**: no network, no account, no analytics. Everything happens on your device
 - 🙈 **Polite with clipboard managers**: the preview rewrites are marked transient, so they don't pile up in your clipboard history
 
 <table>
   <tr>
-    <td><img src="docs/images/preview-links.png" alt="Preview links" /></td>
-    <td><img src="docs/images/trackers.png" alt="Trackers" /></td>
+    <td><img src="docs/images/trackers.png" alt="Link cleaning" /></td>
+    <td><img src="docs/images/preview-links.png" alt="Optional app previews" /></td>
   </tr>
 </table>
 
@@ -45,6 +46,12 @@ fxclip isn't notarized by Apple yet, so macOS blocks the first launch: open **Sy
 
 ### Windows (10/11, x64)
 Unzip `fxclip-windows-x64.zip` and run `fxclip.exe`; it lives in the tray, with the same settings window as on the Mac. It isn't signed yet, so SmartScreen may warn: click **More info › Run anyway**. Rewritten preview links stay out of Win+V history. Details: [Windows/README.md](Windows/README.md).
+
+### Android (8.0+)
+Sideload the APK. Android forbids watching the clipboard in the background, so cleaning is one tap:
+share a link to **Clean link**, pick it in the text selection menu, or use the quick-settings tile
+or the home-screen widget. Optional preview links adapt to Telegram. No permission is requested,
+not even internet. Details: [android/README.md](android/README.md).
 
 ### Linux (Wayland)
 Works on Sway, Hyprland and KDE Plasma (GNOME Wayland doesn't let background apps watch the clipboard). wl-clipboard comes bundled (2.3, with KDE's newer clipboard protocol); on KDE, install `kdotool` for previews. Then:
@@ -72,6 +79,7 @@ Engine tests: `swift test --package-path Engine`.
 - `Engine/` is the cleaning engine (Foundation only), tested against `Shared/vectors.json`, a list of before/after links.
 - `App/` is the macOS menu bar app: it watches the clipboard, applies the engine, and swaps the preview link in and out as you change apps.
 - `Linux/` is the Wayland daemon; it reuses the same Swift engine.
+- `android/` is the Android app in Kotlin/Compose, with its own port of the engine held to the same test files.
 - `Windows/` is the tray app in C#, with its own port of the engine held to the same test files (`Shared/vectors.json`, `Shared/settings_vectors.json`).
 
 ## Releases

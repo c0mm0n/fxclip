@@ -32,13 +32,13 @@ struct WelcomeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Clean links, better previews").font(.title2.bold())
+            Text("Clean links, ready to share").font(.title2.bold())
             Text("fxclip removes trackers (utm_*, fbclid, YouTube si…) from every link you copy. Nothing leaves your Mac.")
                 .fixedSize(horizontal: false, vertical: true)
             Toggle(isOn: $previews) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Better previews in Telegram")
-                    Text("While Telegram is in front, x.com becomes fxtwitter.com and instagram.com becomes zzinstagram.com, so posts show a full preview. The clean link comes back in any other app. These mirrors are run by third parties.")
+                    Text("Also adapt links for Telegram previews")
+                    Text("Optional: use preview-friendly versions of X and Instagram links in Telegram. Other apps get the clean original. Choose other destination apps in App previews. Preview mirrors are run by third parties.")
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
