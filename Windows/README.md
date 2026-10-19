@@ -26,7 +26,7 @@ Windows 10/11, x64. The app stays in the system tray. Double-click its icon for 
 
 Rule choices live in `%APPDATA%\fxclip\settings.json`, using the same camelCase `UserSettings` format as the Mac app. Missing keys use defaults. An unreadable file is moved to `settings.unreadable.json` and the welcome window returns.
 
-`preferences.json` beside it contains only tray visibility and the tracker count. Open at login uses the current user's `Software\Microsoft\Windows\CurrentVersion\Run` registry key. Links, copied text, and app history are never saved. No network, no account, no analytics.
+`preferences.json` beside it contains tray visibility, the tracker count and update preferences. Open at login uses the current user's `Software\Microsoft\Windows\CurrentVersion\Run` registry key. Links, copied text, and app history are never saved. Cleaning is offline; optional updates contact GitHub. No account or analytics.
 
 ## Build and verification
 
@@ -43,3 +43,9 @@ The engine tests run on macOS and Windows and read **all** cases directly from `
 `build-windows.yml` builds on pushes to `windows` and can be called by the release workflow with a `version` input. It uploads `release-windows`, containing only `fxclip-windows-x64.zip` (the executable and this README as README.txt).
 
 The CI clipboard smoke test launches the published executable with an isolated temporary APPDATA and `--no-welcome`. This flag only skips first-run setup; it doesn't enable login startup. It probes desktop/clipboard access and reports the exact result in the job summary. That step is best-effort because hosted runners may lack a usable desktop. It cannot replace checking foreground switching, tray interaction, all settings pages, first-run controls, login startup, and light/dark appearance on a real Windows desktop. CI also captures all five settings pages, the paused overview, the app picker, and the welcome screen in both light and dark themes in the separate `windows-ui-check` artifact.
+
+## Updates (0.5.0+)
+
+Install `fxclip-windows-setup.exe` for a per-user installation, or extract the complete `fxclip-windows-x64.zip` portable archive. Keep its helper files with the app. An old standalone ZIP needs this one manual upgrade; settings and counters remain in `%APPDATA%\fxclip`, and an existing login preference follows the new path.
+
+Use **Settings → Updates** or **Check for Updates…** in the tray menu. Checking contacts public GitHub Releases; cleaning stays local. Automatic checks are optional, off by default and at most daily. Downloads verify Velopack's package digest, then wait for **Restart to Update** and a second confirmation. Quitting or opening the app never installs a downloaded update automatically. No account, token or paid signing certificate is required.

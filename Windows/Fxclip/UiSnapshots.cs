@@ -19,13 +19,15 @@ internal static class UiSnapshots
                 Theme.CaptureTheme(dark);
                 var themeDirectory = Path.Combine(directory, dark ? "dark" : "light");
                 Directory.CreateDirectory(themeDirectory);
-                var window = new SettingsWindow(store, clipboard);
+                var window = new SettingsWindow(store, clipboard, new AppUpdater(store));
                 window.Show();
                 foreach (var name in new[] { "Overview", "Link cleaning", "App previews", "Never clean", "Settings" })
                 {
                     window.SelectPage(name);
                     await Save(window, Path.Combine(themeDirectory, name.ToLowerInvariant().Replace(' ', '-') + ".png"));
                 }
+                window.ShowUpdates();
+                await Save(window, Path.Combine(themeDirectory, "settings-updates.png"));
                 window.SelectPage("Overview");
                 clipboard.TogglePause();
                 await Save(window, Path.Combine(themeDirectory, "overview-paused.png"));

@@ -235,6 +235,7 @@ struct NeverCleanPage: View {
 
 struct SettingsPage: View {
     @EnvironmentObject var store: SettingsStore
+    @EnvironmentObject var updates: AppUpdater
     @EnvironmentObject var stats: Stats
     @StateObject private var login = LoginItem()
 
@@ -269,7 +270,7 @@ struct SettingsPage: View {
             SectionTitle("Privacy")
             Card {
                 CardRow(first: true) {
-                    Text("Links are cleaned on this Mac. Nothing is stored or sent, apart from a count of trackers removed.")
+                    Text("Links are cleaned on this Mac and are never sent. Only the tracker count and your settings are saved. Update checks contact GitHub only when you ask or enable automatic checks.")
                         .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -278,12 +279,31 @@ struct SettingsPage: View {
                     Button("Reset counter") { stats.reset() }
                 }
             }
-            SectionTitle("About")
+            SectionTitle("Updates")
             Card {
                 CardRow(first: true) {
                     Text("Version"); Spacer()
                     Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?")
                         .foregroundStyle(.secondary)
+                    Button("Check for Updates…", action: updates.checkForUpdates)
+                        .disabled(!updates.canCheckForUpdates)
+                }
+                CardRow {
+                    Text("Automatically check for updates")
+                    Spacer()
+                    Toggle("", isOn: Binding(get: { updates.automaticallyChecksForUpdates }, set: updates.setAutomaticChecks))
+                        .labelsHidden().toggleStyle(.switch)
+                        .accessibilityLabel("Automatically check for updates")
+                }
+                CardRow {
+                    Text("Optional: check GitHub once a day. Downloads and installation always ask for your confirmation.")
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                if let lastCheck = updates.lastCheck {
+                    CardRow {
+                        Text("Last checked"); Spacer()
+                        Text(lastCheck, style: .relative).foregroundStyle(.secondary)
+                    }
                 }
             }
         }

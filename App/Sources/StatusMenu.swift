@@ -5,13 +5,15 @@ import AppKit
 final class StatusMenu: NSObject, NSMenuDelegate {
     private let watcher: ClipboardWatcher
     private let stats: Stats
+    private let updates: AppUpdater
     /// Opens the Settings window.
     var openSettings: () -> Void = {}
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
-    init(watcher: ClipboardWatcher, stats: Stats) {
+    init(watcher: ClipboardWatcher, stats: Stats, updates: AppUpdater) {
         self.watcher = watcher
         self.stats = stats
+        self.updates = updates
         super.init()
         let menu = NSMenu()
         menu.delegate = self
@@ -52,6 +54,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(action("Settings…", #selector(settings), key: ","))
         menu.addItem(action("About fxclip", #selector(about)))
+        menu.addItem(updates.menuItem())
         menu.addItem(action("Quit fxclip", #selector(NSApplication.terminate(_:)), key: "q", target: NSApp))
     }
 

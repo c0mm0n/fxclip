@@ -3,6 +3,9 @@ options:
   deploymentTarget:
     macOS: "13.0"
 packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
   FxEngine:
     path: Engine
 targets:
@@ -12,10 +15,18 @@ targets:
     sources:
       - App/Sources
       - App/Assets.xcassets
+      - path: App/Resources/Sparkle-LICENSE.txt
+        buildPhase: resources
       - path: Shared/rules.json
         buildPhase: resources
     dependencies:
       - package: FxEngine
+      - package: Sparkle
+    entitlements:
+      path: App/FxClip.entitlements
+      properties:
+        # Ad-hoc signatures have no Apple Team ID: allow the embedded Sparkle framework.
+        com.apple.security.cs.disable-library-validation: true
     configFiles:
       Debug: Signing.xcconfig
       Release: Signing.xcconfig
@@ -27,6 +38,15 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSApplicationCategoryType: public.app-category.utilities
+        SUFeedURL: https://github.com/c0mm0n/fxclip/releases/latest/download/appcast.xml
+        SUPublicEDKey: VmmGLYGzWJmjCRP4DgwbZ+9bhz4lz432TcwChs2q3JU=
+        SUEnableAutomaticChecks: false
+        SUScheduledCheckInterval: 86400
+        SUAutomaticallyUpdate: false
+        SUAllowsAutomaticUpdates: false
+        SUSendProfileInfo: false
+        SURequireSignedFeed: true
+        SUVerifyUpdateBeforeExtraction: true
     settings:
       base:
         PRODUCT_NAME: fxclip

@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var watcher: ClipboardWatcher?
     private var menu: StatusMenu?
     private var window: MainWindow?
+    private var updates: AppUpdater?
     private let welcome = WelcomeWindow()
 
     static func main() {
@@ -30,24 +31,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if #available(macOS 15.4, *) {
             log.notice("pasteboard accessBehavior=\(NSPasteboard.general.accessBehavior.rawValue, privacy: .public)")
         }
-        NSApp.mainMenu = mainMenu()
+        #if UPDATE_TESTING
+        // Only compiled into the isolated two-version update test builds.
+        let updateTestDirectory = Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("update-test-data", isDirectory: true)
+        let store = SettingsStore(builtins: rules, directory: updateTestDirectory)
+        #else
         let store = SettingsStore(builtins: rules)
+        #endif
         let stats = Stats()
         let watcher = ClipboardWatcher(engine: Engine(rules: store.effective), stats: stats)
-        let menu = StatusMenu(watcher: watcher, stats: stats)
-        let window = MainWindow(store: store, stats: stats, watcher: watcher)
+        let updates = AppUpdater()
+        let menu = StatusMenu(watcher: watcher, stats: stats, updates: updates)
+        #if UPDATE_TESTING
+        let initialPage: Page = .settings
+        #else
+        let initialPage: Page = .overview
+        #endif
+        let window = MainWindow(store: store, stats: stats, watcher: watcher, updates: updates, initialPage: initialPage)
         store.onRulesChange = { [weak watcher] in watcher?.engine = Engine(rules: $0) }
         store.onPresenceChange = { [weak self] in self?.applyPresence() }
         watcher.onChange = { [weak menu] in menu?.refreshIcon() }
         menu.openSettings = { [weak window] in window?.show() }
         (self.store, self.watcher, self.menu, self.window) = (store, watcher, menu, window)
+        self.updates = updates
+        NSApp.mainMenu = mainMenu()
         applyPresence()
 
+        #if UPDATE_TESTING
+        // Test builds always stay isolated, including after Sparkle relaunches them.
+        // No clipboard watching or production settings writes; normal first-run setup is skipped.
+        updates.start()
+        if CommandLine.arguments.contains("--welcome-test") {
+            // Screenshot only: do not click Start or enable a login item in this mode.
+            welcome.show(store: store, login: LoginItem()) { window.show() }
+        } else {
+            window.show()
+        }
+        #else
         if store.isFirstRun {
-            welcome.show(store: store, login: LoginItem()) { [weak watcher] in watcher?.start() }
+            welcome.show(store: store, login: LoginItem()) { [weak watcher, weak updates] in
+                watcher?.start()
+                updates?.start()
+            }
         } else {
             watcher.start()
+            updates.start()
         }
+        #endif
     }
 
     /// Opening fxclip again (Spotlight, Finder, Dock) shows its window: the way back when icons are hidden.
@@ -71,6 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let main = NSMenu()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About fxclip", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        if let updates { appMenu.addItem(updates.menuItem()) }
         appMenu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")

@@ -16,7 +16,7 @@ xcodebuild -project FxClip.xcodeproj -scheme FxClip -configuration Release \
   build >build/dmg.log 2>&1 || { tail -40 build/dmg.log; exit 1; }
 
 app=build/dmg/Build/Products/Release/fxclip.app
-codesign --verify --strict "$app"
+codesign --verify --deep --strict "$app"
 [ "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$version" ]
 
 stage=$(mktemp -d)

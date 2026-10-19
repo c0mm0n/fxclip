@@ -18,5 +18,6 @@
   <ItemGroup>
     <ProjectReference Include="../Fxclip.Engine/Fxclip.Engine.csproj" />
     <Resource Include="Assets/fxclip.ico" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 </Project>

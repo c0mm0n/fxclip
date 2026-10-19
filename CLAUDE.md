@@ -40,7 +40,7 @@ tools/make_dmg.sh 0.2.0                   # ad-hoc signed DMG in build/fxclip.dm
 3. Only after all builds pass, `publish` uploads all four downloads to a draft, creates the version tag at the tested commit, then publishes the complete release. Concurrent releases are serialized. Explicit `v*` tag pushes are still supported.
 4. `build-linux.yml` / `build-windows.yml` also run on pushes to the `linux` / `windows` branches for port work.
 
-The DMG is **ad-hoc signed and not notarized** (owner's choice for now): users click System Settings › Privacy & Security › Open Anyway once. Developer ID, notarization and Sparkle wait for the signing-identity decision.
+The DMG is **ad-hoc signed and not notarized** (owner's choice): users click System Settings › Privacy & Security › Open Anyway once. Sparkle 2.10.0 supplies Mac updates from 0.4.0. Hardened Runtime stays enabled with only the library-validation exception needed for the ad-hoc embedded framework. `tools/make_appcast.sh` signs the exact release DMG and feed using `FXCLIP_SPARKLE_PRIVATE_KEY`; only its public key is tracked. Every release must include `appcast.xml` with immutable versioned download URLs. Do not rotate or discard the private key casually.
 
 ## Contributing and protection (GitHub rulesets)
 
@@ -58,7 +58,7 @@ The owner's name, e-mail, company and Apple team ID must never reach git (histor
 - No absolute home paths in docs or plans; refer to repo-relative paths.
 - Before any push: `git grep -i -E '<name>|<email>|<team id>|/Users/'` on what's about to leave, and `strings` on a release binary.
 
-Product privacy promise (README, Settings): no network, no account, no analytics; settings and the counter stay on the Mac. Anything that would break it (short-link expansion in v1.1) must say so in the UI where it's switched on.
+Product privacy promise (README, Settings): link cleaning stays offline, no account or analytics; settings and the counter stay on the Mac. Mac update checks contact GitHub only on request or after enabling automatic checks (daily). No automatic download/install or system-profile reporting. Anything else that needs network access must say so in the UI where it's switched on.
 
 ## Clipboard: what we learned
 
@@ -95,7 +95,7 @@ The window copies VoiceInk's layout from **measurements only** (VoiceInk is GPL-
 
 ## Versions (from the plan)
 
-- **v1.0** (now): engine, per-app preview links, sidebar settings, welcome, GitHub releases. Left: signing identity → notarization + Sparkle updates.
+- **v1.0** (now): engine, per-app preview links, sidebar settings, welcome, GitHub releases and signed Sparkle Mac updates. Developer ID/notarization remain out of scope by choice; other OS updaters follow in separate deliveries.
 - **v1.1 copy extras:** strip `mailto:`, force HTTPS, Songlink, "Copy without any parameters", on-demand short-link expansion (direct request, said in the UI).
 - **v1.2 coverage:** ClearURLs catalog as a base under our rules, offline redirect unwrapping.
 - **v1.3 power users:** link tester, "cleaned" flash, rule editing, import/export.

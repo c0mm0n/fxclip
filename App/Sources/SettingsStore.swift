@@ -31,9 +31,9 @@ final class SettingsStore: ObservableObject {
     private let log = Logger(subsystem: "io.github.c0mm0n.fxclip", category: "settings")
     private let file: URL
 
-    init(builtins: Rules) {
+    init(builtins: Rules, directory: URL? = nil) {
         self.builtins = builtins
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("fxclip", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         file = dir.appendingPathComponent("settings.json")

@@ -33,7 +33,7 @@ struct WelcomeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Clean links, ready to share").font(.title2.bold())
-            Text("fxclip removes trackers (utm_*, fbclid, YouTube si…) from every link you copy. Nothing leaves your Mac.")
+            Text("fxclip removes trackers (utm_*, fbclid, YouTube si…) from every link you copy. Links stay on this Mac.")
                 .fixedSize(horizontal: false, vertical: true)
             Toggle(isOn: $previews) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -45,7 +45,9 @@ struct WelcomeView: View {
             }
             .toggleStyle(.checkbox)
             Toggle("Open fxclip at login", isOn: $openAtLogin).toggleStyle(.checkbox)
-            Text("You can change all of this later in Settings.").font(.caption).foregroundStyle(.secondary)
+            Text("You can change all of this later in Settings. Update checks are optional and contact GitHub only when you ask or enable them.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
                 Button("Start", action: start).keyboardShortcut(.defaultAction)

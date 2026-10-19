@@ -3,6 +3,8 @@
 
 **macOS** (13 Ventura or later): open `fxclip.dmg` and drag fxclip to Applications. The app isn't notarized by Apple, so the first launch is blocked: open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**.
 
+From 0.4.0, **Check for Updates…** is available in the app menu, menu bar and Settings. Install this DMG once if your current version has no updater. Automatic checks are off by default; GitHub is contacted only when you check or enable them. Downloads and installation always ask for confirmation. The cleaning itself stays offline.
+
 **Windows** (10/11, x64): unzip `fxclip-windows-x64.zip` and run `fxclip.exe`. It isn't signed, so SmartScreen may warn: click **More info › Run anyway**. fxclip lives in the tray.
 
 **Linux** (Wayland: Sway, Hyprland, KDE Plasma; GNOME isn't supported): wl-clipboard is bundled; on KDE install `kdotool` for previews, then
