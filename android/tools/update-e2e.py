@@ -187,7 +187,14 @@ try:
     passed('automatic-consent-daily-expiry-and-reopen', 2)
     reset('normal'); check_available(); download(); wait(strings['update_ready'] % '1.0.1')
     device('shell', 'appops', 'set', package, 'REQUEST_INSTALL_PACKAGES', 'allow')
-    device('shell', 'run-as ' + package + ' sh -c ' + shlex.quote('printf X | dd of=files/updates/update.apk bs=1 count=1 conv=notrunc'))
+    # Android 8's dd has conv disabled. Round-trip private QA bytes instead, keeping
+    # the size identical so the install-time digest check must detect the mutation.
+    cached = subprocess.check_output([adb, '-s', serial, 'exec-out', 'run-as', package,
+                                      'cat', 'files/updates/update.apk'], timeout=30)
+    changed = bytes([cached[0] ^ 1]) + cached[1:]
+    subprocess.run([adb, '-s', serial, 'shell', '-T', 'run-as ' + package + ' sh -c ' +
+                    shlex.quote('cat > files/updates/update.apk')], input=changed,
+                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True, timeout=30)
     press('fxclip-update-install'); press('fxclip-update-install-confirm')
     wait(strings['update_invalid_apk']); clean_download(); passed('reverify-before-install', 2)
     reset('normal'); check_available(); download(); wait(strings['update_ready'] % '1.0.1')
