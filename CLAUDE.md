@@ -16,6 +16,7 @@ Plan and decisions: `docs/00_app_plan.md` (the "Versions" section at the top win
 | `App/Sources/` | The app: `ClipboardWatcher` (the loop), `SettingsStore` (settings.json + UserDefaults), `StatusMenu`, `MainWindow` + `Pages` + `Components` (sidebar window), `Windows.swift` (welcome), `ChooseAppsSheet`, `AppIcons`. |
 | `Linux/` | Wayland daemon (SwiftPM, reuses `Engine/`): wl-clipboard for the clipboard, focus adapters for Sway/Hyprland/KDE (kdotool), `fxclip check`, systemd user unit + `install.sh` in `Linux/dist/`, headless-Sway e2e in `Linux/scripts/e2e.sh`. |
 | `Windows/` | .NET 8: `Fxclip.Engine` (C# port of the engine, byte-exact), `Fxclip.Engine.Tests` (runs both shared vector files), `Fxclip` WPF tray app with the same five pages; `tools/clipboard-smoke.ps1` is the real-clipboard check run in CI. |
+| `android/` | Android app (Gradle, Kotlin/Compose, Android 8+): `engine/` is the Kotlin port of the engine held to the shared vectors, `app/` the four cleaning paths (share target, text-selection menu, quick-settings tile, widget) and the Material 3 settings screen. |
 | `tools/` | `make_dmg.sh` (release DMG), `make_icon.swift` (redraws the app icon), `vectors_from_legacy.py`. |
 | `release-notes/` | One `vX.Y.Z.md` per release + `install.md` appended to every release. |
 | `fxclip.swift` | The original ~190-line CLI the app grew from. Reference only. |
@@ -99,6 +100,7 @@ The window copies VoiceInk's layout from **measurements only** (VoiceInk is GPL-
 - **v1.3 power users:** link tester, "cleaned" flash, rule editing, import/export.
 - **Windows (shipped 0.2.0):** C# WPF tray app, unsigned single-file exe. Left: test foreground switching, tray and settings on a real Windows desktop; code signing (Azure Trusted Signing) when the identity is decided.
 - **Linux (shipped 0.2.0):** Wayland daemon for Sway/Hyprland/KDE, no window (settings.json). GNOME Wayland can't work (no data-control; would need a Shell extension). Left: first real Hyprland/KDE session.
+- **Android (new):** share target, text menu, tile and widget; Material 3 settings, own rules, settings.json import/export, history, first-launch tour. Background watching is impossible (see `android/README.md`). Left: a release identity, and the Play Store question.
 - Not taken: cleaning on *open* (Velja's job), link warnings, link history (contradicts "nothing stored").
 
 ## Ports: rules that keep them honest

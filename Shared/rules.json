@@ -48,6 +48,7 @@
     { "id": "telegram", "name": "Telegram",
       "bundleIDs": ["ru.keepcoder.Telegram", "org.telegram.desktop", "com.tdesktop.Telegram"],
       "linux": ["org.telegram.desktop", "TelegramDesktop", "telegram-desktop"],
-      "windows": ["Telegram.exe"] }
+      "windows": ["Telegram.exe"],
+      "android": ["org.telegram.messenger", "org.telegram.messenger.web", "org.telegram.messenger.beta", "org.thunderdog.challegram"] }
   ]
 }
