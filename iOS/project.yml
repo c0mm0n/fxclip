@@ -70,6 +70,8 @@ targets:
     platform: iOS
     sources:
       - Tests
+      # Compiled in again so the tests can drive and snapshot the share sheet's view.
+      - ShareExtension/ShareViewController.swift
     dependencies:
       - target: FxClipiOS
       - package: FxEngine

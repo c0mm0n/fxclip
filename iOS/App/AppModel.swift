@@ -45,9 +45,10 @@ final class AppModel: ObservableObject {
             clipboardHasLink = false
             return
         }
-        UIPasteboard.general.detectPatterns(for: [.probableWebURL]) { [weak self] outcome in
-            let found = (try? outcome.get())?.contains(.probableWebURL) ?? false
-            Task { @MainActor in self?.clipboardHasLink = found }
+        Task {
+            let found = (try? await UIPasteboard.general.detectedPatterns(for: [\.probableWebURL]))?
+                .contains(\UIPasteboard.DetectedValues.probableWebURL) ?? false
+            clipboardHasLink = found
         }
     }
 

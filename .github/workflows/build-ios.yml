@@ -47,11 +47,16 @@ jobs:
           xcrun simctl list devices | grep "$udid"
 
       - name: Build and test
+        env:
+          # Passed to the tests as FXCLIP_SCREENS: they snapshot the share sheet and the app there.
+          TEST_RUNNER_FXCLIP_SCREENS: ${{ github.workspace }}/build/ios-screens
         run: |
-          xcodebuild test -quiet \
+          set -o pipefail
+          xcodebuild test \
             -project iOS/FxClipiOS.xcodeproj -scheme FxClipiOS \
             -destination "id=$SIM" -derivedDataPath build/ios \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO 2>&1 \
+            | grep -E --line-buffered "error:|warning:|Test Case .*(passed|failed)|Executed [0-9]+ test|\*\* TEST"
 
       - name: Screenshot the app
         run: |
@@ -65,10 +70,10 @@ jobs:
           xcrun simctl launch "$SIM" io.github.c0mm0n.fxclip
           sleep 5
           mkdir -p build/ios-screens
-          xcrun simctl io "$SIM" screenshot build/ios-screens/main.png
+          xcrun simctl io "$SIM" screenshot build/ios-screens/launch.png
           xcrun simctl ui "$SIM" appearance dark
           sleep 2
-          xcrun simctl io "$SIM" screenshot build/ios-screens/main-dark.png
+          xcrun simctl io "$SIM" screenshot build/ios-screens/launch-dark.png
 
       - uses: actions/upload-artifact@v4
         with:
