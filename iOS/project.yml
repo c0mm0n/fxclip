@@ -29,6 +29,8 @@ targets:
     dependencies:
       - package: FxEngine
       - target: FxClipShare
+      # Explicit, or the build skips the Shortcuts actions' metadata.
+      - sdk: AppIntents.framework
     # The team ID stays out of git (Local.xcconfig, as for the Mac app).
     configFiles:
       Debug: ../Signing.xcconfig
@@ -70,8 +72,6 @@ targets:
     platform: iOS
     sources:
       - Tests
-      # Compiled in again so the tests can drive and snapshot the share sheet's view.
-      - ShareExtension/ShareViewController.swift
     dependencies:
       - target: FxClipiOS
       - package: FxEngine

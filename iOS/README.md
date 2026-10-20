@@ -31,7 +31,7 @@ Allow Shortcuts to paste once (Settings › Apps › Shortcuts › Paste from Ot
 | Path | What |
 |---|---|
 | `project.yml` | xcodegen spec for `FxClipiOS.xcodeproj` (git-ignored), separate from the Mac project. Signing comes from `../Signing.xcconfig` (team ID in the ignored `Local.xcconfig`). |
-| `Shared/` | Compiled into the app and the extension: `LinkCleaner` (the `FxEngine` from `../Engine` with the user's settings), `SharedStore` (settings.json and the counter in the App Group `group.io.github.c0mm0n.fxclip`), `DestinationLink` (per-destination share item). |
+| `Shared/` | Compiled into the app and the extension: `LinkCleaner` (the `FxEngine` from `../Engine` with the user's settings), `SharedStore` (settings.json and the counter in the App Group `group.io.github.c0mm0n.fxclip`), `DestinationLink` (per-destination share item), `ShareSheet` (the share sheet's view, here so the tests can snapshot it). |
 | `ShareExtension/` | Share › Clean link. |
 | `App/` | The SwiftUI app (clipboard, link cleaning, app previews, how to use) and the Shortcuts actions. |
 | `Tests/` | Unit tests hosted in the app. The engine itself is held to `Shared/vectors.json` by `swift test --package-path Engine`. |
