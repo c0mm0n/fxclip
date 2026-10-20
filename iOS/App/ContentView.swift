@@ -57,7 +57,8 @@ private struct ClipboardSection: View {
         } footer: {
             if let r = model.result {
                 Text(r.removed == 0 ? "Already clean, back on the clipboard." :
-                     "\(r.removed) removed. The clean link is on the clipboard.")
+                     r.removed == 1 ? "1 tracker removed. The clean link is on the clipboard." :
+                     "\(r.removed) trackers removed. The clean link is on the clipboard.")
             } else if model.clipboardHasLink {
                 Text("There is a link on the clipboard. Paste cleans it and puts it back.")
             } else {
