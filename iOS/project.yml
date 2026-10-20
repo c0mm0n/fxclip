@@ -1,0 +1,90 @@
+# iOS app: its own project so the Mac scheme, DMG and release stay untouched.
+# xcodegen generate --spec iOS/project.yml  →  iOS/FxClipiOS.xcodeproj (git-ignored)
+name: FxClipiOS
+options:
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  FxEngine:
+    path: ../Engine
+settings:
+  base:
+    # Releases would override both from the tag; nothing is published for iOS yet.
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: "1,2"
+targets:
+  FxClipiOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+        excludes: ["Info.plist", "*.entitlements"]
+      - Shared
+      - Assets.xcassets
+      - path: ../Shared/rules.json
+        buildPhase: resources
+    dependencies:
+      - package: FxEngine
+      - target: FxClipShare
+    # The team ID stays out of git (Local.xcconfig, as for the Mac app).
+    configFiles:
+      Debug: ../Signing.xcconfig
+      Release: ../Signing.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: fxclip
+        PRODUCT_MODULE_NAME: FxClipiOS
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.c0mm0n.fxclip
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Hand-written: xcodegen's iOS defaults add armv7 and a launch storyboard.
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/FxClipiOS.entitlements
+
+  FxClipShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+        excludes: ["Info.plist", "*.entitlements"]
+      - Shared
+      - path: ../Shared/rules.json
+        buildPhase: resources
+    dependencies:
+      - package: FxEngine
+    configFiles:
+      Debug: ../Signing.xcconfig
+      Release: ../Signing.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: FxClipShare
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.c0mm0n.fxclip.share
+        INFOPLIST_FILE: ShareExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/FxClipShare.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+
+  FxClipiOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: FxClipiOS
+      - package: FxEngine
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.c0mm0n.fxclip.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/fxclip.app/fxclip"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  FxClipiOS:
+    build:
+      targets:
+        FxClipiOS: all
+        FxClipShare: all
+    test:
+      targets: [FxClipiOSTests]

@@ -1,4 +1,4 @@
-# Pull requests check all desktop platforms and build/test the Android app.
+# Pull requests check all desktop platforms, build/test the Android app and the iOS app (simulator).
 name: PR checks
 
 on:
@@ -55,6 +55,9 @@ jobs:
 
   windows:
     uses: ./.github/workflows/build-windows.yml
+
+  ios:
+    uses: ./.github/workflows/build-ios.yml
 
   android-updates:
     uses: ./.github/workflows/android-updates.yml

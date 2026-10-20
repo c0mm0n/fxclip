@@ -1,0 +1,77 @@
+# iOS app (simulator only: nothing is signed or published yet). Called by PR checks,
+# and run on any push that touches the iOS app, the engine or the shared rules.
+name: Build iOS
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'iOS/**'
+      - 'Engine/**'
+      - 'Shared/**'
+      - '.github/workflows/build-ios.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - run: brew install xcodegen
+
+      - name: Engine tests
+        run: swift test --package-path Engine
+
+      - name: Generate the project
+        run: xcodegen generate --spec iOS/project.yml
+
+      - name: Pick a simulator
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          runtimes = json.load(sys.stdin)["devices"]
+          ios = sorted((r for r in runtimes if ".iOS-" in r), key=lambda r: [int(x) for x in r.rsplit(".iOS-", 1)[1].split("-")])
+          phones = [d for d in runtimes[ios[-1]] if d["name"].startswith("iPhone")]
+          print(phones[-1]["udid"])')
+          echo "SIM=$udid" >> "$GITHUB_ENV"
+          xcrun simctl list devices | grep "$udid"
+
+      - name: Build and test
+        run: |
+          xcodebuild test -quiet \
+            -project iOS/FxClipiOS.xcodeproj -scheme FxClipiOS \
+            -destination "id=$SIM" -derivedDataPath build/ios \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Screenshot the app
+        run: |
+          xcrun simctl boot "$SIM" || true
+          xcrun simctl bootstatus "$SIM" -b
+          xcrun simctl ui "$SIM" appearance light
+          app=$(find build/ios/Build/Products -maxdepth 2 -name fxclip.app -path '*iphonesimulator*' | head -1)
+          xcrun simctl install "$SIM" "$app"
+          test -d "$app/PlugIns/FxClipShare.appex"
+          xcrun simctl pbcopy "$SIM" <<< 'https://x.com/a/status/1?s=20&t=abc'
+          xcrun simctl launch "$SIM" io.github.c0mm0n.fxclip
+          sleep 5
+          mkdir -p build/ios-screens
+          xcrun simctl io "$SIM" screenshot build/ios-screens/main.png
+          xcrun simctl ui "$SIM" appearance dark
+          sleep 2
+          xcrun simctl io "$SIM" screenshot build/ios-screens/main-dark.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-screens
+          path: build/ios-screens/*.png
+          if-no-files-found: error

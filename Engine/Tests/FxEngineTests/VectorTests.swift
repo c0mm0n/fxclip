@@ -22,7 +22,8 @@ final class VectorTests: XCTestCase {
     }
 
     func testTelegramPreviewMatchesLegacy() {
-        for bundleID in ["ru.keepcoder.Telegram", "org.telegram.desktop", "com.tdesktop.Telegram"] {
+        for bundleID in ["ru.keepcoder.Telegram", "org.telegram.desktop", "com.tdesktop.Telegram",
+                         "ph.telegra.Telegraph", "ph.telegra.Telegraph.Share"] {
             for v in vectors {
                 XCTAssertEqual(engine.preview(engine.clean(v.input).text, forBundleID: bundleID), v.telegram, "input: \(v.input)")
             }
@@ -71,6 +72,16 @@ final class VectorTests: XCTestCase {
             let cleaned = engine.clean(v.input).text
             XCTAssertEqual(engine.preview(cleaned, forBundleID: "com.apple.Safari"), cleaned)
         }
+    }
+
+    /// iOS share destinations are matched exactly: other activity types and a lowercased id get the clean link.
+    func testIOSShareDestinations() {
+        let link = "https://x.com/a/status/1"
+        for activity in ["com.apple.UIKit.activity.Mail", "com.apple.UIKit.activity.CopyToPasteboard",
+                         "ph.telegra.telegraph.share", "ph.telegra.Telegraph.Share.evil"] {
+            XCTAssertEqual(engine.preview(link, forBundleID: activity), link, activity)
+        }
+        XCTAssertEqual(engine.preview(link, forBundleID: "ph.telegra.Telegraph.Share"), "https://fxtwitter.com/a/status/1")
     }
 
     func testRemovedCount() {

@@ -17,6 +17,7 @@ Plan and decisions: `docs/00_app_plan.md` (the "Versions" section at the top win
 | `Linux/` | Wayland daemon (SwiftPM, reuses `Engine/`): wl-clipboard for the clipboard, focus adapters for Sway/Hyprland/KDE (kdotool), `fxclip check`, systemd user unit + `install.sh` in `Linux/dist/`, headless-Sway e2e in `Linux/scripts/e2e.sh`. |
 | `Windows/` | .NET 8: `Fxclip.Engine` (C# port of the engine, byte-exact), `Fxclip.Engine.Tests` (runs both shared vector files), `Fxclip` WPF tray app with the same five pages; `tools/clipboard-smoke.ps1` is the real-clipboard check run in CI. |
 | `android/` | Android app (Gradle, Kotlin/Compose, Android 8+): `engine/` is the Kotlin port of the engine held to the shared vectors, `app/` the four cleaning paths (share target, text-selection menu, quick-settings tile, widget) and the Material 3 settings screen. |
+| `iOS/` | iOS app (SwiftUI, iOS 16+, own xcodegen spec `iOS/project.yml`): share extension "Clean link" (Telegram gets the preview link, other apps the clean one), Shortcuts actions, and the app (Paste button, settings). Simulator only so far. |
 | `tools/` | `make_dmg.sh` (release DMG), `make_icon.swift` (redraws the app icon), `vectors_from_legacy.py`. |
 | `release-notes/` | One `vX.Y.Z.md` per release + `install.md` appended to every release. |
 | `fxclip.swift` | The original ~190-line CLI the app grew from. Reference only. |
@@ -102,11 +103,12 @@ The window copies VoiceInk's layout from **measurements only** (VoiceInk is GPL-
 - **Windows (shipped 0.2.0):** C# WPF tray app, unsigned single-file exe. Left: test foreground switching, tray and settings on a real Windows desktop; code signing (Azure Trusted Signing) when the identity is decided.
 - **Linux (shipped 0.2.0):** Wayland daemon for Sway/Hyprland/KDE, no window (settings.json). GNOME Wayland can't work (no data-control; would need a Shell extension). Left: first real Hyprland/KDE session.
 - **Android:** share target, text menu, tile and widget; Material 3 settings, own rules, settings.json import/export, history, first-launch tour. Background watching is impossible (see `android/README.md`). Published APKs use a persistent signing key from repository secrets; local/PR builds stay debug-signed. Left: the Play Store question.
+- **iOS:** share extension, Shortcuts actions (an automation on Telegram open/close gives the Mac's swap) and the app's Paste button; see `iOS/README.md`. Built and tested on the simulator in CI only. Left: a real-iPhone check, and the distribution decision (an individual Apple account shows the owner's legal name as the seller).
 - Not taken on desktop: cleaning on *open* (Velja's job), link warnings, link history. Android offers an explicitly opt-in local history and cleans on app open because it cannot watch the clipboard in the background.
 
 ## Ports: rules that keep them honest
 
-- Every app identity lives in `rules.json` apps: `bundleIDs` (macOS, exact), `linux` (app_id / WM class) and `windows` (exe name), both matched ignoring case.
+- Every app identity lives in `rules.json` apps: `bundleIDs` (macOS, exact), `linux` (app_id / WM class), `windows` (exe name) and `android` (package), matched ignoring case, and `ios` (bundle ID / share activity type, exact).
 - `Shared/vectors.json` and `Shared/settings_vectors.json` are the contract. A behaviour change starts as a new vector, checked against the Swift engine (the reference), then every port must pass it.
 - Clipboard policy is the same everywhere: refuse files and images, act on rich content only when the text is one bare URL, never re-process our own writes, never overwrite a newer copy, respect clipboard privacy markers (Windows `ExcludeClipboardContentFromMonitorProcessing`, history/cloud opt-outs; KDE password-manager hint).
 

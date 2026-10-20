@@ -52,18 +52,24 @@ public struct Rules: Codable, Sendable {
         public var linux: [String]?
         /// Windows exe names ("Telegram.exe"), matched ignoring case.
         public var windows: [String]?
+        /// iOS bundle IDs and share-extension activity types ("ph.telegra.Telegraph.Share"), matched exactly.
+        public var ios: [String]?
 
-        public init(id: String, name: String, bundleIDs: [String], linux: [String]? = nil, windows: [String]? = nil) {
+        public init(id: String, name: String, bundleIDs: [String], linux: [String]? = nil, windows: [String]? = nil,
+                    ios: [String]? = nil) {
             self.id = id
             self.name = name
             self.bundleIDs = bundleIDs
             self.linux = linux
             self.windows = windows
+            self.ios = ios
         }
 
-        /// The front app's identifier on any platform: bundle ID, app_id/WM class or exe name.
+        /// The front app's identifier on any platform: bundle ID, app_id/WM class, exe name
+        /// or iOS share destination.
         public func matches(_ identifier: String) -> Bool {
             bundleIDs.contains(identifier)
+                || (ios ?? []).contains(identifier)
                 || (linux ?? []).contains { linuxIdentifier($0, matches: identifier) }
                 || (windows ?? []).contains { $0.caseInsensitiveCompare(identifier) == .orderedSame }
         }
