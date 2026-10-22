@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Releases override this from the tag, the way MARKETING_VERSION is overridden on macOS.
+val appVersion = (System.getenv("FXCLIP_VERSION") ?: "0.2.1").removePrefix("v")
+
 android {
     namespace = "io.github.c0mm0n.fxclip"
     compileSdk = 35
@@ -12,8 +15,8 @@ android {
         applicationId = "io.github.c0mm0n.fxclip"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.2.1"
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+        versionName = appVersion
     }
 
     buildTypes {

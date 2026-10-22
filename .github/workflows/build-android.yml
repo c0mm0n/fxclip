@@ -1,0 +1,58 @@
+name: Build Android
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to bake into the APK
+        type: string
+        required: false
+        default: "0.0.0-dev"
+  push:
+    branches: [android]
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: android
+    env:
+      FXCLIP_VERSION: ${{ inputs.version || '0.0.0-dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Only the packages this build needs: the runner image carries others that no
+      # longer resolve, and installing those fails.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test every shared vector, and the app's own units
+        run: ./gradlew :engine:test :app:testReleaseUnitTest --console=plain
+
+      # The release APK is signed with the debug key: sideloaded like the ad-hoc signed DMG,
+      # with no store identity yet. The key is generated here, so it differs between runs
+      # and an update needs the previous version uninstalled.
+      - name: Build the APK
+        run: ./gradlew :app:assembleRelease --console=plain
+
+      - name: Name it after the tag
+        run: cp app/build/outputs/apk/release/app-release.apk "../fxclip-android-${FXCLIP_VERSION}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: fxclip-android-*.apk
+          if-no-files-found: error

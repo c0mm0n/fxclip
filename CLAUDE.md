@@ -37,14 +37,17 @@ tools/make_dmg.sh 0.2.0                   # ad-hoc signed DMG in build/fxclip.dm
 
 1. Write `release-notes/v0.2.0.md` ("## What's New in fxclip 0.2.0" + emoji bullets), commit, push.
 2. `git tag v0.2.0 && git push origin v0.2.0`.
-3. `.github/workflows/release.yml` runs three platform jobs: `mac` (notes file check, engine tests, DMG), `linux` (`build-linux.yml`: engine tests on Linux Foundation, static binary, headless Sway e2e, tarball) and `windows` (`build-windows.yml`: all vectors, single-file exe, clipboard smoke test, zip). `publish` waits for all three and creates one release with `fxclip.dmg`, `fxclip-windows-x64.zip`, `fxclip-linux-x86_64.tar.gz`. GitHub adds the source archives itself.
-4. `build-linux.yml` / `build-windows.yml` also run on pushes to the `linux` / `windows` branches: work on a port there, push the branch, read the run.
+3. `.github/workflows/release.yml` runs four platform jobs: `mac` (notes file check, engine tests, DMG), `linux` (`build-linux.yml`: engine tests on Linux Foundation, static binary, headless Sway e2e, tarball), `windows` (`build-windows.yml`: all vectors, single-file exe, clipboard smoke test, zip) and `android` (`build-android.yml`: all vectors, release APK). `publish` waits for all four and creates one release with `fxclip.dmg`, `fxclip-windows-x64.zip`, `fxclip-linux-x86_64.tar.gz`, `fxclip-android-<version>.apk`. GitHub adds the source archives itself.
+4. `build-linux.yml` / `build-windows.yml` / `build-android.yml` also run on pushes to the `linux` / `windows` / `android` branches: work on a port there, push the branch, read the run.
+
+The APK is signed with the debug key, generated fresh in each run, so an update needs the previous
+version uninstalled. A real signing key is the same open question as Developer ID on macOS.
 
 The DMG is **ad-hoc signed and not notarized** (owner's choice for now): users click System Settings › Privacy & Security › Open Anyway once. Developer ID, notarization and Sparkle wait for the signing-identity decision.
 
 ## Contributing and protection (GitHub rulesets)
 
-- `main` changes only through a pull request: one approval (not from the last pusher), and the `PR checks` workflow (`.github/workflows/pr.yml`: `mac`, `linux / linux`, `windows / windows`, `android`) must pass. No force-push or deletion.
+- `main` changes only through a pull request: one approval (not from the last pusher), and the `PR checks` workflow (`.github/workflows/pr.yml`: `mac`, `linux / linux`, `windows / windows`, `android / android`) must pass. No force-push or deletion.
 - Release tags `v*` can only be created by admins, so only the owner publishes releases.
 - The owner (admin) bypasses both. Merge a PR by fast-forwarding `main` locally and pushing, not with GitHub's merge button, so the commit keeps the noreply identity.
 
