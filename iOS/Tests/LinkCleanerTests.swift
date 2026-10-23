@@ -30,6 +30,10 @@ final class LinkCleanerTests: XCTestCase {
         }
         XCTAssertEqual(cleaner.clean("see https://FXTWITTER.com/a/status/1?s=20 and https://fxtwitter.com.evil/x").text,
                        "see https://x.com/a/status/1 and https://fxtwitter.com.evil/x")
+        XCTAssertEqual(cleaner.clean("http://fxtwitter.com/a/status/1?s=20").text, "https://x.com/a/status/1")
+        XCTAssertEqual(cleaner.clean("(https://zzinstagram.com/p/abc/)").text, "(https://instagram.com/p/abc/)")
+        let nested = "https://example.com/?next=https://fxtwitter.com/a&sig=abc"
+        XCTAssertEqual(cleaner.clean(nested).text, nested)
     }
 
     func testSettingsMovedAsideByAnotherProcessStillWarn() throws {

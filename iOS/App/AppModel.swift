@@ -26,8 +26,6 @@ final class AppModel: ObservableObject {
         trackersRemoved = store.trackersRemoved
     }
 
-    var cleaner: LinkCleaner { LinkCleaner(rules: builtins, user: user) }
-
     /// The share extension and the Shortcuts actions count too: reread when the app comes back.
     func refresh() {
         trackersRemoved = store.trackersRemoved

@@ -29,9 +29,14 @@ struct LinkCleaner {
         engine.clean(unmirror(text))
     }
 
+    /// Only at the start of a link (start of text, after a space, quote or bracket): a mirror
+    /// link nested in another link's query is left alone, as the engine does for previews.
     private func unmirror(_ text: String) -> String {
         mirrors.reduce(text) { text, m in
-            text.replacingOccurrences(of: "https://\(m.to)/", with: "https://\(m.from)/", options: .caseInsensitive)
+            let pattern = #"(?<![^\s"'<(\[])https?://"# + NSRegularExpression.escapedPattern(for: m.to) + "/"
+            guard let re = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return text }
+            return re.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text),
+                                               withTemplate: NSRegularExpression.escapedTemplate(for: "https://\(m.from)/"))
         }
     }
 

@@ -10,6 +10,8 @@ final class ShareModel: ObservableObject {
     @Published private(set) var removedNames: [String] = []
     @Published private(set) var telegram = ""
     @Published private(set) var failed = false
+    /// False until the shared item has been read: nothing to copy or share before.
+    @Published private(set) var loaded = false
 
     private(set) var cleaner: LinkCleaner?
     var copy: (String) -> Void = { _ in }
@@ -18,6 +20,7 @@ final class ShareModel: ObservableObject {
 
     func load(_ text: String?) {
         let store = SharedStore()
+        defer { loaded = true }
         guard let text, let rules = try? LinkCleaner.bundledRules() else {
             failed = true
             return
@@ -40,7 +43,13 @@ struct ShareView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if model.failed {
+                if !model.loaded {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                } else if model.failed {
                     Text("No link to clean.")
                         .foregroundStyle(.secondary)
                 } else {

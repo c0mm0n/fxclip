@@ -68,7 +68,6 @@ jobs:
           test -d "$app/PlugIns/FxClipShare.appex"
           # Shortcuts only lists the actions when their metadata is in the app.
           test -d "$app/Metadata.appintents"
-          xcrun simctl pbcopy "$SIM" <<< 'https://x.com/a/status/1?s=20&t=abc'
           xcrun simctl launch "$SIM" io.github.c0mm0n.fxclip
           sleep 5
           mkdir -p build/ios-screens

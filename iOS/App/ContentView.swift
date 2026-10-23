@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 /// Home: the two ways fxclip is really used, copy in X then paste in Telegram (a Shortcuts
-/// automation does the swap) and Share › fxclip, set up from here; settings one level down.
+/// automation does the swap) and Share › Clean link, set up from here; settings one level down.
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
@@ -81,7 +81,7 @@ private struct AutomationSection: View {
 private struct ShareSection: View {
     var body: some View {
         Section {
-            Step(1, "On a post or a link, tap **Share** › **fxclip**. Not listed? Swipe the apps to the end › More.")
+            Step(1, "On a post or a link, tap **Share** › **Clean link**. Not listed? Swipe the apps to the end › More.")
             Step(2, "**Share…** › Telegram gets the preview link, every other app the clean one. Or just **Copy**.")
         } header: {
             Text("From the share sheet")
