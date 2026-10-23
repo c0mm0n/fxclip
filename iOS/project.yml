@@ -77,6 +77,9 @@ targets:
     platform: iOS
     sources:
       - Tests
+    configFiles:
+      Debug: ../Signing.xcconfig
+      Release: ../Signing.xcconfig
     dependencies:
       - target: FxClipiOS
       - package: FxEngine

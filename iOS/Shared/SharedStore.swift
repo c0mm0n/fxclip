@@ -27,11 +27,16 @@ final class SharedStore {
 
     /// Same format as every other platform, so settings.json moves between them.
     func load() -> UserSettings {
-        guard let data = try? Data(contentsOf: file) else { return UserSettings() }
-        if let saved = try? JSONDecoder().decode(UserSettings.self, from: data) { return saved }
+        let fm = FileManager.default
         let aside = file.deletingPathExtension().appendingPathExtension("unreadable.json")
-        try? FileManager.default.removeItem(at: aside)
-        try? FileManager.default.moveItem(at: file, to: aside)
+        guard let data = try? Data(contentsOf: file) else {
+            // The extension or a Shortcut may have moved it aside: warn until settings are saved again.
+            movedAside = fm.fileExists(atPath: aside.path)
+            return UserSettings()
+        }
+        if let saved = try? JSONDecoder().decode(UserSettings.self, from: data) { return saved }
+        try? fm.removeItem(at: aside)
+        try? fm.moveItem(at: file, to: aside)
         movedAside = true
         return UserSettings()
     }

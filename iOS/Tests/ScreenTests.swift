@@ -24,18 +24,6 @@ final class ScreenTests: XCTestCase {
         XCTAssertTrue(empty.failed)
     }
 
-    func testAppAfterPaste() throws {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let store = SharedStore(directory: dir, defaults: UserDefaults(suiteName: "fxclip-screens-\(UUID().uuidString)"))
-        let model = AppModel(store: store)
-        model.cleanPasted(link)
-        XCTAssertEqual(model.result?.removed, 2)
-        XCTAssertEqual(UIPasteboard.general.string, "https://x.com/CerfiaFR/status/2103787353680851028")
-        XCTAssertEqual(model.trackersRemoved, 2)
-        XCTAssertEqual(model.result?.removedNames, ["s", "t"])
-        try snapshot(ContentView().environmentObject(model), "app-pasted")
-    }
-
     func testAppPages() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let model = AppModel(store: SharedStore(directory: dir, defaults: UserDefaults(suiteName: "fxclip-screens-\(UUID().uuidString)")))
@@ -44,7 +32,6 @@ final class ScreenTests: XCTestCase {
         try snapshot(ContentView().environmentObject(model), "app")
         try snapshot(NavigationStack { CleaningPage() }.environmentObject(model), "app-cleaning")
         try snapshot(NavigationStack { PreviewsPage() }.environmentObject(model), "app-previews")
-        try snapshot(NavigationStack { HowToPage() }.environmentObject(model), "app-howto")
     }
 
     func testRemovedParameters() {

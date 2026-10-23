@@ -20,6 +20,33 @@ final class LinkCleanerTests: XCTestCase {
         try LinkCleaner.bundledRules(Bundle(for: AppModel.self))
     }
 
+    /// The "Telegram is closed" automation runs Clean link on what "Is opened" produced.
+    func testCleanLinkUndoesPreviewLink() throws {
+        let cleaner = LinkCleaner(rules: try rules(), user: UserSettings())
+        for original in ["https://x.com/a/status/1", "https://instagram.com/p/abc/"] {
+            let preview = cleaner.telegramPreview(original)
+            XCTAssertNotEqual(preview, original)
+            XCTAssertEqual(cleaner.clean(preview).text, original)
+        }
+        XCTAssertEqual(cleaner.clean("see https://FXTWITTER.com/a/status/1?s=20 and https://fxtwitter.com.evil/x").text,
+                       "see https://x.com/a/status/1 and https://fxtwitter.com.evil/x")
+    }
+
+    func testSettingsMovedAsideByAnotherProcessStillWarn() throws {
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data("{not json".utf8).write(to: dir.appendingPathComponent("settings.json"))
+        let ext = SharedStore(directory: dir, defaults: defaults)   // the extension reads first
+        _ = ext.load()
+        XCTAssertTrue(ext.movedAside)
+        let app = SharedStore(directory: dir, defaults: defaults)
+        _ = app.load()
+        XCTAssertTrue(app.movedAside)
+        try app.save(UserSettings())
+        let later = SharedStore(directory: dir, defaults: defaults)
+        _ = later.load()
+        XCTAssertFalse(later.movedAside)
+    }
+
     func testTelegramShareGetsThePreviewOtherDestinationsTheCleanLink() throws {
         let cleaner = LinkCleaner(rules: try rules(), user: UserSettings())
         let clean = cleaner.clean("https://x.com/a/status/1?s=20&t=abc").text

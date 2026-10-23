@@ -1,8 +1,7 @@
 import FxEngine
 import SwiftUI
-import UIKit
 
-/// The app's state: settings (shared with the extension and Shortcuts), the counter and the last result.
+/// The app's state: settings (shared with the extension and Shortcuts) and the counter.
 @MainActor
 final class AppModel: ObservableObject {
     let builtins: Rules
@@ -11,22 +10,12 @@ final class AppModel: ObservableObject {
     @Published var user: UserSettings {
         didSet {
             guard user != oldValue else { return }
-            try? store.save(user)
+            if (try? store.save(user)) != nil { settingsWereUnreadable = false }
         }
     }
     @Published private(set) var trackersRemoved: Int
-    /// The clipboard holds something that looks like a link (asked without reading it).
-    @Published private(set) var clipboardHasLink = false
-    @Published private(set) var result: CleanResult?
-    /// settings.json could not be read and was moved aside.
-    let settingsWereUnreadable: Bool
-
-    struct CleanResult: Equatable {
-        let clean: String
-        let telegram: String
-        let removed: Int
-        let removedNames: [String]
-    }
+    /// settings.json could not be read and was moved aside; cleared once settings are saved again.
+    @Published private(set) var settingsWereUnreadable: Bool
 
     init(store: SharedStore = SharedStore()) {
         self.store = store
@@ -39,33 +28,9 @@ final class AppModel: ObservableObject {
 
     var cleaner: LinkCleaner { LinkCleaner(rules: builtins, user: user) }
 
-    /// Detection only: iOS answers without showing the paste prompt.
-    func checkClipboard() {
+    /// The share extension and the Shortcuts actions count too: reread when the app comes back.
+    func refresh() {
         trackersRemoved = store.trackersRemoved
-        guard UIPasteboard.general.hasStrings || UIPasteboard.general.hasURLs else {
-            clipboardHasLink = false
-            return
-        }
-        Task {
-            let found = (try? await UIPasteboard.general.detectedPatterns(for: [\.probableWebURL]))?
-                .contains(\UIPasteboard.DetectedValues.probableWebURL) ?? false
-            clipboardHasLink = found
-        }
-    }
-
-    /// Text the user pasted with the system Paste button (no prompt): clean it and put it back.
-    func cleanPasted(_ text: String) {
-        let cleaner = cleaner
-        let out = cleaner.clean(text)
-        store.record(out.removed)
-        trackersRemoved = store.trackersRemoved
-        result = CleanResult(clean: out.text, telegram: cleaner.telegramPreview(out.text), removed: out.removed,
-                             removedNames: removedParameters(original: text, clean: out.text))
-        UIPasteboard.general.string = out.text
-    }
-
-    func copy(_ text: String) {
-        UIPasteboard.general.string = text
     }
 
     func resetCounter() {

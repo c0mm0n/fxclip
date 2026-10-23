@@ -9,13 +9,12 @@ account (see [Build it yourself](#build-it-yourself)).
 The desktop apps watch the clipboard and swap in the preview link while Telegram is in front.
 iOS forbids both, like Android: no app may read the clipboard in the background, none can tell
 which app is in front, and reading what another app copied shows a paste prompt. Cleaning is
-therefore something the user asks for, by one of three paths:
+therefore something the user asks for, by one of two paths:
 
 | Path | What happens |
 |---|---|
 | **Share › Clean link** | The share extension cleans the link. **Copy** puts the clean link on the clipboard, **Copy for Telegram** the preview link, **Share…** hands it on: Telegram (`ph.telegra.Telegraph.Share`) gets `fxtwitter` / `zzinstagram`, every other app the clean link (`UIActivityItemSource`, asked per destination). |
-| **Shortcuts** | "Clean link" and "Preview link" take text and return it cleaned. Shortcuts' own Get/Copy Clipboard actions do the clipboard, under Shortcuts' paste permission. |
-| **Opening the app** | It checks for a link with `detectPatterns` (no prompt); the system Paste button (no prompt either) cleans it and puts it back. |
+| **Shortcuts** | "Clean link" and "Preview link" take text and return it cleaned ("Clean link" also turns a preview link back into the original). Shortcuts' own Get/Copy Clipboard actions do the clipboard, under Shortcuts' paste permission. |
 
 ### Telegram previews without asking, via Shortcuts automations
 
@@ -33,7 +32,7 @@ Allow Shortcuts to paste once (Settings › Apps › Shortcuts › Paste from Ot
 | `project.yml` | xcodegen spec for `FxClipiOS.xcodeproj` (git-ignored), separate from the Mac project. Signing comes from `../Signing.xcconfig` (team ID in the ignored `Local.xcconfig`). |
 | `Shared/` | Compiled into the app and the extension: `LinkCleaner` (the `FxEngine` from `../Engine` with the user's settings), `SharedStore` (settings.json and the counter in the App Group `group.<prefix>.fxclip`, read from Info.plist), `DestinationLink` (per-destination share item), `ShareSheet` (the share sheet's view, here so the tests can snapshot it). |
 | `ShareExtension/` | Share › Clean link. |
-| `App/` | The SwiftUI app (clipboard, link cleaning, app previews, how to use) and the Shortcuts actions. |
+| `App/` | The SwiftUI app (setting up the Telegram automation and the share sheet, link cleaning, app previews) and the Shortcuts actions. |
 | `Tests/` | Unit tests hosted in the app. The engine itself is held to `Shared/vectors.json` by `swift test --package-path Engine`. |
 
 Telegram's iOS bundle ID and share activity type live in `Shared/rules.json` under `ios`, next to the
@@ -77,4 +76,3 @@ CI (`.github/workflows/build-ios.yml`) does the same and keeps light and dark sc
 
 - Presenting the second share sheet from the share extension, and Telegram's activity type there.
 - The Shortcuts automations above.
-- No paste prompt from `detectPatterns` and the Paste button.

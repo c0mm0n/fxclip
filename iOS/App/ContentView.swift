@@ -1,8 +1,9 @@
 import FxEngine
 import SwiftUI
+import UIKit
 
-/// Home: the one gesture (Paste), its result and the counter; settings one level down,
-/// the way the Mac app keeps them on their own pages.
+/// Home: the two ways fxclip is really used, copy in X then paste in Telegram (a Shortcuts
+/// automation does the swap) and Share › fxclip, set up from here; settings one level down.
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
@@ -16,8 +17,8 @@ struct ContentView: View {
                               systemImage: "exclamationmark.triangle")
                     }
                 }
-                PasteSection()
-                if let r = model.result { ResultSection(result: r) }
+                AutomationSection()
+                ShareSection()
                 CounterSection()
                 Section {
                     NavigationLink { CleaningPage() } label: {
@@ -26,88 +27,64 @@ struct ContentView: View {
                     NavigationLink { PreviewsPage() } label: {
                         IconRow(title: "App previews", icon: "link", color: .blue, value: model.previewsSummary)
                     }
-                    NavigationLink { HowToPage() } label: {
-                        IconRow(title: "Clean from any app", icon: "square.and.arrow.up", color: .orange)
-                    }
                 } footer: {
                     Text("Links are cleaned on this iPhone. No account, no analytics, no network access.")
                 }
             }
             .navigationTitle("fxclip")
         }
-        .onAppear { model.checkClipboard() }
         .onChange(of: scenePhase) { phase in
-            if phase == .active { model.checkClipboard() }
+            if phase == .active { model.refresh() }
         }
     }
 }
 
-private struct PasteSection: View {
-    @EnvironmentObject private var model: AppModel
+/// The closest iOS gets to the Mac: copy anywhere, paste in Telegram, the preview shows.
+private struct AutomationSection: View {
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         Section {
-            if model.result != nil {
-                // After a paste the result says it all; Paste stays at hand for the next link.
-                HStack {
-                    Text("Another link?").foregroundStyle(.secondary)
-                    Spacer()
-                    pasteButton
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 12) {
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Copy in X, paste in Telegram").font(.headline)
+                        Text("Set up once, then it just works").font(.subheadline).foregroundStyle(.secondary)
+                    }
                 }
-            } else {
-                hero
+                Text("When Telegram opens, the link you copied becomes its preview link. When you leave, the clean link comes back.")
+                    .font(.subheadline)
+                    .padding(.top, 6)
             }
-        }
-    }
-
-    private var hero: some View {
-            VStack(spacing: 14) {
-                Image(systemName: model.clipboardHasLink ? "link" : "doc.on.clipboard")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                VStack(spacing: 4) {
-                    Text(model.clipboardHasLink ? "A link is on your clipboard" : "Copy a link, then come back")
-                        .font(.headline)
-                    Text("Paste cleans it and puts the clean link back on the clipboard.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                pasteButton
-                    .controlSize(.large)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-    }
-
-    private var pasteButton: some View {
-        PasteButton(payloadType: String.self) { strings in
-            guard let text = strings.first else { return }
-            Task { @MainActor in model.cleanPasted(text) }
-        }
-        .labelStyle(.titleAndIcon)
-        .buttonBorderShape(.capsule)
-    }
-}
-
-private struct ResultSection: View {
-    @EnvironmentObject private var model: AppModel
-    let result: AppModel.CleanResult
-
-    var body: some View {
-        Section {
-            LinkResultView(clean: result.clean, removed: result.removed, removedNames: result.removedNames)
-            if result.telegram != result.clean {
-                Button {
-                    model.copy(result.telegram)
-                } label: {
-                    Label("Copy for Telegram", systemImage: "paperplane")
-                }
+            .padding(.vertical, 6)
+            Step(1, "Shortcuts › Automation › **+** › App › **Telegram** › Is Opened › Run Immediately.")
+            Step(2, "Add **Get Clipboard**, **Preview link** (fxclip), **Copy to Clipboard**.")
+            Step(3, "Same again with **Is Closed** and **Clean link**.")
+            Button {
+                openURL(URL(string: "shortcuts://")!)
+            } label: {
+                Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
             }
         } header: {
-            Text("On your clipboard")
+            Text("Telegram previews")
+        } footer: {
+            Text("The first time, allow Shortcuts to paste: Settings › Apps › Shortcuts › Paste from Other Apps › Allow.")
+        }
+    }
+}
+
+private struct ShareSection: View {
+    var body: some View {
+        Section {
+            Step(1, "On a post or a link, tap **Share** › **fxclip**. Not listed? Swipe the apps to the end › More.")
+            Step(2, "**Share…** › Telegram gets the preview link, every other app the clean one. Or just **Copy**.")
+        } header: {
+            Text("From the share sheet")
         }
     }
 }
@@ -204,36 +181,6 @@ struct PreviewsPage: View {
             }
         }
         .navigationTitle("App previews")
-    }
-}
-
-struct HowToPage: View {
-    var body: some View {
-        List {
-            Section {
-                Step(1, "In Safari, X or any app, tap Share on a link.")
-                Step(2, "Tap **Clean link**. The first time, swipe the row of apps to the end, tap More and add it.")
-                Step(3, "**Copy**, **Copy for Telegram**, or **Share…**: Telegram gets the preview link, every other app the clean one.")
-            } header: {
-                Label("Share sheet", systemImage: "square.and.arrow.up")
-            }
-            Section {
-                Step(1, "In Shortcuts, search the actions for **fxclip**.")
-                Step(2, "**Clean link** and **Preview link** take text and return the result.")
-            } header: {
-                Label("Shortcuts", systemImage: "square.2.layers.3d")
-            }
-            Section {
-                Step(1, "Shortcuts › Automation › New › App › **Telegram** › Is Opened, Run Immediately.")
-                Step(2, "Actions: Get Clipboard › **Preview link** › Copy to Clipboard.")
-                Step(3, "A second automation for **Is Closed**, with **Clean link**.")
-            } header: {
-                Label("Telegram previews, automatically", systemImage: "paperplane")
-            } footer: {
-                Text("iOS lets no app watch the clipboard. These automations are the closest to the Mac, where Telegram gets the preview link on its own. Allow Shortcuts to paste once: Settings › Apps › Shortcuts › Paste from Other Apps.")
-            }
-        }
-        .navigationTitle("Clean from any app")
     }
 }
 
