@@ -32,8 +32,14 @@ final class LinkCleanerTests: XCTestCase {
                        "see https://x.com/a/status/1 and https://fxtwitter.com.evil/x")
         XCTAssertEqual(cleaner.clean("http://fxtwitter.com/a/status/1?s=20").text, "https://x.com/a/status/1")
         XCTAssertEqual(cleaner.clean("(https://zzinstagram.com/p/abc/)").text, "(https://instagram.com/p/abc/)")
-        let nested = "https://example.com/?next=https://fxtwitter.com/a&sig=abc"
-        XCTAssertEqual(cleaner.clean(nested).text, nested)
+        for nested in ["https://example.com/?next=https://fxtwitter.com/a&sig=abc",
+                       "https://example.com/?next=(https://fxtwitter.com/a)&sig=abc"] {
+            XCTAssertEqual(cleaner.clean(nested).text, nested)
+        }
+        // Whatever Preview link rewrites, Clean link undoes.
+        for text in ["link:https://x.com/a/status/1", "`https://x.com/a/status/1`", "see (https://instagram.com/p/abc/)."] {
+            XCTAssertEqual(cleaner.clean(cleaner.telegramPreview(text)).text, text)
+        }
     }
 
     func testSettingsMovedAsideByAnotherProcessStillWarn() throws {

@@ -11,7 +11,7 @@ public func isBareURL(_ text: String) -> Bool {
 
 /// Applies f to each URL in text, leaving prose punctuation around it untouched:
 /// "see (https://x.com/a)." → f("https://x.com/a").
-func mapURLs(_ text: String, _ f: (String) -> String) -> String {
+public func mapURLs(_ text: String, _ f: (String) -> String) -> String {
     var out = text
     // Replace from the end so earlier ranges stay valid.
     for m in urlPattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
