@@ -4,7 +4,8 @@ import FxEngine
 /// Settings and the counter, shared by the app, the share extension and the Shortcuts actions
 /// through the App Group. Only a total is counted, never a link or a site.
 final class SharedStore {
-    static let appGroup = "group.io.github.c0mm0n.fxclip"
+    /// From Info.plist (`FXCLIP_APP_GROUP`), since each self-signed build has its own group.
+    static let appGroup = (Bundle.main.object(forInfoDictionaryKey: "FxclipAppGroup") as? String).flatMap { $0.isEmpty ? nil : $0 }
     private static let counterKey = "trackersRemoved"
 
     let file: URL
@@ -17,11 +18,11 @@ final class SharedStore {
     init(directory: URL? = nil, defaults: UserDefaults? = nil) {
         let fm = FileManager.default
         let dir = directory
-            ?? fm.containerURL(forSecurityApplicationGroupIdentifier: Self.appGroup)
+            ?? Self.appGroup.flatMap { fm.containerURL(forSecurityApplicationGroupIdentifier: $0) }
             ?? fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("fxclip", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         file = dir.appendingPathComponent("settings.json")
-        self.defaults = defaults ?? UserDefaults(suiteName: Self.appGroup) ?? .standard
+        self.defaults = defaults ?? Self.appGroup.flatMap { UserDefaults(suiteName: $0) } ?? .standard
     }
 
     /// Same format as every other platform, so settings.json moves between them.

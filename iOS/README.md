@@ -1,8 +1,8 @@
 # fxclip for iOS
 
-The same link cleaning as the other apps, for iPhone and iPad (iOS 16+). Built and tested on the
-simulator only: nothing is signed or published yet (the Apple developer account is undecided:
-an individual account would show the owner's legal name as the seller).
+The same link cleaning as the other apps, for iPhone and iPad (iOS 16+). It ships as source only:
+there is no App Store version and no download, so you build it and sign it with your own Apple
+account (see [Build it yourself](#build-it-yourself)).
 
 ## What iOS changes
 
@@ -31,7 +31,7 @@ Allow Shortcuts to paste once (Settings › Apps › Shortcuts › Paste from Ot
 | Path | What |
 |---|---|
 | `project.yml` | xcodegen spec for `FxClipiOS.xcodeproj` (git-ignored), separate from the Mac project. Signing comes from `../Signing.xcconfig` (team ID in the ignored `Local.xcconfig`). |
-| `Shared/` | Compiled into the app and the extension: `LinkCleaner` (the `FxEngine` from `../Engine` with the user's settings), `SharedStore` (settings.json and the counter in the App Group `group.io.github.c0mm0n.fxclip`), `DestinationLink` (per-destination share item), `ShareSheet` (the share sheet's view, here so the tests can snapshot it). |
+| `Shared/` | Compiled into the app and the extension: `LinkCleaner` (the `FxEngine` from `../Engine` with the user's settings), `SharedStore` (settings.json and the counter in the App Group `group.<prefix>.fxclip`, read from Info.plist), `DestinationLink` (per-destination share item), `ShareSheet` (the share sheet's view, here so the tests can snapshot it). |
 | `ShareExtension/` | Share › Clean link. |
 | `App/` | The SwiftUI app (clipboard, link cleaning, app previews, how to use) and the Shortcuts actions. |
 | `Tests/` | Unit tests hosted in the app. The engine itself is held to `Shared/vectors.json` by `swift test --package-path Engine`. |
@@ -45,7 +45,25 @@ other platforms' identifiers, and are matched exactly.
 file is moved to `settings.unreadable.json`, never silently replaced. The counter is a total only.
 Nothing leaves the device: no network access at all.
 
-## Build
+## Build it yourself
+
+You need a Mac with Xcode and [xcodegen](https://github.com/yonaskolb/XcodeGen), and an Apple
+account. A free one works, but its apps stop opening after 7 days until you build them again.
+
+1. Bundle IDs and App Groups belong to the first Apple account that registers them, so pick your
+   own prefix. Create `Local.xcconfig` at the repository root (git-ignored):
+
+   ```
+   DEVELOPMENT_TEAM = <your team ID>
+   FXCLIP_BUNDLE_PREFIX = com.yourname
+   ```
+
+   Your team ID is in Xcode › Settings › Accounts. The app becomes `com.yourname.fxclip`, the
+   share extension `com.yourname.fxclip.share`, the App Group `group.com.yourname.fxclip`.
+2. `xcodegen generate --spec iOS/project.yml`, open `iOS/FxClipiOS.xcodeproj`, pick your iPhone
+   (Developer Mode on) and Run. Xcode registers the IDs and the App Group for you.
+
+## Tests
 
 ```shell
 xcodegen generate --spec iOS/project.yml

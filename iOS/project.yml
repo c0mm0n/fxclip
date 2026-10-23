@@ -14,6 +14,11 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     CODE_SIGN_STYLE: Automatic
+    # Bundle IDs and App Groups belong to the Apple account that registers them first, so
+    # anyone signing their own build sets FXCLIP_BUNDLE_PREFIX in Local.xcconfig. Defined here,
+    # at project level, so the targets' Signing.xcconfig can override it.
+    FXCLIP_BUNDLE_PREFIX: io.github.c0mm0n
+    FXCLIP_APP_GROUP: group.$(FXCLIP_BUNDLE_PREFIX).fxclip
     TARGETED_DEVICE_FAMILY: "1,2"
 targets:
   FxClipiOS:
@@ -39,7 +44,7 @@ targets:
       base:
         PRODUCT_NAME: fxclip
         PRODUCT_MODULE_NAME: FxClipiOS
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.c0mm0n.fxclip
+        PRODUCT_BUNDLE_IDENTIFIER: $(FXCLIP_BUNDLE_PREFIX).fxclip
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Hand-written: xcodegen's iOS defaults add armv7 and a launch storyboard.
         INFOPLIST_FILE: App/Info.plist
@@ -62,7 +67,7 @@ targets:
     settings:
       base:
         PRODUCT_NAME: FxClipShare
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.c0mm0n.fxclip.share
+        PRODUCT_BUNDLE_IDENTIFIER: $(FXCLIP_BUNDLE_PREFIX).fxclip.share
         INFOPLIST_FILE: ShareExtension/Info.plist
         CODE_SIGN_ENTITLEMENTS: ShareExtension/FxClipShare.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
@@ -77,7 +82,7 @@ targets:
       - package: FxEngine
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.c0mm0n.fxclip.tests
+        PRODUCT_BUNDLE_IDENTIFIER: $(FXCLIP_BUNDLE_PREFIX).fxclip.tests
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/fxclip.app/fxclip"
         BUNDLE_LOADER: "$(TEST_HOST)"
