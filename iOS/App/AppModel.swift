@@ -25,6 +25,7 @@ final class AppModel: ObservableObject {
         let clean: String
         let telegram: String
         let removed: Int
+        let removedNames: [String]
     }
 
     init(store: SharedStore = SharedStore()) {
@@ -58,7 +59,8 @@ final class AppModel: ObservableObject {
         let out = cleaner.clean(text)
         store.record(out.removed)
         trackersRemoved = store.trackersRemoved
-        result = CleanResult(clean: out.text, telegram: cleaner.telegramPreview(out.text), removed: out.removed)
+        result = CleanResult(clean: out.text, telegram: cleaner.telegramPreview(out.text), removed: out.removed,
+                             removedNames: removedParameters(original: text, clean: out.text))
         UIPasteboard.general.string = out.text
     }
 
@@ -85,6 +87,20 @@ final class AppModel: ObservableObject {
         var s = user.previews[p.id] ?? .init(enabled: true, apps: p.apps)
         s.enabled = enabled
         user.previews[p.id] = s
+    }
+
+    /// "On", "Off" or "5 of 7 sites", for the home row.
+    var cleaningSummary: String {
+        let sites = builtins.trackers.sites
+        let on = sites.filter(siteEnabled).count
+        if on == sites.count { return user.trackersEverywhere ? "On" : "Sites only" }
+        if on == 0 && !user.trackersEverywhere { return "Off" }
+        return "\(on) of \(sites.count) sites"
+    }
+
+    var previewsSummary: String {
+        let on = builtins.previews.filter(previewEnabled).count
+        return on == 0 ? "Off" : on == builtins.previews.count ? "On" : "\(on) of \(builtins.previews.count)"
     }
 
     /// The app names a preview is used in, from the built-in and added apps.

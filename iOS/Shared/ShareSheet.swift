@@ -7,6 +7,7 @@ final class ShareModel: ObservableObject {
     @Published private(set) var original = ""
     @Published private(set) var clean = ""
     @Published private(set) var removed = 0
+    @Published private(set) var removedNames: [String] = []
     @Published private(set) var telegram = ""
     @Published private(set) var failed = false
 
@@ -28,6 +29,7 @@ final class ShareModel: ObservableObject {
         original = text
         clean = result.text
         removed = result.removed
+        removedNames = removedParameters(original: text, clean: result.text)
         telegram = cleaner.telegramPreview(result.text)
     }
 }
@@ -43,15 +45,9 @@ struct ShareView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     Section {
-                        Text(model.clean)
-                            .font(.callout.monospaced())
-                            .textSelection(.enabled)
-                            .lineLimit(6)
+                        LinkResultView(clean: model.clean, removed: model.removed, removedNames: model.removedNames)
                     } header: {
                         Text("Clean link")
-                    } footer: {
-                        Text(model.removed == 0 ? "Already clean." :
-                             model.removed == 1 ? "1 tracker removed." : "\(model.removed) trackers removed.")
                     }
                     Section {
                         Button {

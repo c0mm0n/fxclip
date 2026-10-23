@@ -32,7 +32,25 @@ final class ScreenTests: XCTestCase {
         XCTAssertEqual(model.result?.removed, 2)
         XCTAssertEqual(UIPasteboard.general.string, "https://x.com/CerfiaFR/status/2103787353680851028")
         XCTAssertEqual(model.trackersRemoved, 2)
+        XCTAssertEqual(model.result?.removedNames, ["s", "t"])
         try snapshot(ContentView().environmentObject(model), "app-pasted")
+    }
+
+    func testAppPages() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let model = AppModel(store: SharedStore(directory: dir, defaults: UserDefaults(suiteName: "fxclip-screens-\(UUID().uuidString)")))
+        XCTAssertEqual(model.cleaningSummary, "On")
+        XCTAssertEqual(model.previewsSummary, "On")
+        try snapshot(ContentView().environmentObject(model), "app")
+        try snapshot(NavigationStack { CleaningPage() }.environmentObject(model), "app-cleaning")
+        try snapshot(NavigationStack { PreviewsPage() }.environmentObject(model), "app-previews")
+        try snapshot(NavigationStack { HowToPage() }.environmentObject(model), "app-howto")
+    }
+
+    func testRemovedParameters() {
+        XCTAssertEqual(removedParameters(original: "https://a.com/?utm_source=x&id=1&utm_source=y&t=2",
+                                         clean: "https://a.com/?id=1"), ["utm_source", "t"])
+        XCTAssertEqual(removedParameters(original: "not a link", clean: "not a link"), [])
     }
 
     private func snapshot<V: View>(_ view: V, _ name: String) throws {
