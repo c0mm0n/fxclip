@@ -24,7 +24,7 @@ struct LinkCleaner {
     }
 
     /// Also turns preview links back into the original: on iOS the clean link can't be remembered
-    /// between Telegram opening and closing, as the Mac does, so "Clean link" undoes "Preview link".
+    /// across Shortcuts runs, as the Mac does, so "Clean link" undoes "Preview link".
     func clean(_ text: String) -> (text: String, removed: Int) {
         engine.clean(unmirror(text))
     }

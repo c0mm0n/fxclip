@@ -10,18 +10,18 @@ import XCTest
 final class ScreenTests: XCTestCase {
     private let link = "https://x.com/CerfiaFR/status/2103787353680851028?s=20&t=abc"
 
-    func testShareSheetCleansAndOffersThePreview() throws {
+    func testShareCleansAndOffersThePreview() throws {
         let model = ShareModel()
         model.load(link)
         XCTAssertEqual(model.clean, "https://x.com/CerfiaFR/status/2103787353680851028")
         XCTAssertEqual(model.telegram, "https://fxtwitter.com/CerfiaFR/status/2103787353680851028")
         XCTAssertEqual(model.removed, 2)
         XCTAssertFalse(model.failed)
-        try snapshot(ShareView(model: model), "share")
 
         let empty = ShareModel()
         empty.load(nil)
         XCTAssertTrue(empty.failed)
+        try snapshot(ShareFailedView(model: empty), "share-nothing")
     }
 
     func testAppPages() throws {
@@ -32,12 +32,6 @@ final class ScreenTests: XCTestCase {
         try snapshot(ContentView().environmentObject(model), "app")
         try snapshot(NavigationStack { CleaningPage() }.environmentObject(model), "app-cleaning")
         try snapshot(NavigationStack { PreviewsPage() }.environmentObject(model), "app-previews")
-    }
-
-    func testRemovedParameters() {
-        XCTAssertEqual(removedParameters(original: "https://a.com/?utm_source=x&id=1&utm_source=y&t=2",
-                                         clean: "https://a.com/?id=1"), ["utm_source", "t"])
-        XCTAssertEqual(removedParameters(original: "not a link", clean: "not a link"), [])
     }
 
     private func snapshot<V: View>(_ view: V, _ name: String) throws {

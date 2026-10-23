@@ -20,7 +20,7 @@ final class LinkCleanerTests: XCTestCase {
         try LinkCleaner.bundledRules(Bundle(for: AppModel.self))
     }
 
-    /// The "Telegram is closed" automation runs Clean link on what "Is opened" produced.
+    /// Whatever Preview link produced, Clean link restores (for anyone chaining the two in Shortcuts).
     func testCleanLinkUndoesPreviewLink() throws {
         let cleaner = LinkCleaner(rules: try rules(), user: UserSettings())
         for original in ["https://x.com/a/status/1", "https://instagram.com/p/abc/"] {

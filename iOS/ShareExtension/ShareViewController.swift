@@ -3,33 +3,38 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// Share › Clean link: cleans the shared link, then copies it or hands it on,
-/// with the preview mirror for Telegram and the clean link everywhere else.
+/// Share › fxclip: cleans the shared link and goes straight to the share sheet, where Telegram
+/// gets the preview mirror and every other app (Copy included) the clean link.
 final class ShareViewController: UIViewController {
     private let model = ShareModel()
+    private var loaded = false
+    private var appeared = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        model.copy = { [weak self] text in
-            UIPasteboard.general.string = text
-            self?.finish()
+        view.backgroundColor = .clear
+        model.done = { [weak self] in self?.finish() }
+        Task {
+            await model.load(sharedText())
+            loaded = true
+            next()
         }
-        model.share = { [weak self] in self?.presentShareSheet() }
-        model.cancel = { [weak self] in self?.finish() }
+    }
 
-        let host = UIHostingController(rootView: ShareView(model: model))
-        addChild(host)
-        host.view.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(host.view)
-        NSLayoutConstraint.activate([
-            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            host.view.topAnchor.constraint(equalTo: view.topAnchor),
-            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
-        host.didMove(toParent: self)
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        appeared = true
+        next()
+    }
 
-        Task { await model.load(sharedText()) }
+    /// Both the link and the view must be ready before presenting anything.
+    private func next() {
+        guard loaded, appeared, presentedViewController == nil, children.isEmpty else { return }
+        if model.failed {
+            showFailure()
+        } else {
+            presentShareSheet()
+        }
     }
 
     /// The first link (or text) the host app shared.
@@ -51,12 +56,26 @@ final class ShareViewController: UIViewController {
         guard let cleaner = model.cleaner else { return }
         let sheet = UIActivityViewController(activityItems: [DestinationLink(clean: model.clean, cleaner: cleaner)],
                                              applicationActivities: nil)
-        sheet.completionWithItemsHandler = { [weak self] _, completed, _, _ in
-            if completed { self?.finish() }
-        }
+        // Sent, copied or cancelled: either way the user is done with fxclip.
+        sheet.completionWithItemsHandler = { [weak self] _, _, _, _ in self?.finish() }
         sheet.popoverPresentationController?.sourceView = view
         sheet.popoverPresentationController?.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
         present(sheet, animated: true)
+    }
+
+    private func showFailure() {
+        view.backgroundColor = .systemBackground
+        let host = UIHostingController(rootView: ShareFailedView(model: model))
+        addChild(host)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(host.view)
+        NSLayoutConstraint.activate([
+            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            host.view.topAnchor.constraint(equalTo: view.topAnchor),
+            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        host.didMove(toParent: self)
     }
 
     private func finish() {

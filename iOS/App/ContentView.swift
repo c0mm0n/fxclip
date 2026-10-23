@@ -1,9 +1,7 @@
 import FxEngine
 import SwiftUI
-import UIKit
 
-/// Home: the two ways fxclip is really used, copy in X then paste in Telegram (a Shortcuts
-/// automation does the swap) and Share › Clean link, set up from here; settings one level down.
+/// Home: the one gesture, Share › fxclip, then the counter; settings one level down.
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
@@ -17,7 +15,6 @@ struct ContentView: View {
                               systemImage: "exclamationmark.triangle")
                     }
                 }
-                AutomationSection()
                 ShareSection()
                 CounterSection()
                 Section {
@@ -39,52 +36,24 @@ struct ContentView: View {
     }
 }
 
-/// The closest iOS gets to the Mac: copy anywhere, paste in Telegram, the preview shows.
-private struct AutomationSection: View {
-    @Environment(\.openURL) private var openURL
-
-    var body: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 12) {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Copy in X, paste in Telegram").font(.headline)
-                        Text("Set up once, then it just works").font(.subheadline).foregroundStyle(.secondary)
-                    }
-                }
-                Text("When Telegram opens, the link you copied becomes its preview link. When you leave, the clean link comes back.")
-                    .font(.subheadline)
-                    .padding(.top, 6)
-            }
-            .padding(.vertical, 6)
-            Step(1, "Shortcuts › Automation › **+** › App › **Telegram** › Is Opened › Run Immediately.")
-            Step(2, "Add **Get Clipboard**, **Preview link** (fxclip), **Copy to Clipboard**.")
-            Step(3, "Same again with **Is Closed** and **Clean link**.")
-            Button {
-                openURL(URL(string: "shortcuts://")!)
-            } label: {
-                Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
-            }
-        } header: {
-            Text("Telegram previews")
-        } footer: {
-            Text("The first time, allow Shortcuts to paste: Settings › Apps › Shortcuts › Paste from Other Apps › Allow.")
-        }
-    }
-}
-
 private struct ShareSection: View {
     var body: some View {
         Section {
-            Step(1, "On a post or a link, tap **Share** › **Clean link**. Not listed? Swipe the apps to the end › More.")
-            Step(2, "**Share…** › Telegram gets the preview link, every other app the clean one. Or just **Copy**.")
-        } header: {
-            Text("From the share sheet")
+            HStack(spacing: 12) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Share › fxclip").font(.headline)
+                    Text("Clean links, real previews in Telegram").font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 6)
+            Step(1, "In X, Instagram or any app, tap **Share** on a post or a link.")
+            Step(2, "Tap **fxclip**. Not in the row? Swipe to the end › More.")
+            Step(3, "Pick your **Telegram** chat: it gets the preview link. Every other app, and Copy, get the clean link.")
         }
     }
 }
