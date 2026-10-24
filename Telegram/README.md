@@ -1,13 +1,9 @@
 # fxclip for Telegram
 
-A self-hosted bot that cleans links for a group without requiring members to
-install a client. It reuses Swift `FxEngine` and `Shared/rules.json` to remove
-tracking and improve X / Instagram previews.
-
-`Shared/rules.json` is the single source of rules for every platform. Do not add
-site rules or cleaning logic to the bot. Behavior changes begin in
-`Shared/vectors.json`, pass the reference Swift engine, then the Android and
-Windows ports against the same data. Language only affects presentation.
+Clean links, ready to share. fxclip is a self-hosted Telegram bot that removes tracking
+from links and optionally improves X and Instagram previews, without requiring group
+members to install a client. Menus support English and French. Run your own instance
+using the [Docker setup](#docker-setup); this project does not configure a public bot.
 
 ## Choose your behavior
 
@@ -38,6 +34,17 @@ member's preferences. A short join greeting links everyone to their settings.
 Commands remain available: `/mode reply|replace|secretary|off|default`,
 `/fxclip reply|replace|off`, and `/fxclip previews on|off`.
 
+## Preview links
+
+Group admins can enable or disable enhanced previews in `/setup` or with
+`/fxclip previews on|off`. When enabled, X and Instagram links can use
+`fxtwitter.com` and `zzinstagram.com`.
+
+The bot stays silent when the final cleaned/preview result is unchanged. Links
+already prepared by a desktop or mobile fxclip client produce no reply, repost,
+deletion or edit. A tracker-free original URL can still be rewritten when
+improved previews are enabled for its site.
+
 ## English and French
 
 English is the fallback language. French is fully supported, including buttons,
@@ -61,11 +68,6 @@ its locale selection; private overrides also update that private command menu.
 Message content is never translated or analyzed to guess a language. Existing
 modes, group activation and polling checkpoints survive the language upgrade.
 
-The bot stays silent when the final cleaned/preview result is unchanged. Links
-already prepared by a desktop or mobile fxclip client produce no reply, repost,
-deletion or edit. A tracker-free original URL can still be rewritten when
-improved previews are enabled for its site.
-
 ## Secretary Mode
 
 Enable **Secretary Mode** in @BotFather, then connect the bot in your account's
@@ -80,8 +82,7 @@ with incoming activity within 24 hours. Text and caption edits are supported.
 ## Docker setup
 
 Use one instance per token. No public port, domain or inbound tunnel is needed:
-the bot contacts Telegram over HTTPS long polling. Tailscale is only needed for
-server administration.
+the bot contacts Telegram over HTTPS long polling.
 
 From the repository root:
 
@@ -120,8 +121,8 @@ in the group, or your numeric user ID in private for `TELEGRAM_OWNER_IDS`.
 Startup registers English/French native descriptions and command menus. The
 persistent volume retains modes, language preferences, discovered group IDs and
 titles, and the polling checkpoint. Back up that volume. Message text and URLs
-are never persisted or logged. Watchtower is disabled for this service: install
-new images explicitly.
+are never persisted or logged. Automatic container updates are disabled in the supplied
+configuration: install new images explicitly.
 
 ## Real-world verification
 
@@ -163,3 +164,11 @@ References: [language support](https://core.telegram.org/bots/features#language-
 [Business bots](https://core.telegram.org/bots/features#secretary-bots),
 [Business rights](https://core.telegram.org/bots/api#businessbotrights),
 [deletion](https://core.telegram.org/bots/api#deletemessage).
+
+## Shared rules
+
+The bot reuses Swift `FxEngine` and [`Shared/rules.json`](../Shared/rules.json), the
+single source of rules for every platform. Do not add site rules or cleaning logic
+to the bot. Behavior changes begin in [`Shared/vectors.json`](../Shared/vectors.json),
+pass the reference Swift engine, then the Android and Windows ports against the
+same data. Language only affects presentation.

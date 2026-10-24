@@ -1,15 +1,16 @@
 # fxclip for Windows
 
-Clean links, ready to share. Remove tracking parameters from copied links, with optional adaptations for better previews in the destination apps you choose.
+Clean links, ready to share. fxclip removes tracking from copied links and optionally adapts X and Instagram links for better previews in the apps you choose. Runs in the system tray on Windows 10/11, x64.
 
 ## Install
 
-1. Download and unzip `fxclip-windows-x64.zip` into a permanent folder.
-2. Run `fxclip.exe`. No .NET installation or administrator access is needed.
-3. The app is unsigned. If SmartScreen appears, select **More info → Run anyway**.
-4. Choose your welcome preferences and select **Start**.
+1. Download and run [fxclip-windows-setup.exe](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-windows-setup.exe) for a per-user installation. No .NET installation or administrator access is needed.
+2. The app is unsigned. If SmartScreen appears, select **More info → Run anyway**.
+3. Choose your welcome preferences and select **Start**.
 
-Windows 10/11, x64. The app stays in the system tray. Double-click its icon for Settings; opening the executable again also brings Settings forward. Keep the extracted folder in place when Open at login is enabled.
+For a portable installation, download and extract the complete [fxclip-windows-x64.zip](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-windows-x64.zip) into a permanent folder, then run `fxclip.exe`. Keep its helper files together and leave the folder in place when Open at login is enabled.
+
+Double-click the tray icon for Settings; opening the executable again also brings Settings forward.
 
 ## Features
 
@@ -40,12 +41,12 @@ python3 Windows/tools/make_icon.py
 
 The engine tests run on macOS and Windows and read **all** cases directly from `Shared/vectors.json` and `Shared/settings_vectors.json`. The WPF app needs the Windows Desktop build targets (included in the official Microsoft SDK); the Homebrew source-built SDK can run the engine tests but may omit the desktop build targets.
 
-`build-windows.yml` builds on pushes to `windows` and can be called by the release workflow with a `version` input. It uploads `release-windows`, containing only `fxclip-windows-x64.zip` (the executable and this README as README.txt).
+`build-windows.yml` builds on pushes to `windows` and can be called by the release workflow with a `version` input. It uploads `release-windows` with the per-user installer, portable ZIP, update package and feed. The portable archive includes this guide as `README.txt`.
 
 The CI clipboard smoke test launches the published executable with an isolated temporary APPDATA and `--no-welcome`. This flag only skips first-run setup; it doesn't enable login startup. It probes desktop/clipboard access and reports the exact result in the job summary. That step is best-effort because hosted runners may lack a usable desktop. It cannot replace checking foreground switching, tray interaction, all settings pages, first-run controls, login startup, and light/dark appearance on a real Windows desktop. CI also captures all five settings pages, the paused overview, the app picker, and the welcome screen in both light and dark themes in the separate `windows-ui-check` artifact.
 
-## Updates (0.5.0+)
+## Updates
 
-Install `fxclip-windows-setup.exe` for a per-user installation, or extract the complete `fxclip-windows-x64.zip` portable archive. Keep its helper files with the app. An old standalone ZIP needs this one manual upgrade; settings and counters remain in `%APPDATA%\fxclip`, and an existing login preference follows the new path.
+Install `fxclip-windows-setup.exe` for a per-user installation, or extract the complete `fxclip-windows-x64.zip` portable archive. Keep its helper files with the app. If your current version has no updater, install the latest complete download manually once; settings and counters remain in `%APPDATA%\fxclip`, and an existing login preference follows the new path.
 
 Use **Settings → Updates** or **Check for Updates…** in the tray menu. Checking contacts public GitHub Releases; cleaning stays local. Automatic checks are optional, off by default and at most daily. Downloads verify Velopack's package digest, then wait for **Restart to Update** and a second confirmation. Quitting or opening the app never installs a downloaded update automatically. No account, token or paid signing certificate is required.

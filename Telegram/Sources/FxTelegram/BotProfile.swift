@@ -3,6 +3,7 @@ public enum BotProfile {
     public static func configure(api: BotAPI, ownerIDs: Set<Int64>,
                                  userLanguages: [String: BotLanguage]) async throws {
         for (code, language): (String, BotLanguage) in [("", .en), ("fr", .fr)] {
+            _ = try await api.call("setMyName", ["language_code": code, "name": "fxclip"])
             _ = try await api.call("setMyDescription", [
                 "language_code": code,
                 "description": language.text(

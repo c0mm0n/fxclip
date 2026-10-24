@@ -1,11 +1,15 @@
 # fxclip for Linux (Wayland)
 
-fxclip cleans copied links by removing tracking parameters while keeping useful
+Clean links, ready to share. fxclip removes tracking from copied links while keeping useful
 details. Optionally, it adapts X and Instagram links for better previews in chosen
 destination apps (Telegram by default); switching away restores the clean original.
 Link cleaning stays local, with no account, analytics, clipboard history or clipboard
 logging. Only the current text is held in memory. Authorized updates contact GitHub
 from the desktop interface; the cleaning service never makes network requests.
+
+## Install
+
+Download [fxclip-linux-x86_64.tar.gz](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-linux-x86_64.tar.gz).
 
 Supported desktops: Sway/wlroots and Hyprland; KDE Plasma with data-control enabled.
 GNOME Wayland is unsupported and exits with an explanation. Other compositors with
@@ -72,7 +76,7 @@ runs the engine without accessing the clipboard.
 
 ## Updates
 
-From version 0.6.0, choose **Check for Updates…** in the tray menu or **Settings →
+Choose **Check for Updates…** in the tray menu or **Settings →
 Updates**. Install this download manually once if your current version has no
 updater. The updater manages the standard user installation created by `install.sh`.
 

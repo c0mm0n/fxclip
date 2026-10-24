@@ -45,13 +45,16 @@ final class BotProfileTests: XCTestCase {
                 XCTAssertLessThanOrEqual(expected.count, field == "description" ? 512 : 120)
             }
         }
-        XCTAssertFalse(api.calls.contains { $0.method == "setMyName" })
+        let names = api.calls.filter { $0.method == "setMyName" }
+        XCTAssertEqual(names.count, 2)
+        XCTAssertEqual(Set(names.compactMap { $0.parameters["language_code"] as? String }), ["", "fr"])
+        XCTAssertTrue(names.allSatisfy { $0.parameters["name"] as? String == "fxclip" })
     }
 
     func testDefaultAndGroupScopesHaveStableCommandsInBothLocales() async throws {
         let api = ProfileRecordingAPI()
         try await BotProfile.configure(api: api, ownerIDs: [], userLanguages: [:])
-        XCTAssertEqual(api.calls.count, 8)
+        XCTAssertEqual(api.calls.count, 10)
         for code in ["", "fr"] {
             let personal = try menu(api, scope: "default", code: code)
             let group = try menu(api, scope: "all_group_chats", code: code)
@@ -101,7 +104,7 @@ final class BotProfileTests: XCTestCase {
     func testStartupOwnersGetPrivateExtrasAndExplicitPreferenceIsPreserved() async throws {
         let api = ProfileRecordingAPI()
         try await BotProfile.configure(api: api, ownerIDs: [314, 927], userLanguages: ["314": .en, "681": .fr])
-        XCTAssertEqual(api.calls.count, 14)
+        XCTAssertEqual(api.calls.count, 16)
         for code in ["", "fr"] {
             let explicitOwner = try menu(api, scope: "chat", code: code, userID: 314)
             let autoOwner = try menu(api, scope: "chat", code: code, userID: 927)
@@ -140,7 +143,7 @@ final class BotProfileTests: XCTestCase {
             "unknown": .fr, "": .fr, "0": .fr, "-123": .fr,
             "9223372036854775808": .fr, " 123": .fr, "0123": .fr, "+123": .fr, "123": .en
         ])
-        XCTAssertEqual(api.calls.count, 10)
+        XCTAssertEqual(api.calls.count, 12)
         for code in ["", "fr"] {
             XCTAssertEqual(try menu(api, scope: "chat", code: code, userID: 123).first?["description"], "Choose your settings")
         }

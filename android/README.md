@@ -1,23 +1,23 @@
 # fxclip for Android
 
-The same link cleaning as the Mac, Windows and Linux apps, in Kotlin and Jetpack Compose
-(Android 8.0+). Link cleaning stays local. Only update checks and downloads that the user authorizes contact GitHub; the update screen explains network access and Android’s install permission.
+Clean links, ready to share. fxclip removes tracking from links on Android 8.0+, with optional X and Instagram preview links for Telegram. Cleaning stays local; optional updates contact GitHub.
 
-## What Android changes
+## Install
 
-The desktop apps watch the clipboard and swap in the preview link while Telegram is in front.
-Android forbids both: an app can only read the clipboard while it is the one in front, and it
-cannot know which app is. Background watching was tried over ADB (`READ_LOGS` + a log watcher,
-the KDE Connect trick) and dropped: on a Galaxy Z Fold7 under Android 16 the system logs no
-clipboard line at all, so the signal it relied on does not exist. Cleaning is therefore
-something the user asks for, by one of four paths:
+Download [fxclip-android.apk](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-android.apk) and open it. Allow installation from your browser or file manager when Android asks, then open fxclip for the first-launch tour.
+
+Published APKs can update an existing installation without removing its settings or history. See [Updates](#updates) for in-app checks and installation.
+
+## How to use it
+
+Android does not allow background clipboard watching or detection of the app in front. Choose how to clean each link:
 
 | Path | What happens |
 |---|---|
-| **Share → Clean link** | The link is cleaned, then handed on. Telegram gets `fxtwitter` / `zzinstagram`, every other app the clean link (`EXTRA_REPLACEMENT_EXTRAS`). Apps you re-share to often are offered first. |
-| **Text selection menu** | "Clean link" replaces the selection in place, with the preview link when the field belongs to Telegram. "Preview link" forces it anywhere. |
-| **Quick-settings tile / app shortcut** | Cleans the link already on the clipboard. The invisible activity exists only to hold focus for the moment Android needs. |
-| **Home-screen widget / opening the app** | The same, one tap away. |
+| **Share → Clean link** | Cleans the link and opens a new share sheet. Telegram gets the optional preview link; other apps get the clean original. Frequent destinations are offered first. |
+| **Text selection menu** | **Clean link** replaces the selection in place, with the optional preview link in Telegram. **Preview link** requests a preview in any app. |
+| **Quick-settings tile / app shortcut** | Cleans the link already on the clipboard. fxclip briefly takes focus so Android allows clipboard access. |
+| **Home-screen widget / opening the app** | Cleans the clipboard link. Automatic cleaning on app open can be turned off in Settings. |
 
 ## Layout
 
@@ -32,13 +32,14 @@ and the Windows exe names, under `android`.
 ## Settings
 
 `settings.json` in the app's private files, the same format as the other platforms, so it can be
-exported here and imported there. Two keys are written only by this app, and the others ignore
-what they don't know: `addedTrackers` (parameters and prefixes the user added) and `addedPreviews`
-(their own mirrors).
+exported here and imported there. Custom rules use two additional keys: `addedTrackers`
+(parameters and prefixes the user added) and `addedPreviews` (their own mirrors). Other platforms
+ignore keys they do not support. Optional link history is stored only on the device and is off
+until enabled.
 
 ## Updates
 
-From version 0.7.0, open **Updates** in the settings screen’s top bar. Check manually,
+Open **Updates** in the settings screen’s top bar. Check manually,
 read the release notes, confirm the download, then choose **Install Update**. The
 APK stays in private app storage. Its SHA-256, package, newer version code, Android
 compatibility and signing certificate are checked before Android’s installer opens.
@@ -58,7 +59,7 @@ installation, and uninstalling is never part of the public update flow.
 
 ## Build
 
-The Android SDK is needed; `local.properties` points at it and is not in git.
+The Android SDK is needed; `local.properties` points at it and is not in git. Run from `android/`:
 
 ```shell
 ./gradlew :engine:test          # the shared vectors, as on every platform

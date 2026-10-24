@@ -1,113 +1,103 @@
 <div align="center">
-  <img src="App/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png" width="160" height="160" />
+  <img src="App/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png" width="160" height="160" alt="fxclip app icon" />
   <h1>fxclip</h1>
   <p>Clean links, ready to share.</p>
-
-  ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Android-brightgreen)
-  ![Swift](https://img.shields.io/badge/Swift-native-orange)
-  ![Offline cleaning](https://img.shields.io/badge/link_cleaning-100%25%20offline-blue)
+  <p>macOS · Windows · Linux · Android · iOS · Telegram</p>
 
   <a href="https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip.dmg"><img src="https://img.shields.io/badge/macOS-Download-blue?style=for-the-badge&logo=apple" alt="Download for macOS"/></a>
-  <a href="https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-windows-x64.zip"><img src="https://img.shields.io/badge/Windows-Download-blue?style=for-the-badge&logo=windows" alt="Download for Windows"/></a>
+  <a href="https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-windows-setup.exe"><img src="https://img.shields.io/badge/Windows-Download-blue?style=for-the-badge&logo=windows" alt="Download for Windows"/></a>
   <a href="https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-linux-x86_64.tar.gz"><img src="https://img.shields.io/badge/Linux-Download-blue?style=for-the-badge&logo=linux" alt="Download for Linux"/></a>
   <a href="https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-android.apk"><img src="https://img.shields.io/badge/Android-Download-blue?style=for-the-badge&logo=android" alt="Download for Android"/></a>
 </div>
 
----
+fxclip removes tracking from links while keeping useful details like video timestamps, searches and product options. Copy a link on desktop, share one on mobile, or let a self-hosted Telegram bot clean messages for your group.
 
-fxclip cleans the links you copy, removing tracking parameters (`utm_*`, `fbclid`, YouTube's `si`, Amazon's `ref`…) while keeping useful details like timestamps, searches and product options. It sits in your menu bar or tray, ready whenever you copy a link.
+It strips common trackers such as `utm_*` and `fbclid`, plus site-specific extras from X, YouTube, Instagram, TikTok, Spotify, Amazon, AliExpress, Facebook, LinkedIn and Reddit. Optional preview mirrors make X and Instagram links easier to preview in chat.
 
-As an optional extra, fxclip can adapt links for better previews in the destination apps you choose. For example, X and Instagram links can use preview-friendly mirrors in Telegram. Other apps get the clean original.
+![fxclip settings on macOS](docs/images/overview.png)
 
-![fxclip](docs/images/overview.png)
+## Choose how to use it
 
-## Features
+| Use fxclip on | How it works | Get started |
+|---|---|---|
+| **macOS 13+** | Menu bar app: cleans copied links and adapts previews as you switch apps. | [Download DMG](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip.dmg) · [Install](#macos) |
+| **Windows 10/11, x64** | Tray app with clipboard cleaning, app previews and settings. | [Download installer](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-windows-setup.exe) · [Guide](Windows/README.md) |
+| **Linux, Wayland, x86_64** | Clipboard service for Sway, Hyprland and KDE Plasma, with an optional Qt settings window. | [Download archive](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-linux-x86_64.tar.gz) · [Guide](Linux/dist/README.md) |
+| **Android 8+** | Clean from Share, text selection, a quick-settings tile or a widget. | [Download APK](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-android.apk) · [Guide](android/README.md) |
+| **iOS 16+** | Share → fxclip opens a new share sheet with the cleaned link. Source only; build and sign it yourself. | [Build guide](iOS/README.md) |
+| **Telegram** | Self-hosted bot: reply with clean links, replace messages with author credit, or edit your outgoing messages in connected private chats. | [Setup guide](Telegram/README.md) |
 
-- 🧹 **Clean every link you copy**: trackers removed on all websites, plus site rules for X, YouTube, Instagram, TikTok, Spotify, Amazon, AliExpress, Facebook, LinkedIn and Reddit
-- 🎛️ **You decide what gets trimmed**: switch sites on and off, and keep a list of websites to never touch
-- ⏸️ **Pause or skip**: pause cleaning, or leave just the next copy as is
-- 🖥️ **Your choice of presence**: menu bar icon, Dock icon, open at login
-- 🔗 **Optional app previews**: adapt X and Instagram links for better previews in the destination apps you choose, such as Telegram. Other apps get the clean original
-- 🔒 **Private**: link cleaning stays offline, with no account or analytics. On Mac, Windows, Linux and Android, optional update checks contact GitHub; links are never sent
-- ⬆️ **Mac updates**: check from the app menu, menu bar or Settings, download an update, then install and relaunch. Automatic checks are off until you enable them; downloads and installation always ask
-- 🙈 **Polite with clipboard managers**: the preview rewrites are marked transient, so they don't pile up in your clipboard history
+## Clean links, with previews when you want them
+
+On desktop, fxclip cleans the clipboard automatically. Choose which sites to clean and exclude websites. On macOS and Windows, you can also pause cleaning or skip the next copy. Files and images are left alone; rich content is only changed when its text is a single bare link.
+
+App previews are optional. By default, X links can use `fxtwitter.com` and Instagram links can use `zzinstagram.com` in Telegram. On desktop, switching to another app restores the clean original. Mobile sharing sends the appropriate link to the destination you choose.
+
+The Telegram bot uses the same rules and stays silent when the final link is unchanged, including matching preview links already prepared by a fxclip client. A tracker-free original can still become a mirror link when previews are enabled. Members choose their own behavior; admins control group activation and defaults. Its menus support English and French.
 
 <table>
   <tr>
-    <td><img src="docs/images/trackers.png" alt="Link cleaning" /></td>
-    <td><img src="docs/images/preview-links.png" alt="Optional app previews" /></td>
+    <td><img src="docs/images/trackers.png" alt="Choose which tracking parameters to remove" /></td>
+    <td><img src="docs/images/preview-links.png" alt="Choose apps for optional preview links" /></td>
   </tr>
 </table>
 
-## Get Started
+## Install
 
-### Telegram bot (self-hosted)
+### macOS
 
-Clean links for an entire group without installing a client. Each member can
-choose reply, replacement with author credit, Secretary Mode for connected
-private chats, or no action from an English/French button menu. Admins choose the defaults.
-Runs in one Docker container with outbound Telegram access; unlike the desktop
-apps, it communicates with Telegram and preview mirrors. [Setup and limits](Telegram/README.md).
+Download [fxclip.dmg](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip.dmg), open it and drag fxclip to Applications. Open the app, choose your preferences and select **Start**.
 
-### macOS (13 Ventura or later)
-Grab `fxclip.dmg` from the [latest release](https://github.com/c0mm0n/fxclip/releases/latest), open it and drag fxclip to Applications.
+The app is ad-hoc signed and not notarized. If macOS blocks the first launch, open **System Settings → Privacy & Security → Open Anyway**. Install in a writable Applications folder so in-app updates can replace it; running from the DMG cannot update the app.
 
-fxclip isn't notarized by Apple yet, so macOS blocks the first launch: open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
+### Windows
 
-From version 0.4.0, use **Check for Updates…** in fxclip or **Settings › Updates**. Automatic checks are optional and run once a day when enabled. Downloading and installing always require confirmation. If you have an older version, install the new DMG once to get the updater. Install the app in a writable Applications folder before updating; running it directly from the DMG cannot replace the app.
+Run [fxclip-windows-setup.exe](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-windows-setup.exe) for a per-user installation. A [portable ZIP](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-windows-x64.zip) is also available; keep its files together. No administrator access or separate .NET installation is needed. The app is unsigned, so SmartScreen may show **More info → Run anyway**. See the [Windows guide](Windows/README.md).
 
-### Windows (10/11, x64)
-Unzip `fxclip-windows-x64.zip` and run `fxclip.exe`; it lives in the tray, with the same settings window as on the Mac. It isn't signed yet, so SmartScreen may warn: click **More info › Run anyway**. Rewritten preview links stay out of Win+V history. Details: [Windows/README.md](Windows/README.md).
+### Linux
 
-### Android (8.0+)
+Download the [Linux archive](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-linux-x86_64.tar.gz), then run these commands in your Wayland session:
 
-Android 0.7.0 adds **Updates** in the settings toolbar: check, confirm the download, then **Install Update** through Android’s installer. Optional daily checks run when the app opens. The APK’s digest, package, newer version code and signing certificate are verified; existing data is kept. Install the new APK manually once to get the updater.
-Download `fxclip-android.apk` from the [latest release](https://github.com/c0mm0n/fxclip/releases/latest) and install it. Android forbids watching the clipboard in the background, so cleaning is one tap:
-share a link to **Clean link**, pick it in the text selection menu, or use the quick-settings tile
-or the home-screen widget. Optional preview links adapt to Telegram. Cleaning stays local. Only authorized updates use network access and Android’s install permission. Details: [android/README.md](android/README.md).
-
-### Linux (Wayland)
-
-Linux 0.6.0 adds **Check for Updates…** in the Qt tray and Settings. Optional daily checks run only while the interface is open; downloading and installing require confirmation. Updates preserve settings and login startup, restart the interface and service, and restore the previous files if installation or relaunch fails. Install the new Linux download manually once to get the updater.
-Works on Sway, Hyprland and KDE Plasma (GNOME Wayland doesn't let background apps watch the clipboard). wl-clipboard comes bundled (2.3, with KDE's newer clipboard protocol); on KDE, install `kdotool` for previews. Then:
 ```shell
-tar xzf fxclip-linux-x86_64.tar.gz && cd fxclip-linux-x86_64 && ./install.sh
-fxclip check
+tar xzf fxclip-linux-x86_64.tar.gz
+cd fxclip-linux-x86_64
+./install.sh
+~/.local/bin/fxclip check
 ```
-It runs as a systemd user service with an optional Qt 6 desktop window (`fxclip-ui`) for settings, service state and Wayland diagnostics. Settings live in `~/.config/fxclip/settings.json`, shared with the other platforms. Details: [Linux/dist/README.md](Linux/dist/README.md).
 
-### Build from source
-Requires Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+The installer sets up a systemd user service and the optional `fxclip-ui` settings window. Clipboard tools are bundled; KDE previews also need `kdotool`. GNOME Wayland and X11 are unsupported. See the [Linux guide](Linux/dist/README.md) for runtime dependencies and session setup.
+
+### Android
+
+Install [fxclip-android.apk](https://github.com/c0mm0n/fxclip/releases/latest/download/fxclip-android.apk), allowing installation from your browser or file manager when Android asks. Share a link to **Clean link**, or use the text-selection menu, quick-settings tile or home-screen widget. Android does not allow background clipboard watching. See the [Android guide](android/README.md).
+
+### iOS and Telegram
+
+iOS is **source only**, with no App Store release or signed download: follow the [iOS build guide](iOS/README.md) using your own Apple account. The Telegram bot is **self-hosted**, with no public bot configured by this project: follow the [Docker setup guide](Telegram/README.md) to run your own instance.
+
+## Privacy and updates
+
+**Native apps clean locally.** Links are not sent to a cleaning service, and there is no account or analytics. Settings and counters stay on the device; Android's optional history is local too. Preview mirrors are third-party services: native apps only rewrite the URL, but sharing or opening it can send the link to the mirror.
+
+**The Telegram bot communicates with Telegram.** Cleaning runs on your server, but the bot receives messages and sends cleaned results through Telegram; preview generation can also involve mirror services. Message text and URLs are never persisted or logged by the bot. See [privacy and limits](Telegram/README.md#privacy-and-limits) before enabling it in a group.
+
+**Updates are your choice.** macOS, Windows, Linux's desktop interface and Android can check GitHub on request. Automatic checks are off by default and run at most daily when enabled; Linux checks require its interface to be open, and Android checks when its settings app opens. Downloads and installation require confirmation. If an older installation has no updater, install the latest download manually once. Update requests never include copied links. iOS builds and Telegram container updates are managed manually.
+
+## Development
+
+The public name is **fxclip**. All platforms use the same white link mark on blue;
+see the [identity and artwork guide](docs/branding.md) for the canonical exports.
+
+[Shared/rules.json](Shared/rules.json) is the single source of truth for tracker rules, preview mirrors and app identities across all six delivery modes. The Swift engine in `Engine/` is reused by macOS, Linux, iOS and Telegram. Windows has a C# port; Android has a Kotlin port. All engines are checked against [shared link vectors](Shared/vectors.json) and [settings vectors](Shared/settings_vectors.json).
+
+To build the macOS app, install Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen), then run from the repository root:
 
 ```shell
+swift test --package-path Engine
 xcodegen generate
 open FxClip.xcodeproj
 ```
 
-To sign with your own Apple team, put `DEVELOPMENT_TEAM = <your team id>` in a `Local.xcconfig` at the root (it's git-ignored). `tools/make_dmg.sh <version>` builds the same ad-hoc signed DMG as the releases.
+For personal signing, put `DEVELOPMENT_TEAM = <your team ID>` in the ignored `Local.xcconfig`. `tools/make_dmg.sh <version>` produces the ad-hoc signed release DMG. Other build and verification commands live in the platform guides above.
 
-Engine tests: `swift test --package-path Engine`.
-
-## How it works
-
-- `Shared/rules.json` holds every rule: tracker parameters, site rules and preview mirrors. No code change is needed to add a site.
-- `Engine/` is the cleaning engine (Foundation only), tested against `Shared/vectors.json`, a list of before/after links.
-- `App/` is the macOS menu bar app: it watches the clipboard, applies the engine, and swaps the preview link in and out as you change apps.
-- `Linux/` is the Wayland daemon and optional Qt desktop UI; the daemon reuses the same Swift engine.
-- `android/` is the Android app in Kotlin/Compose, with its own port of the engine held to the same test files.
-- `Windows/` is the tray app in C#, with its own port of the engine held to the same test files (`Shared/vectors.json`, `Shared/settings_vectors.json`).
-
-## Releases
-
-Every merge to `main` automatically builds and tests all four platforms, then publishes the downloads together. The tag is created only after all builds pass.
-
-A new `release-notes/vX.Y.Z.md` selects that version (for example `v0.3.0`). Otherwise the patch version increments automatically and GitHub generates the change list. Re-running a published commit does not create another release. Explicit version tags are still supported.
-
-## Requirements
-
-- Android 8.0 or later
-- macOS 13 Ventura or later
-- Windows 10/11 x64
-- Linux with a Wayland compositor that supports data-control (Sway, Hyprland, KDE Plasma) and `wl-clipboard`
-
-Windows 0.5.0 adds a per-user installer and in-app updates in Settings/the tray menu. Automatic checks are optional and off by default; downloading and restarting require confirmation. Cleaning stays local, while authorized updates contact GitHub. Install the complete new Windows download manually once.
+Merging to `main` runs the release workflow, which tests and builds macOS, Windows, Linux and Android before publishing their downloads together. iOS stays source only; Telegram has its own Docker build instructions. Release history is in [GitHub Releases](https://github.com/c0mm0n/fxclip/releases).

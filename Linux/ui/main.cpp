@@ -512,7 +512,7 @@ private:
         subtitle_->setVisible(row != 1 && row != 2);
         pageInfoButton_->setVisible(row == 1 || row == 2);
         pageInfoButton_->setToolTip(row == 1
-            ? QStringLiteral("Fxclip removes the selected parameters and tracking prefixes. Amazon links can also have their referral path removed.")
+            ? QStringLiteral("fxclip removes the selected parameters and tracking prefixes. Amazon links can also have their referral path removed.")
             : QStringLiteral("Choose which apps receive X and Instagram preview links. Changes apply when you select Apply."));
         if (!startupError_.isEmpty()) {
             auto *label = new QLabel(startupError_, body_);

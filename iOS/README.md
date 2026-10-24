@@ -1,19 +1,16 @@
 # fxclip for iOS
 
-The same link cleaning as the other apps, for iPhone and iPad (iOS 16+). It ships as source only:
-there is no App Store version and no download, so you build it and sign it with your own Apple
-account (see [Build it yourself](#build-it-yourself)).
+Clean links, ready to share. fxclip removes tracking from links on iPhone and iPad (iOS 16+), with optional X and Instagram previews for Telegram. It is **source only**: there is no App Store release or signed download. Build and sign it with your own Apple account using the [build guide below](#build-it-yourself).
 
-## How it's used
+## How to use it
 
 **Share › fxclip.** In X, Instagram or any app, tap Share on a post, then fxclip. The share sheet
-opens again with the cleaned link: Telegram (`ph.telegra.Telegraph.Share`) gets the preview link
-(`fxtwitter.com`, `zzinstagram.com`), every other app and Copy get the clean link
-(`DestinationLink`, a `UIActivityItemSource` iOS asks once per destination). One tap more than a
-normal share. Checked on an iPhone: the second sheet opens and Telegram shows the preview.
+opens again with the cleaned link. With app previews enabled, Telegram gets the preview link
+(`fxtwitter.com`, `zzinstagram.com`); every other app and Copy get the clean original. Choose
+your destination as usual.
 
-Why not like the Mac: iOS lets no app read the clipboard in the background or tell which app is in
-front, so nothing can swap links on its own.
+iOS does not allow background clipboard watching or detection of the app in front. Cleaning
+starts when you share a link or run a Shortcuts action.
 
 The **Shortcuts actions** "Clean link" and "Preview link" take text and return it; "Clean link"
 also turns a preview link back into the original. They're there for whoever builds their own
@@ -36,7 +33,8 @@ other platforms' identifiers, and are matched exactly.
 
 `settings.json` in the App Group container, the same format as the other platforms. An unreadable
 file is moved to `settings.unreadable.json`, never silently replaced. The counter is a total only.
-Nothing leaves the device: no network access at all.
+Cleaning stays on the device; fxclip makes no network requests and has no account or analytics.
+Preview mirrors are third-party services: sharing or opening a mirror link can send it to that service.
 
 ## Build it yourself
 
@@ -48,15 +46,18 @@ account. A free one works, but its apps stop opening after 7 days until you buil
 
    ```
    DEVELOPMENT_TEAM = <your team ID>
-   FXCLIP_BUNDLE_PREFIX = com.yourname
+   FXCLIP_BUNDLE_PREFIX = com.example
    ```
 
-   Your team ID is in Xcode › Settings › Accounts. The app becomes `com.yourname.fxclip`, the
-   share extension `com.yourname.fxclip.share`, the App Group `group.com.yourname.fxclip`.
+   Replace `com.example` with your own unique prefix. Your team ID is in Xcode › Settings ›
+   Accounts. With this example, the app becomes `com.example.fxclip`, the share extension
+   `com.example.fxclip.share`, and the App Group `group.com.example.fxclip`.
 2. `xcodegen generate --spec iOS/project.yml`, open `iOS/FxClipiOS.xcodeproj`, pick your iPhone
    (Developer Mode on) and Run. Xcode registers the IDs and the App Group for you.
 
 ## Tests
+
+From the repository root:
 
 ```shell
 xcodegen generate --spec iOS/project.yml
