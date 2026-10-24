@@ -56,23 +56,34 @@ keep their existing behavior. Secretary only edits links; it does not post cards
 upgrade. Turning on group cleaning or enhanced previews does not turn it on.
 When explicitly enabled, a message containing only one plain public Facebook or
 Facebed link can receive a native video reply, even if the link is already clean.
-Following Facebed's URL-forwarding format, the bot replaces the host with fixed
-`https://facebed.com`, preserving the engine-cleaned path and meaningful query
-parameters. Facebed decides how to resolve reel, share (including `/share/r/token`),
-post, watch and group routes; a supported URL format does not guarantee a video.
-Only metadata containing a validated `og:video` can produce a native video reply.
-Image/text-only posts are not converted by this option.
+The full upstream Facebed source runs privately alongside the bot on the NAS,
+pinned to revision `ccc612c6`. It resolves metadata by contacting Facebook itself;
+resolution still depends on Meta allowing logged-out fetching. There is no
+Facebook login or access to private content, and no runtime request or fallback
+to the public facebed.com service.
+
+Following Facebed's URL-forwarding format, the bot rewrites accepted source links
+to `http://facebook-resolver:9812` on the Docker network, preserving the
+engine-cleaned path and meaningful query parameters and dropping the fragment.
+This includes reel, share (such as `/share/r/token`), post, watch and group routes;
+a supported URL format does not guarantee a video. Only metadata containing a
+validated `og:video` can produce a native video reply. Image/text-only posts are
+not converted by this option.
 
 Accepted source hosts are exactly `facebook.com`, `www.facebook.com`,
-`m.facebook.com`, `facebed.com` and `www.facebed.com`. The Facebed host is fixed,
-not an editable mirror provider. Diagnostic/service routes (including `/dump`
-and `/healthz`), unsafe paths, credentials and unrelated/lookalike hosts are
-rejected. The bot requests metadata from Facebed, downloads validated public
-Facebook video from an HTTPS `*.fbcdn.net` MP4 URL to the bot server, then uploads
-a copy to Telegram. No Facebook account, private content access or additional
-self-hosted service is used. Tracker removal stays entirely in the shared engine
-and `Shared/rules.json`; this option adds no shared mirror rule or separate
-tracking-parameter list.
+`m.facebook.com`, `facebed.com` and `www.facebed.com`. Facebed source links use the
+same private resolver; their public host is never contacted. The resolver is not
+an editable mirror provider. Diagnostic/service routes (including `/dump` and
+`/healthz`), unsafe paths, credentials and unrelated/lookalike hosts are rejected.
+The bot downloads validated public Facebook video from an HTTPS `*.fbcdn.net`
+MP4 URL to the bot server, then uploads a copy to Telegram. Tracker removal stays
+entirely in the shared engine and `Shared/rules.json`; this option adds no shared
+mirror rule or separate tracking-parameter list.
+
+Full-video replies show just the video and the five-minute **Remove preview**
+control, without a heading, author/description, raw link or **Open Facebook**
+button. When replacement is attempted, a small poster credit is added; the
+original stays if deletion fails. Full-video removal records need no source Open URL.
 
 Videos are limited to 20 MiB; temporary downloads are discarded after the attempt.
 For a larger video, the bot replies with its title and **Open Facebook**
@@ -102,8 +113,10 @@ only remaining copy. Anonymous/channel-authored messages have no identifiable
 personal owner and do not receive this control.
 
 Pending cleanup keeps chat/message IDs, the poster's ID and a timestamp. For
-native cards/videos it also temporarily keeps the source Open button's label and
-URL, so that button can stay after removal expires, including across a restart.
+YouTube cards and oversized-video notices it also temporarily keeps the source
+Open button's label and URL, so that button can stay after removal expires,
+including across a restart. Full-video replies have no Open button and retain no
+source Open URL.
 The record is deleted after successful cleanup; failed cleanup can retry for up
 to 48 hours, with a limit of 4096 pending replies. No message text or media is
 stored. A full queue skips offering removal on new replies. Replies sent before
@@ -188,7 +201,11 @@ with incoming activity within 24 hours. Text and caption edits are supported.
 ## Docker setup
 
 Use one instance per token. No public port, domain or inbound tunnel is needed:
-the bot contacts Telegram over HTTPS long polling.
+the bot contacts Telegram over HTTPS long polling. The private Facebed sidecar
+uses `http://facebook-resolver:9812` only on the Docker network, with no published
+host port or public hostname. It receives neither the Telegram token nor the bot
+state volume. Python access logs, content logs and Discord diagnostics are
+disabled.
 
 From the repository root:
 
@@ -196,6 +213,7 @@ From the repository root:
 swift test --package-path Engine
 swift test --package-path Telegram
 docker build --platform linux/amd64 -f Telegram/Dockerfile -t fxclip-telegram:local .
+docker build -f Telegram/resolver/Dockerfile -t fxclip-facebook-resolver:local .
 docker run --rm --platform linux/amd64 fxclip-telegram:local --check
 ```
 
@@ -205,7 +223,9 @@ Compose commands. Restrict the `secrets` directory to its owner (`chmod 700`).
 For non-Swarm Compose the file must be readable by container user 10001; mode
 `0444` inside that private directory works. The image initializes the state volume.
 
-Set `FXCLIP_IMAGE`, `TELEGRAM_OWNER_IDS` (numeric bot-owner IDs), and optionally
+Set `FXCLIP_IMAGE` and `TELEGRAM_OWNER_IDS` (numeric bot-owner IDs).
+`FXCLIP_FACEBOOK_RESOLVER_IMAGE` selects the private sidecar image and defaults to
+`fxclip-facebook-resolver:local`. Optionally set
 `TELEGRAM_ALLOWED_CHATS` (initial group IDs). With an empty group list, private
 settings and `/chatid` work; group cleaning starts only when an admin enables it.
 Saved activation overrides the initial environment list. Secretary uses separate
@@ -228,7 +248,8 @@ Startup registers English/French native descriptions and command menus. The
 persistent volume retains modes, language preferences, discovered group IDs and
 titles, and the polling checkpoint. Back up that volume. Message bodies and media
 are never persisted or logged. Pending removal-button cleanup temporarily retains
-source opening-button URLs until cleanup succeeds, for at most 48 hours.
+YouTube and oversized-notice opening-button URLs until cleanup succeeds, for at
+most 48 hours; full-video replies retain no source Open URL.
 Automatic container updates are disabled in the supplied
 configuration: install new images explicitly.
 
@@ -254,13 +275,19 @@ generated. The engine does not expand or visit links. No additional analytics or
 external account is used. Native YouTube cards request video metadata from
 YouTube's oEmbed endpoint and let Telegram fetch the YouTube thumbnail; they use
 no preview mirror. Fetched titles, thumbnails and videos are not persisted;
-source opening-button URLs are retained only while removal-button cleanup is
-pending, for at most 48 hours. Opting into Facebook videos sends
-the cleaned public Facebook or Facebed link to Facebed for resolution. Only when
-it returns validated video metadata does the bot request the public Facebook
-video and upload a copy to Telegram (up to 20 MiB). Larger videos receive a title
-and opening-button reply while the original stays intact. Temporary video data
-is discarded after each attempt; no Facebook login or private access is available. Locale detection uses Telegram's supplied language tag,
+YouTube and oversized-notice opening-button URLs are retained only while
+removal-button cleanup is pending, for at most 48 hours. Full-video replies have
+no opening button or saved source Open URL. Facebook videos are off by default. Opting in
+sends the cleaned public Facebook or Facebed link to the private resolver running
+pinned upstream Facebed code on the same server. The resolver contacts Facebook
+for metadata; the bot downloads validated Facebook CDN video and uploads a copy
+to Telegram (up to 20 MiB). This still uses Facebook and Telegram over the network;
+it makes no runtime requests or fallback to the public facebed.com service.
+Resolution depends on Meta allowing logged-out fetching, with no Facebook login
+or private access. Larger videos receive a title and opening-button reply while
+the original stays intact. Temporary video data is discarded after each attempt.
+The resolver has no Telegram secret or state volume, Python access/content logs
+or Discord diagnostics. Locale detection uses Telegram's supplied language tag,
 never message-text analysis or an external translation service.
 
 Unchanged links stay untouched except for enabled YouTube cards or Facebook videos. Protected, paid,

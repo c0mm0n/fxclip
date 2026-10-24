@@ -101,6 +101,33 @@ final class FacebookSourceBotTests: XCTestCase {
         provider.error = FacebookReelError.videoTooLarge(author: provider.author, caption: provider.caption)
     }
 
+    private func assertBareVideo(_ video: [String: Any], file: StaticString = #filePath,
+                                 line: UInt = #line) throws {
+        XCTAssertNil(video["caption"], file: file, line: line)
+        XCTAssertNil(video["caption_entities"], file: file, line: line)
+        XCTAssertEqual((video["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5,
+                       file: file, line: line)
+        let rows = try buttons(video)
+        XCTAssertEqual(rows.count, 1, file: file, line: line)
+        XCTAssertEqual(rows.first?.count, 1, file: file, line: line)
+        XCTAssertEqual(rows.first?.first?.callback_data, "fxclip:preview:delete", file: file, line: line)
+        XCTAssertNil(rows.first?.first?.url, file: file, line: line)
+        let receipt = try XCTUnwrap(store.state.replyControls["-100:42"], file: file, line: line)
+        XCTAssertEqual(receipt.posterID, 7, file: file, line: line)
+        XCTAssertNil(receipt.openButton, file: file, line: line)
+        let state = try XCTUnwrap(JSONSerialization.jsonObject(with:
+            Data(contentsOf: directory.appendingPathComponent("state.json"))) as? [String: Any])
+        let receipts = try XCTUnwrap(state["replyControls"] as? [String: [String: Any]])
+        XCTAssertEqual(Set(try XCTUnwrap(receipts["-100:42"]).keys), ["posterID", "createdAt"],
+                       file: file, line: line)
+        let payload = try JSONSerialization.data(withJSONObject: video.filter { $0.key != "video" },
+                                                options: [.withoutEscapingSlashes])
+        let text = String(decoding: payload, as: UTF8.self)
+        for hidden in [provider.author, provider.caption, "facebook.com", "facebed.com", "utm_source", "mibextid", "rdid"] {
+            XCTAssertFalse(text.contains(hidden), hidden, file: file, line: line)
+        }
+    }
+
     private func removeNotice(userID: Int64, messageID: Int64, markup: Any) async throws {
         let update = try decode(Update.self, from: ["update_id": 2, "callback_query": [
             "id": "Example123", "from": ["id": userID, "first_name": "Example123", "is_bot": false],
@@ -135,10 +162,7 @@ final class FacebookSourceBotTests: XCTestCase {
             let video = try sent("sendVideo")
             XCTAssertEqual((video["video"] as? VideoUpload)?.data, provider.video, input)
             XCTAssertNil(video["video"] as? String, input)
-            XCTAssertTrue((video["caption"] as? String ?? "").contains(provider.author), input)
-            XCTAssertTrue((video["caption"] as? String ?? "").contains(provider.caption), input)
-            XCTAssertTrue((video["caption"] as? String ?? "").hasSuffix(expected), input)
-            XCTAssertEqual(try buttons(video).first?.first?.url, expected, input)
+            try assertBareVideo(video)
         }
     }
 
@@ -150,11 +174,7 @@ final class FacebookSourceBotTests: XCTestCase {
         try await handle(input)
         XCTAssertEqual(provider.sourceURLs, [clean])
         let video = try sent("sendVideo")
-        XCTAssertEqual(try buttons(video).first?.first?.url, clean)
-        XCTAssertNotEqual(try buttons(video).first?.first?.url,
-                          FacebookReelPreview.facebedURL(in: clean)?.absoluteString)
-        let entities = try decode([Entity].self, from: XCTUnwrap(video["caption_entities"]))
-        XCTAssertEqual(entities.first { $0.type == "text_link" }?.url, clean)
+        try assertBareVideo(video)
 
         var settings = UserSettings()
         settings.trackersEverywhere = false
@@ -163,7 +183,41 @@ final class FacebookSourceBotTests: XCTestCase {
         api.base.calls = []
         try await handle(input)
         XCTAssertEqual(provider.sourceURLs, [clean, input])
-        XCTAssertEqual(try buttons(sent("sendVideo")).first?.first?.url, input)
+        try assertBareVideo(sent("sendVideo"))
+    }
+
+    func testSourceVideoDirtyReplacementKeepsOnlyPosterCreditAndDeletesAfterConfirmation() async throws {
+        try replaceMode()
+        api.base.sendResult = ["message_id": Int64(84)]
+        api.beforeSend = { [self] in
+            XCTAssertFalse(api.base.methods.contains("deleteMessage"))
+            XCTAssertTrue(store.state.replyControls.isEmpty)
+        }
+        try await handle(dirtySource, extra: ["reply_to_message": ["message_id": 3]])
+        XCTAssertEqual(provider.sourceURLs, [source])
+        XCTAssertTrue(provider.reelIDs.isEmpty)
+        XCTAssertEqual(api.base.methods, ["getChatMember", "sendVideo", "deleteMessage"])
+        let video = try sent("sendVideo")
+        XCTAssertEqual(video["caption"] as? String, "Posted by Example123")
+        let entities = try decode([Entity].self, from: XCTUnwrap(video["caption_entities"]))
+        XCTAssertEqual(entities.count, 1)
+        let mention = try XCTUnwrap(entities.first)
+        XCTAssertEqual(mention.type, "text_mention")
+        XCTAssertEqual(mention.user?.id, 7)
+        XCTAssertEqual(mention.offset, "Posted by ".utf16.count)
+        XCTAssertEqual(mention.length, "Example123".utf16.count)
+        XCTAssertNil(video["reply_markup"])
+        XCTAssertEqual((video["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 3)
+        XCTAssertEqual(api.base.calls.last?.1["message_id"] as? Int64, 5)
+        XCTAssertTrue(store.state.replyControls.isEmpty)
+    }
+
+    func testCleanSourceInReplaceModeRemainsBareReplyAndKeepsOriginal() async throws {
+        try replaceMode()
+        try await handle()
+        XCTAssertEqual(provider.sourceURLs, [source])
+        XCTAssertEqual(api.base.methods, ["sendVideo"])
+        try assertBareVideo(sent("sendVideo"))
     }
 
     func testMasterPreviewGroupAndModeGatesPreventSourceFetching() async throws {

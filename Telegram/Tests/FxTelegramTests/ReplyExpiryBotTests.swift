@@ -62,6 +62,21 @@ extension BotTests {
         XCTAssertEqual(store.state.replyControls.count, 4096)
         XCTAssertNotNil(store.state.replyControls["-100:1"])
         XCTAssertNil(store.state.replyControls["-100:9000"])
+
+        try store.setDefaultFacebookReels(true)
+        bot = Bot(api: api, store: store, engine: engine, allowedChats: [-100], allowedOwners: [7],
+                  botID: 99, username: "fxclipbot", facebookReels: ExpiryReelFixture())
+        api.calls = []
+        try await handle(["text": ExpiryReplyKind.video.source, "from": fixtureUser(7, languageCode: nil)])
+        XCTAssertEqual(api.methods, ["sendVideo"])
+        let video = try XCTUnwrap(api.calls.first?.1)
+        XCTAssertNil(video["caption"])
+        XCTAssertNil(video["caption_entities"])
+        XCTAssertNil(video["reply_markup"])
+        XCTAssertEqual((video["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5)
+        XCTAssertEqual(store.state.replyControls.count, 4096)
+        XCTAssertNotNil(store.state.replyControls["-100:1"])
+        XCTAssertNil(store.state.replyControls["-100:9000"])
     }
 
     func testReplyExpiryRealClockReceiptStartsAfterSendCompletion() async throws {
@@ -150,15 +165,22 @@ extension BotTests {
         XCTAssertTrue(api.calls.isEmpty)
     }
 
-    func testReplyExpiryMediaAfterRestartKeepsOnlyTheExactLocalizedOpenButton() async throws {
+    func testReplyExpiryMediaAfterRestartKeepsYouTubeOpenButtonAndClearsBareVideoMarkup() async throws {
         for kind in [ExpiryReplyKind.photo, .video] {
             for language in [BotLanguage.en, .fr] {
                 let parameters = try await replyExpirySend(kind, language: language)
                 let originalRows = try replyExpiryRows(parameters)
-                XCTAssertEqual(originalRows.count, 2)
-                let open = try XCTUnwrap(originalRows.first?.first)
-                XCTAssertEqual(open.url, kind.source)
-                XCTAssertNil(open.callback_data)
+                XCTAssertEqual(originalRows.count, kind == .photo ? 2 : 1)
+                let open = kind == .photo ? try XCTUnwrap(originalRows.first?.first) : nil
+                if let open {
+                    XCTAssertEqual(open.url, kind.source)
+                    XCTAssertNil(open.callback_data)
+                    XCTAssertTrue(open.text.contains(language == .fr ? "Ouvrir YouTube" : "Open YouTube"))
+                } else {
+                    XCTAssertNil(parameters["caption"])
+                    XCTAssertNil(parameters["caption_entities"])
+                    XCTAssertNil(originalRows.first?.first?.url)
+                }
                 XCTAssertEqual(originalRows.last?.first?.callback_data, "fxclip:preview:delete")
                 XCTAssertEqual(store.state.replyControls["-100:7301"]?.openButton, open)
 
@@ -172,7 +194,7 @@ extension BotTests {
                 XCTAssertEqual(api.methods, ["editMessageReplyMarkup"])
                 let edit = try XCTUnwrap(api.calls.first?.1)
                 replyExpiryAssertEdit(edit, messageID: 7301)
-                XCTAssertEqual(try replyExpiryRows(edit), [[open]])
+                XCTAssertEqual(try replyExpiryRows(edit), open.map { [[$0]] } ?? [])
                 XCTAssertTrue(store.state.replyControls.isEmpty)
                 let persisted = try String(contentsOf: directory.appendingPathComponent("state.json"), encoding: .utf8)
                 XCTAssertFalse(persisted.contains(kind.source))
@@ -187,15 +209,20 @@ extension BotTests {
                 Data(contentsOf: directory.appendingPathComponent("state.json"))) as? [String: Any])
             let receipts = try XCTUnwrap(state["replyControls"] as? [String: [String: Any]])
             let receipt = try XCTUnwrap(receipts["-100:7301"])
-            let expectedKeys: Set<String> = kind == .text
-                ? ["posterID", "createdAt"] : ["posterID", "createdAt", "openButton"]
+            let expectedKeys: Set<String> = kind == .photo
+                ? ["posterID", "createdAt", "openButton"] : ["posterID", "createdAt"]
             XCTAssertEqual(Set(receipt.keys), expectedKeys)
-            if kind != .text {
+            if kind == .photo {
                 let open = try XCTUnwrap(receipt["openButton"] as? [String: Any])
                 XCTAssertEqual(Set(open.keys), ["text", "url"])
                 XCTAssertEqual(open["url"] as? String, kind.source)
             }
             let encoded = try String(decoding: JSONSerialization.data(withJSONObject: receipt), as: UTF8.self)
+            if kind == .video {
+                XCTAssertFalse(encoded.contains("facebook"))
+                XCTAssertFalse(encoded.contains("sourceURL"))
+                XCTAssertNil(receipt["openButton"])
+            }
             for key in ["text", "caption", "photo", "video"] {
                 if let body = parameters[key] as? String {
                     XCTAssertFalse(encoded.contains(body), "Receipt contains \(key)")
@@ -203,6 +230,33 @@ extension BotTests {
             }
             try store.removeReplyControl(chatID: -100, messageID: 7301)
         }
+    }
+
+    func testReplyExpiryLegacyFacebookOpenReceiptAndReceiptWithoutOpenRemainCompatible() async throws {
+        var state = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(store.state)) as? [String: Any])
+        let source = ExpiryReplyKind.video.source
+        state["replyControls"] = [
+            "-100:7301": ["posterID": 7, "createdAt": 1100,
+                          "openButton": ["text": "▶ Ouvrir Facebook", "url": source]],
+            "-100:7302": ["posterID": 7, "createdAt": 1100],
+        ]
+        try JSONSerialization.data(withJSONObject: state).write(to: directory.appendingPathComponent("state.json"))
+        try replyExpiryRestart()
+        let open = try XCTUnwrap(store.state.replyControls["-100:7301"]?.openButton)
+        XCTAssertNil(store.state.replyControls["-100:7302"]?.openButton)
+        try await bot.expireReplyControls(now: 1399)
+        XCTAssertTrue(api.calls.isEmpty)
+        try await bot.expireReplyControls(now: 1400)
+        XCTAssertEqual(api.methods, ["editMessageReplyMarkup", "editMessageReplyMarkup"])
+        guard api.calls.count == 2 else { return }
+        replyExpiryAssertEdit(api.calls[0].1, messageID: 7301)
+        XCTAssertEqual(try replyExpiryRows(api.calls[0].1), [[open]])
+        replyExpiryAssertEdit(api.calls[1].1, messageID: 7302)
+        XCTAssertTrue(try replyExpiryRows(api.calls[1].1).isEmpty)
+        XCTAssertTrue(store.state.replyControls.isEmpty)
+        XCTAssertTrue(try StateStore(directory: directory).state.replyControls.isEmpty)
+        let persisted = try String(contentsOf: directory.appendingPathComponent("state.json"), encoding: .utf8)
+        XCTAssertFalse(persisted.contains("facebook"))
     }
 
     func testReplyExpiryRemovalCallbackWorksAt299SecondsAndIsDeniedAt300() async throws {

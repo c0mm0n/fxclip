@@ -43,6 +43,7 @@ public enum FacebookReelPreview {
 
     /// Facebed documents a host replacement, not a separate Facebook route catalog.
     /// The caller supplies the engine-cleaned URL; path and query remain untouched.
+    /// This is a routing/validation helper, never a metadata network destination.
     public static func facebedURL(in url: String) -> URL? {
         guard let parts = facebookURL(url), safeContentPath(parts.percentEncodedPath) else { return nil }
         var endpoint = URLComponents()
@@ -111,6 +112,7 @@ public enum FacebookReelPreview {
 
 public enum FacebookReelError: Error {
     case invalidReelID
+    case invalidMetadataOrigin
     case invalidResponse
     case responseTooLarge
     case videoTooLarge(author: String, caption: String)
@@ -118,10 +120,16 @@ public enum FacebookReelError: Error {
 
 public final class FacebookReelFetcher: FacebookReelProviding {
     private let configuration: URLSessionConfiguration
+    private let metadataOrigin: URLComponents?
 
     /// Only protocol classes are inherited, to allow offline URLProtocol fixtures.
     /// Transport privacy settings and timeouts cannot be overridden by the caller.
-    public init(configuration: URLSessionConfiguration = .ephemeral) {
+    /// The operator supplies a fixed origin, independently of any submitted link.
+    /// HTTP is limited to the private Compose service and loopback development.
+    /// Invalid origins fail at fetch time without sending a request or falling back.
+    public init(configuration: URLSessionConfiguration = .ephemeral,
+                metadataOrigin: URL = URL(string: "http://facebook-resolver:9812")!) {
+        self.metadataOrigin = Self.validatedMetadataOrigin(metadataOrigin)
         let safe = URLSessionConfiguration.ephemeral
         safe.protocolClasses = configuration.protocolClasses
         safe.timeoutIntervalForRequest = 6
@@ -136,14 +144,41 @@ public final class FacebookReelFetcher: FacebookReelProviding {
 
     public func fetch(reelID: String) async throws -> FacebookReel {
         guard FacebookReelPreview.validID(reelID) else { throw FacebookReelError.invalidReelID }
-        return try await fetch(endpoint: URL(string: "https://facebed.com/reel/\(reelID)")!)
+        return try await fetch(sourceURL: "https://facebook.com/reel/\(reelID)")
     }
 
     public func fetch(sourceURL: String) async throws -> FacebookReel {
-        guard let endpoint = FacebookReelPreview.facebedURL(in: sourceURL) else {
+        guard let route = FacebookReelPreview.facebedURL(in: sourceURL),
+              let parts = URLComponents(url: route, resolvingAgainstBaseURL: false) else {
             throw FacebookReelError.invalidReelID
         }
+        guard var endpoint = metadataOrigin else { throw FacebookReelError.invalidMetadataOrigin }
+        endpoint.percentEncodedPath = parts.percentEncodedPath
+        endpoint.percentEncodedQuery = parts.percentEncodedQuery
+        guard let endpoint = endpoint.url else { throw FacebookReelError.invalidMetadataOrigin }
         return try await fetch(endpoint: endpoint)
+    }
+
+    private static func validatedMetadataOrigin(_ origin: URL) -> URLComponents? {
+        guard let parts = strictURL(origin.absoluteString),
+              let scheme = parts.scheme, ["http", "https"].contains(scheme),
+              let host = parts.percentEncodedHost, !host.isEmpty,
+              parts.query == nil, parts.fragment == nil,
+              parts.percentEncodedPath.isEmpty || parts.percentEncodedPath == "/",
+              parts.port == nil || (1...65535).contains(parts.port!) else { return nil }
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard host.utf8.count <= 253, labels.allSatisfy({ label in
+            !label.isEmpty && label.utf8.count <= 63 && label.first != "-" && label.last != "-" &&
+            label.utf8.allSatisfy { (97...122).contains($0) || (48...57).contains($0) || $0 == 45 }
+        }), !["facebook.com", "facebed.com"].contains(where: { host == $0 || host.hasSuffix("." + $0) }) else { return nil }
+        if scheme == "http" {
+            guard (host == "facebook-resolver" && parts.port == 9812) ||
+                    ["localhost", "127.0.0.1"].contains(host) else { return nil }
+        }
+        // Reject ambiguous spellings such as empty or zero-padded ports.
+        let authority = "\(scheme)://\(host)" + (parts.port.map { ":\($0)" } ?? "")
+        guard origin.absoluteString == authority || origin.absoluteString == authority + "/" else { return nil }
+        return parts
     }
 
     private func fetch(endpoint: URL) async throws -> FacebookReel {

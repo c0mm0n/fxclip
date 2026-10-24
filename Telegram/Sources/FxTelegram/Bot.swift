@@ -208,31 +208,24 @@ public final class Bot {
                 return
             } catch { facebookVideo = nil }
         } else { facebookVideo = nil }
-        if let reel = facebookVideo, let cleanURL = facebookSource {
-            let cleanText = rendered?.text ?? cleanURL
-            let heading = "Facebook\n"
-            // Keep the caption compact and reserve space for the complete cleaned source.
-            let author = facebookCaptionText(reel.author, limit: 160)
-            let description = facebookCaptionText(reel.caption.split(whereSeparator: { $0.isWhitespace }).joined(separator: " "), limit: 400)
-            let prefix = heading + author + (description.isEmpty ? "\n\n" : "\n" + description + "\n\n")
-            let caption = prefix + cleanText
-            if !reel.video.isEmpty, reel.video.count <= 20 * 1024 * 1024, caption.utf16.count <= 1024 {
+        if let reel = facebookVideo {
+            let creditLabel = language.text("Posted by ", "Publié par ")
+            let credit = replace ? creditLabel + (message.from?.name ?? language.text("Unknown sender", "Auteur inconnu")) : ""
+            if !reel.video.isEmpty, reel.video.count <= 20 * 1024 * 1024, credit.utf16.count <= 1024 {
                 var video = base(message)
                 video["video"] = VideoUpload(data: reel.video)
-                video["caption"] = caption
                 video["supports_streaming"] = true
                 video["disable_notification"] = true
-                var entities = [Entity(type: "text_link", offset: 0, length: 8, url: cleanURL)]
-                if !author.isEmpty { entities.append(Entity(type: "bold", offset: heading.utf16.count, length: author.utf16.count)) }
-                if let rendered {
-                    var originalEntities = rendered.entities
-                    for index in originalEntities.indices { originalEntities[index].offset += prefix.utf16.count }
-                    entities += originalEntities
-                } else { entities.append(Entity(type: "url", offset: prefix.utf16.count, length: cleanText.utf16.count)) }
-                video["caption_entities"] = try jsonObject(entities)
-                video["reply_markup"] = ["inline_keyboard": [[[
-                    "text": language.text("▶ Open Facebook", "▶ Ouvrir Facebook"), "url": cleanURL,
-                ]]]]
+                // A reply already identifies the poster. Only actual replacement
+                // needs credit because the original is removed after confirmation.
+                if replace {
+                    video["caption"] = credit
+                    if let user = message.from {
+                        video["caption_entities"] = try jsonObject([
+                            Entity(type: "text_mention", offset: creditLabel.utf16.count, length: user.name.utf16.count, user: user)
+                        ])
+                    }
+                }
                 if removalPoster != nil { addRemovalButton(to: &video, language: language) }
                 if replace {
                     if let parent = message.reply_to_message {
@@ -246,8 +239,7 @@ public final class Bot {
                     }
                     if let removalPoster {
                         try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
-                                                     now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970,
-                                                     openButton: openingButton(in: video))
+                                                     now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
                     }
                     if replace { await deleteReplacedOriginal(message) }
                     return

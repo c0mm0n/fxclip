@@ -1,0 +1,8 @@
+**
+!Telegram/
+!Telegram/resolver/
+!Telegram/resolver/Dockerfile
+!Telegram/resolver/requirements.txt
+!Telegram/resolver/requirements.lock
+!Telegram/resolver/service.py
+!Telegram/resolver/healthcheck.py

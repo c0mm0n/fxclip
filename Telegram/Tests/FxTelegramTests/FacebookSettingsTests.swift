@@ -104,6 +104,37 @@ final class FacebookSettingsTests: XCTestCase {
         XCTAssertTrue(settings.previews)
     }
 
+    private func assertPrivateFacebookDisclosure(_ panel: SettingsUI, language: BotLanguage,
+                                                 file: StaticString = #filePath, line: UInt = #line) {
+        for phrase in language == .en ? [
+            "private Facebed code on the bot server", "metadata from Facebook",
+            "validated Facebook CDN video", "uploads a copy to Telegram",
+            "No calls or fallback to the public facebed.com service",
+            "depends on Meta allowing logged-out access",
+            "No Facebook login or access to private content",
+            "Full videos show only the video and Remove preview for 5 minutes",
+            "no heading, author, description, link or Open button",
+            "small poster credit; the original stays if deletion fails",
+            "YouTube and size notices", "Full-video replies retain no Open URL",
+        ] : [
+            "code Facebed privé sur le serveur du bot", "métadonnées sur Facebook",
+            "vidéo validée du CDN Facebook", "en envoie une copie à Telegram",
+            "Aucun appel ni repli vers le service public facebed.com",
+            "dépend de l’accès sans connexion autorisé par Meta",
+            "Aucune connexion Facebook ni accès au contenu privé",
+            "vidéo seule et Retirer l’aperçu pendant 5 minutes",
+            "sans titre, auteur, description, lien ni bouton Ouvrir",
+            "petit crédit d’auteur ; l’original reste si sa suppression échoue",
+            "YouTube et avis de taille", "Aucun lien d’ouverture conservé pour les vidéos complètes",
+        ] {
+            XCTAssertTrue(panel.text.contains(phrase), phrase, file: file, line: line)
+        }
+        for stale in ["metadata via Facebed", "sent to Facebed", "envoyé à Facebed",
+                      "métadonnées via Facebed", "https://facebed.com"] {
+            XCTAssertFalse(panel.text.contains(stale), stale, file: file, line: line)
+        }
+    }
+
     func testFacebookPreviewToggleAndDisclosureInBothLanguagesAndEveryScope() throws {
         let rules = try builtins()
         for language in [BotLanguage.en, .fr] {
@@ -121,12 +152,11 @@ final class FacebookSettingsTests: XCTestCase {
                     XCTAssertEqual(facebookButton["text"], "\(enabled ? "✓" : "○") \(label) · \(state)")
                     XCTAssertTrue(panel.text.contains("<b>\(label)</b>"))
                     XCTAssertFalse(panel.text.contains(language == .en ? "Facebook reels" : "Reels Facebook"))
-                    XCTAssertTrue(panel.text.contains("Facebed"))
+                    assertPrivateFacebookDisclosure(panel, language: language)
                     XCTAssertTrue(panel.text.contains("/reel/id"))
                     XCTAssertTrue(panel.text.contains("/share/r/token"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "single plain public Facebook or Facebed link" : "lien public Facebook ou Facebed seul et sans mise en forme"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "Requires enhanced previews" : "Nécessite les aperçus améliorés"))
-                    XCTAssertTrue(panel.text.contains(language == .en ? "only when Facebed can resolve it" : "uniquement si Facebed peut la résoudre"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "image/text-only posts are not converted" : "publications image/texte seules ne sont pas converties"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "title and Open Facebook reply" : "le titre et Ouvrir Facebook"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "original stays even in Replace mode" : "original reste même en mode Remplacer"))
@@ -135,7 +165,6 @@ final class FacebookSettingsTests: XCTestCase {
                     XCTAssertTrue(panel.plainText.contains(language == .en ? "Open-button links stay locally" : "liens des boutons d’ouverture restent localement"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "20 MiB" : "20 Mio"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "off by default" : "désactivée par défaut"))
-                    XCTAssertTrue(panel.text.contains(language == .en ? "No access to private" : "Aucun accès au contenu"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "already clean" : "déjà propre"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "duplicate" : "doublon"))
                     XCTAssertLessThanOrEqual(panel.plainText.utf16.count, 4096)
@@ -185,15 +214,13 @@ final class FacebookSettingsTests: XCTestCase {
                 SettingsUI.group(KnownGroup(chat: chat), enabled: false, rights: nil, language: language),
             ]
             for panel in panels {
-                XCTAssertTrue(panel.text.contains("Facebed"))
+                assertPrivateFacebookDisclosure(panel, language: language)
                 XCTAssertTrue(panel.text.contains(language == .en ? "off by default" : "désactivées par défaut"))
                 XCTAssertTrue(panel.text.contains(language == .en ? "enabled separately" : "activée séparément"))
                 XCTAssertTrue(panel.text.contains(language == .en ? "Facebook videos" : "vidéos Facebook"))
                 XCTAssertTrue(panel.text.contains(language == .en ? "single plain public Facebook or Facebed link" : "lien public Facebook ou Facebed seul et sans mise en forme"))
                 XCTAssertTrue(panel.text.contains("/reel/id"))
                 XCTAssertTrue(panel.text.contains("/share/r/token"))
-                XCTAssertTrue(panel.text.contains(language == .en ? "Only videos Facebed can resolve" : "Seules les vidéos que Facebed peut résoudre"))
-                XCTAssertTrue(panel.text.contains(language == .en ? "No private Facebook access" : "Aucun accès Facebook privé"))
                 XCTAssertTrue(panel.text.contains(language == .en ? "Pausing enhanced previews" : "Mettre les aperçus améliorés en pause"))
                 XCTAssertTrue(panel.plainText.contains("5 minutes"))
                 XCTAssertTrue(panel.plainText.contains("48 h"))

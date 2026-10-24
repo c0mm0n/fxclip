@@ -51,6 +51,20 @@ extension BotTests {
         return try encoder.encode(store.state)
     }
 
+    private func facebookAssertBareVideo(_ video: [String: Any], removal: Bool = true,
+                                         file: StaticString = #filePath, line: UInt = #line) throws {
+        XCTAssertNil(video["caption"], file: file, line: line)
+        XCTAssertNil(video["caption_entities"], file: file, line: line)
+        if removal {
+            let buttons = try facebookButtons(video)
+            XCTAssertEqual(buttons.count, 1, file: file, line: line)
+            XCTAssertEqual(buttons.first?.callback_data, "fxclip:preview:delete", file: file, line: line)
+            XCTAssertNil(buttons.first?.url, file: file, line: line)
+        } else {
+            XCTAssertNil(video["reply_markup"], file: file, line: line)
+        }
+    }
+
     func testFacebookAlreadyCleanReelUploadsBytesAndRepliesEvenInReplaceMode() async throws {
         let provider = try facebookProvider()
         try replaceMode()
@@ -64,20 +78,11 @@ extension BotTests {
         XCTAssertEqual(video["message_thread_id"] as? Int64, 123)
         XCTAssertEqual((video["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5)
         XCTAssertEqual(video["disable_notification"] as? Bool, true)
-        let caption = try XCTUnwrap(video["caption"] as? String)
-        XCTAssertTrue(caption.hasPrefix("Facebook\n"))
-        XCTAssertTrue(caption.contains(provider.author))
-        XCTAssertTrue(caption.contains(provider.caption))
-        XCTAssertTrue(caption.hasSuffix(facebookCleanURL))
-        XCTAssertFalse(caption.contains("Posted by"))
-        XCTAssertLessThanOrEqual(caption.utf16.count, 1024)
-        let entities = try decode([Entity].self, from: XCTUnwrap(video["caption_entities"]))
-        let author = try XCTUnwrap(entities.first { $0.type == "bold" })
-        XCTAssertEqual((caption as NSString).substring(with: NSRange(location: author.offset, length: author.length)), provider.author)
-        let buttons = try facebookButtons(video)
-        XCTAssertTrue(buttons.contains { $0.url == facebookCleanURL && $0.text.contains("Open Facebook") })
-        XCTAssertEqual(buttons.last?.callback_data, "fxclip:preview:delete")
-        XCTAssertEqual(store.state.replyControls["-100:42"]?.posterID, 7)
+        try facebookAssertBareVideo(video)
+        let receipt = try XCTUnwrap(store.state.replyControls["-100:42"])
+        XCTAssertEqual(receipt.posterID, 7)
+        XCTAssertNil(receipt.openButton)
+        XCTAssertFalse(api.methods.contains("deleteMessage"))
     }
 
     private func facebookHandleSettingsLanguage(_ language: BotLanguage) throws {
@@ -92,14 +97,14 @@ extension BotTests {
         XCTAssertEqual(api.methods, ["getChatMember", "sendVideo", "deleteMessage"])
         let video = try facebookVideo()
         let caption = try XCTUnwrap(video["caption"] as? String)
-        XCTAssertTrue(caption.contains("Posted by Member"))
-        XCTAssertTrue(caption.hasSuffix(facebookCleanURL))
+        XCTAssertEqual(caption, "Posted by Member")
         XCTAssertEqual((video["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 3)
         let entities = try decode([Entity].self, from: XCTUnwrap(video["caption_entities"]))
+        XCTAssertEqual(entities.count, 1)
         let credit = try XCTUnwrap(entities.first { $0.type == "text_mention" })
         XCTAssertEqual(credit.user?.id, 7)
         XCTAssertEqual((caption as NSString).substring(with: NSRange(location: credit.offset, length: credit.length)), "Member")
-        XCTAssertFalse(try facebookButtons(video).contains { $0.callback_data == "fxclip:preview:delete" })
+        XCTAssertNil(video["reply_markup"])
         XCTAssertTrue(store.state.replyControls.isEmpty)
         XCTAssertEqual(api.calls.last?.1["message_id"] as? Int64, 5)
     }
@@ -112,9 +117,9 @@ extension BotTests {
         XCTAssertEqual(api.methods, ["getChatMember", "sendVideo"])
         let video = try facebookVideo()
         XCTAssertEqual((video["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5)
-        XCTAssertFalse((video["caption"] as? String ?? "").contains("Posted by"))
-        XCTAssertEqual(try facebookButtons(video).last?.callback_data, "fxclip:preview:delete")
+        try facebookAssertBareVideo(video)
         XCTAssertEqual(store.state.replyControls["-100:42"]?.posterID, 7)
+        XCTAssertNil(store.state.replyControls["-100:42"]?.openButton)
     }
 
     func testFacebookVideoRemovalUsesConfirmedReceiptAndOnlyOriginalSenderCanRemove() async throws {
@@ -148,23 +153,24 @@ extension BotTests {
         XCTAssertNil(store.state.replyControls["-100:84"])
     }
 
-    func testFacebookFrenchButtonPointsToEngineCleanedSourceAndKeepsMeaningfulParams() async throws {
-        _ = try facebookProvider()
+    func testFacebookFrenchBareVideoFetchesReelIDAndDoesNotLeakSource() async throws {
+        let provider = try facebookProvider()
         try facebookHandleSettingsLanguage(.fr)
         let source = facebookDirtyURL + "&t=12#part"
         try await facebookHandle(source)
         let clean = engine.clean(source).text
         XCTAssertEqual(clean, facebookCleanURL + "?t=12#part")
         let video = try facebookVideo()
-        let button = try XCTUnwrap(facebookButtons(video).first { $0.url != nil })
-        XCTAssertEqual(button.url, clean)
-        XCTAssertTrue(button.text.contains("Ouvrir Facebook"))
-        XCTAssertTrue((video["caption"] as? String ?? "").hasSuffix(clean))
+        XCTAssertEqual(provider.requestedIDs, ["123456"])
+        try facebookAssertBareVideo(video)
         XCTAssertEqual(try facebookButtons(video).last?.text, "🗑 Retirer l’aperçu")
+        let persisted = String(decoding: try facebookStateSnapshot(), as: UTF8.self)
+        XCTAssertFalse(persisted.contains(source))
+        XCTAssertFalse(persisted.contains(clean))
     }
 
     func testFacebookConfiguredEngineDecidesCanonicalSourceWithoutAnotherMirror() async throws {
-        _ = try facebookProvider()
+        let provider = try facebookProvider()
         var settings = UserSettings()
         settings.trackersEverywhere = false
         settings.disabledSites = ["facebook"]
@@ -173,8 +179,8 @@ extension BotTests {
         try await facebookHandle(facebookDirtyURL)
         XCTAssertEqual(api.methods, ["sendVideo"])
         let video = try facebookVideo()
-        XCTAssertEqual(try facebookButtons(video).first?.url, facebookDirtyURL)
-        XCTAssertTrue((video["caption"] as? String ?? "").hasSuffix(facebookDirtyURL))
+        XCTAssertEqual(provider.requestedIDs, ["123456"])
+        try facebookAssertBareVideo(video)
         XCTAssertFalse(engine.rules.previews.contains { $0.id == "facebook" })
     }
 
@@ -186,7 +192,7 @@ extension BotTests {
         let video = try facebookVideo()
         XCTAssertEqual((video["video"] as? VideoUpload)?.data, provider.video)
         XCTAssertNil(video["video"] as? String)
-        XCTAssertEqual(try facebookButtons(video).first?.url, engine.clean(source).text)
+        try facebookAssertBareVideo(video)
     }
 
     func testFacebookFeatureDefaultsOffAndProviderIsOptional() async throws {
@@ -379,20 +385,46 @@ extension BotTests {
         }
     }
 
-    func testFacebookLongCaptionFitsTelegramUTF16LimitAndKeepsSource() async throws {
+    func testFacebookLongFetchedMetadataIsOmittedFromFullVideoAndPersistedReceipt() async throws {
         let provider = try facebookProvider()
         provider.caption = String(repeating: "Example 😀 ", count: 200)
         try await facebookHandle()
         let video = try facebookVideo()
-        let caption = try XCTUnwrap(video["caption"] as? String)
-        XCTAssertLessThanOrEqual(caption.utf16.count, 1024)
-        XCTAssertTrue(caption.contains(provider.author))
-        XCTAssertTrue(caption.hasSuffix(facebookCleanURL))
-        let entities = try decode([Entity].self, from: XCTUnwrap(video["caption_entities"]))
-        for entity in entities {
-            XCTAssertGreaterThanOrEqual(entity.offset, 0)
-            XCTAssertLessThanOrEqual(entity.offset + entity.length, caption.utf16.count)
-            XCTAssertNotNil(Range(NSRange(location: entity.offset, length: entity.length), in: caption))
+        try facebookAssertBareVideo(video)
+        let payload = try JSONSerialization.data(withJSONObject: video.filter { $0.key != "video" }, options: [.withoutEscapingSlashes])
+        let persisted = try Data(contentsOf: directory.appendingPathComponent("state.json"))
+        for data in [payload, persisted] {
+            let text = String(decoding: data, as: UTF8.self)
+            for hidden in [provider.author, provider.caption, facebookCleanURL, "facebook.com", "sourceURL", "Open Facebook"] {
+                XCTAssertFalse(text.contains(hidden), hidden)
+            }
+        }
+    }
+
+    func testFacebookReplacementUsesOnlyLocalizedPosterCreditWithUTF16Mention() async throws {
+        _ = try facebookProvider()
+        try replaceMode()
+        for language in [BotLanguage.en, .fr] {
+            try facebookHandleSettingsLanguage(language)
+            api.calls = []
+            try await facebookHandle(facebookDirtyURL, extra: ["from": [
+                "id": 7, "first_name": "Member 😀", "last_name": "Example", "is_bot": false,
+            ]])
+            let video = try facebookVideo()
+            let name = "Member 😀 Example"
+            let prefix = language == .fr ? "Publié par " : "Posted by "
+            XCTAssertEqual(video["caption"] as? String, prefix + name)
+            let entities = try decode([Entity].self, from: XCTUnwrap(video["caption_entities"]))
+            XCTAssertEqual(entities.count, 1)
+            let mention = try XCTUnwrap(entities.first)
+            XCTAssertEqual(mention.type, "text_mention")
+            XCTAssertEqual(mention.user?.id, 7)
+            XCTAssertEqual(mention.offset, prefix.utf16.count)
+            XCTAssertEqual(mention.length, name.utf16.count)
+            XCTAssertNil(video["reply_parameters"])
+            XCTAssertNil(video["reply_markup"])
+            XCTAssertEqual(api.methods, ["getChatMember", "sendVideo", "deleteMessage"])
+            XCTAssertTrue(store.state.replyControls.isEmpty)
         }
     }
 

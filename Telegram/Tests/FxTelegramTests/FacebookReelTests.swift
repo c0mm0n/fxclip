@@ -130,9 +130,96 @@ final class FacebookReelTests: XCTestCase {
             XCTAssertEqual(result.caption, "Example caption")
             XCTAssertEqual(result.video, mp4)
             XCTAssertEqual(ReelURLProtocol.requests.map { $0.url?.absoluteString },
-                           ["https://facebed.com\(route)", videoURL])
+                           ["http://facebook-resolver:9812\(route)", videoURL])
             XCTAssertEqual(ReelURLProtocol.requests.first?.value(forHTTPHeaderField: "Accept"), "text/html")
             XCTAssertEqual(ReelURLProtocol.requests.last?.value(forHTTPHeaderField: "Accept"), "video/mp4")
+        }
+    }
+
+    func testDefaultMetadataOriginIsPrivateForBothFetchMethods() async throws {
+        let provider = makeFetcher()
+        stub(page: page())
+        _ = try await provider.fetch(reelID: id)
+        _ = try await provider.fetch(sourceURL: "https://facebook.com/reel/\(id)")
+        XCTAssertEqual(ReelURLProtocol.requests.map { $0.url?.absoluteString }, [
+            "http://facebook-resolver:9812/reel/\(id)", videoURL,
+            "http://facebook-resolver:9812/reel/\(id)", videoURL,
+        ])
+    }
+
+    func testConfiguredOriginsPreserveRoutesWithoutChangingMediaOrigin() async throws {
+        for origin in ["http://localhost:9812", "http://127.0.0.1:19812/", "https://resolver.example:8443/"] {
+            let provider = makeFetcher(metadataOrigin: URL(string: origin)!)
+            let expectedOrigin = origin.hasSuffix("/") ? String(origin.dropLast()) : origin
+            for route in forwardedRoutes + ["/reel/123?", "/share/r/Token?x=%252f&x=a+b&x=%2F"] {
+                ReelURLProtocol.reset()
+                stub(page: page())
+                _ = try await provider.fetch(sourceURL: "https://www.facebed.com\(route)#private-fragment")
+                XCTAssertEqual(ReelURLProtocol.requests.map { $0.url?.absoluteString },
+                               ["\(expectedOrigin)\(route)", videoURL])
+            }
+            ReelURLProtocol.reset()
+            stub(page: page())
+            _ = try await provider.fetch(reelID: id)
+            XCTAssertEqual(ReelURLProtocol.requests.first?.url?.absoluteString, "\(expectedOrigin)/reel/\(id)")
+        }
+    }
+
+    func testPublicFacebedSourcesNeverRequestThePublicService() async throws {
+        for host in ["facebed.com", "www.facebed.com"] {
+            ReelURLProtocol.reset()
+            stub(page: page())
+            _ = try await makeFetcher().fetch(sourceURL: "https://\(host)/share/r/Token?x=%2f&x=2")
+            XCTAssertEqual(ReelURLProtocol.requests.map { $0.url?.absoluteString },
+                           ["http://facebook-resolver:9812/share/r/Token?x=%2f&x=2", videoURL])
+        }
+    }
+
+    func testUnreachableResolverDoesNotFallBackForEitherFetchMethod() async {
+        for useSourceURL in [false, true] {
+            ReelURLProtocol.reset()
+            ReelURLProtocol.handler = { _ in throw URLError(.cannotConnectToHost) }
+            do {
+                let provider = makeFetcher()
+                if useSourceURL {
+                    _ = try await provider.fetch(sourceURL: "https://facebed.com/reel/\(id)")
+                } else {
+                    _ = try await provider.fetch(reelID: id)
+                }
+                XCTFail("Expected unavailable resolver")
+            } catch let error as URLError { XCTAssertEqual(error.code, .cannotConnectToHost) }
+            catch { XCTFail("Unexpected error: \(error)") }
+            XCTAssertEqual(ReelURLProtocol.requests.map { $0.url?.absoluteString },
+                           ["http://facebook-resolver:9812/reel/\(id)"])
+        }
+    }
+
+    func testInvalidMetadataOriginsNeverReachTheNetwork() async {
+        for origin in [
+            "http://resolver.example:9812", "http://192.168.1.2:9812", "http://facebook-resolver",
+            "http://facebook-resolver:80", "http://facebook-resolver:09812", "http://localhost:",
+            "http://localhost:0", "http://localhost:65536", "http://127.0.0.2:9812",
+            "https://user:password@resolver.example", "https://@resolver.example", "https://resolver.example?",
+            "https://resolver.example?x=1", "https://resolver.example#", "https://resolver.example#fragment",
+            "https://resolver.example/base", "https://resolver.example//", "https://resolver.example/%2f",
+            "ftp://resolver.example", "//resolver.example", "/relative", "https://resolver.example.",
+            "https://%72esolver.example", "https://-resolver.example", "https://resolver..example",
+            "https://facebed.com", "https://www.facebed.com", "https://other.facebed.com",
+            "https://facebook.com", "https://www.facebook.com", "http://facebed.com",
+        ] {
+            let provider = makeFetcher(metadataOrigin: URL(string: origin)!)
+            for useSourceURL in [false, true] {
+                do {
+                    if useSourceURL {
+                        _ = try await provider.fetch(sourceURL: "https://facebook.com/reel/\(id)")
+                    } else {
+                        _ = try await provider.fetch(reelID: id)
+                    }
+                    XCTFail("Expected invalid metadata origin: \(origin)")
+                } catch FacebookReelError.invalidMetadataOrigin {}
+                catch { XCTFail("Unexpected error for \(origin): \(error)") }
+            }
+            XCTAssertTrue(ReelURLProtocol.requests.isEmpty, origin)
         }
     }
 
@@ -191,8 +278,8 @@ final class FacebookReelTests: XCTestCase {
             XCTAssertFalse(request.httpShouldHandleCookies)
             XCTAssertNil(request.value(forHTTPHeaderField: "Cookie"))
             XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
-            if request.url?.host == "facebed.com" {
-                XCTAssertEqual(request.url?.absoluteString, "https://facebed.com/reel/\(self.id)")
+            if request.url?.host == "facebook-resolver" {
+                XCTAssertEqual(request.url?.absoluteString, "http://facebook-resolver:9812/reel/\(self.id)")
                 XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "text/html")
                 var fixture = self.page(author: "Example Creator", caption: "Une légende 😀 &amp; une suite")
                 fixture.headers["Set-Cookie"] = "session=unwanted; Domain=.fbcdn.net; Secure"
@@ -391,7 +478,7 @@ final class FacebookReelTests: XCTestCase {
         for stage in ["page", "video"] {
             ReelURLProtocol.reset()
             ReelURLProtocol.handler = { request in
-                if stage == "page" || request.url?.host != "facebed.com" { throw URLError(.timedOut) }
+                if stage == "page" || request.url?.host != "facebook-resolver" { throw URLError(.timedOut) }
                 return self.page()
             }
             do {
@@ -419,7 +506,7 @@ final class FacebookReelTests: XCTestCase {
             let started = expectation(description: "\(stage) started")
             let stopped = expectation(description: "\(stage) stopped")
             ReelURLProtocol.handler = { request in
-                if stage == "video" && request.url?.host == "facebed.com" { return self.page() }
+                if stage == "video" && request.url?.host == "facebook-resolver" { return self.page() }
                 return ReelFixture(headers: [:], chunks: [], onStart: { started.fulfill() }, onStop: { stopped.fulfill() })
             }
             let task = Task { try await makeFetcher().fetch(reelID: id) }
@@ -431,9 +518,12 @@ final class FacebookReelTests: XCTestCase {
         }
     }
 
-    private func makeFetcher() -> FacebookReelFetcher {
+    private func makeFetcher(metadataOrigin: URL? = nil) -> FacebookReelFetcher {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [ReelURLProtocol.self]
+        if let metadataOrigin {
+            return FacebookReelFetcher(configuration: configuration, metadataOrigin: metadataOrigin)
+        }
         return FacebookReelFetcher(configuration: configuration)
     }
 
@@ -453,7 +543,7 @@ final class FacebookReelTests: XCTestCase {
 
     private func stub(page: ReelFixture, video: ReelFixture? = nil) {
         ReelURLProtocol.handler = { request in
-            request.url?.host == "facebed.com" ? page : (video ?? self.video())
+            request.value(forHTTPHeaderField: "Accept") == "text/html" ? page : (video ?? self.video())
         }
     }
 

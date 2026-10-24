@@ -22,6 +22,26 @@ services:
         max-file: "2"
     labels:
       com.centurylinklabs.watchtower.enable: "false"
+    depends_on:
+      facebook-resolver:
+        condition: service_started
+
+  facebook-resolver:
+    image: ${FXCLIP_FACEBOOK_RESOLVER_IMAGE:-fxclip-facebook-resolver:local}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    mem_limit: 512m
+    pids_limit: 64
+    cpu_shares: 256
+    logging:
+      driver: none
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
 
 secrets:
   telegram_token:
