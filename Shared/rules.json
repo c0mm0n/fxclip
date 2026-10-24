@@ -11,7 +11,7 @@
       { "id": "x", "name": "X", "hosts": ["x.com", "twitter.com"],
         "params": ["s", "t", "ref_src", "ref_url"] },
       { "id": "youtube", "name": "YouTube", "hosts": ["youtube.com", "youtu.be"],
-        "params": ["si", "feature", "pp", "ab_channel"] },
+        "params": ["si", "is", "feature", "pp", "ab_channel"] },
       { "id": "instagram", "name": "Instagram", "hosts": ["instagram.com"],
         "params": ["igsh", "igshid", "img_index_ref", "exln", "srtk"] },
       { "id": "tiktok", "name": "TikTok", "hosts": ["tiktok.com"],

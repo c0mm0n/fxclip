@@ -72,6 +72,21 @@
       "telegram": "https://youtu.be/dQw4w9WgXcQ"
     },
     {
+      "input": "https://youtu.be/dQw4w9WgXcQ?is=share-token",
+      "clean": "https://youtu.be/dQw4w9WgXcQ",
+      "telegram": "https://youtu.be/dQw4w9WgXcQ"
+    },
+    {
+      "input": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&is=share-token&si=share-token&t=42s&list=PL1&index=2",
+      "clean": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s&list=PL1&index=2",
+      "telegram": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s&list=PL1&index=2"
+    },
+    {
+      "input": "https://example.com/watch?is=share-token",
+      "clean": "https://example.com/watch?is=share-token",
+      "telegram": "https://example.com/watch?is=share-token"
+    },
+    {
       "input": "https://www.youtube.com/watch?v=a&list=PL1&pp=ygU",
       "clean": "https://www.youtube.com/watch?v=a&list=PL1",
       "telegram": "https://www.youtube.com/watch?v=a&list=PL1"
