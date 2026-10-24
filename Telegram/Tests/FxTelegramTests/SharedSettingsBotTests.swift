@@ -76,7 +76,7 @@ extension BotTests {
         XCTAssertEqual(api.calls.last?.1["text"] as? String, "https://personal.example/r/example/")
     }
 
-    func testSharedSettingsFirstPersonalEditCopiesGlobalDefaultsWithoutGroupContext() async throws {
+    func testSharedSettingsFirstPersonalEditRequiresConfirmationThenCopiesGlobalDefaultsWithoutGroupContext() async throws {
         var defaults = sharedSettingsReddit("default.example")
         defaults.disabledSites = ["amazon"]
         defaults.neverClean = [.init(host: "excluded.example", subdomains: true)]
@@ -85,6 +85,10 @@ extension BotTests {
         group.engineSettings = sharedSettingsReddit("group.example")
         try store.set(group, chatID: -100)
 
+        let before = try sharedSettingsSnapshot()
+        try await callback("fxclip:rules:p:trackers:off")
+        XCTAssertEqual(try sharedSettingsSnapshot(), before)
+        try await callback("fxclip:rules:p:customize:confirm")
         try await callback("fxclip:rules:p:trackers:off")
         var expected = defaults
         expected.trackersEverywhere = false
@@ -95,7 +99,7 @@ extension BotTests {
         XCTAssertEqual(store.state.personalLinkSettings["8"], expected)
     }
 
-    func testSharedSettingsFirstGroupEditCopiesDefaultsAndPreservesLegacyMaster() async throws {
+    func testSharedSettingsFirstGroupEditRequiresConfirmationThenCopiesDefaultsAndPreservesLegacyMaster() async throws {
         var defaults = sharedSettingsReddit("default.example")
         defaults.neverClean = [.init(host: "excluded.example", subdomains: false)]
         try store.setDefaultLinks(defaults, youTubeCards: false)
@@ -103,6 +107,10 @@ extension BotTests {
         group.mode = .replace
         group.previews = false
         try store.set(group, chatID: -100)
+        let before = try sharedSettingsSnapshot()
+        try await callback("fxclip:rules:c:-100:site:reddit:off", chatID: -100, chatType: "supergroup")
+        XCTAssertEqual(try sharedSettingsSnapshot(), before)
+        try await callback("fxclip:rules:c:-100:customize:confirm", chatID: -100, chatType: "supergroup")
         try await callback("fxclip:rules:c:-100:site:reddit:off", chatID: -100, chatType: "supergroup")
         var expected = defaults
         expected.disabledSites.insert("reddit")
@@ -113,6 +121,7 @@ extension BotTests {
     }
 
     func testSharedSettingsTrackingAndPerSiteCallbacksAffectActualQueryCleaning() async throws {
+        try store.setPersonalLinks(UserSettings(), youTubeCards: nil, userID: 8)
         try await callback("fxclip:rules:p:trackers:off")
         try await callback("fxclip:rules:p:site:x:off")
         api.calls = []
@@ -129,6 +138,7 @@ extension BotTests {
     }
 
     func testSharedSettingsPreviewSiteToggleDoesNotDisableOtherSitesOrCleaning() async throws {
+        try store.setPersonalLinks(UserSettings(), youTubeCards: nil, userID: 8)
         try await callback("fxclip:rules:p:preview:reddit:off")
         api.calls = []
         try await sharedSettingsMessage("https://reddit.com/r/example/?utm_source=share")
@@ -143,6 +153,7 @@ extension BotTests {
     }
 
     func testSharedSettingsProviderCommandCanonicalizesHostAndRewritesReddit() async throws {
+        try store.setPersonalLinks(UserSettings(), youTubeCards: nil, userID: 8)
         try await privateCommand("/provider reddit Mirror.Example.")
         XCTAssertEqual(store.state.personalLinkSettings["8"]?.previews["reddit"]?.targetHost, "mirror.example")
         api.calls = []
@@ -158,6 +169,7 @@ extension BotTests {
     func testSharedSettingsDefaultAndGroupProviderCommandsUseTheirOwnScope() async throws {
         try await privateCommand("/default provider reddit default.example", userID: 7)
         XCTAssertEqual(store.state.defaultLinkSettings.previews["reddit"]?.targetHost, "default.example")
+        try await callback("fxclip:rules:c:-100:customize:confirm", chatID: -100, chatType: "supergroup")
         try await sharedSettingsMessage("/fxclip provider reddit group.example")
         XCTAssertEqual(store.state.chats["-100"]?.engineSettings?.previews["reddit"]?.targetHost, "group.example")
         XCTAssertNil(store.state.personalLinkSettings["8"])
@@ -185,6 +197,7 @@ extension BotTests {
     }
 
     func testSharedSettingsExclusionsCoverSubdomainsByDefaultAndCanBeRemoved() async throws {
+        try store.setPersonalLinks(UserSettings(), youTubeCards: nil, userID: 8)
         try await privateCommand("/exclude add Example.COM.")
         XCTAssertEqual(store.state.personalLinkSettings["8"]?.neverClean, [.init(host: "example.com", subdomains: true)])
         api.calls = []
@@ -198,6 +211,8 @@ extension BotTests {
     }
 
     func testSharedSettingsExactGroupExclusionLeavesSubdomainsEligible() async throws {
+        var group = ChatSettings(); group.engineSettings = UserSettings()
+        try store.set(group, chatID: -100)
         try await sharedSettingsMessage("/fxclip exclude add example.com exact")
         XCTAssertEqual(store.state.chats["-100"]?.engineSettings?.neverClean,
                        [.init(host: "example.com", subdomains: false)])
@@ -342,6 +357,8 @@ extension BotTests {
     }
 
     func testSharedSettingsGroupCallbacksRecheckRevokedAndUnavailableAdminRights() async throws {
+        var group = ChatSettings(); group.engineSettings = UserSettings()
+        try store.set(group, chatID: -100)
         try await callback("fxclip:rules:c:-100:trackers:off", chatID: -100, chatType: "supergroup")
         XCTAssertEqual(store.state.chats["-100"]?.engineSettings?.trackersEverywhere, false)
         let before = try sharedSettingsSnapshot()
@@ -358,6 +375,8 @@ extension BotTests {
     }
 
     func testSharedSettingsOwnerGroupExceptionWorksWhenMemberLookupUnavailable() async throws {
+        var group = ChatSettings(); group.engineSettings = UserSettings()
+        try store.set(group, chatID: -100)
         api.failMember = true
         try await callback("fxclip:rules:c:-100:trackers:off", userID: 7, chatID: -100, chatType: "supergroup")
         XCTAssertEqual(store.state.chats["-100"]?.engineSettings?.trackersEverywhere, false)
@@ -365,6 +384,7 @@ extension BotTests {
     }
 
     func testSharedSettingsStaleRuleCallbacksLeaveStateUnchanged() async throws {
+        try store.setPersonalLinks(UserSettings(), youTubeCards: nil, userID: 8)
         let before = try sharedSettingsSnapshot()
         for action in ["site:missing:off", "preview:missing:on", "provider:missing", "providerreset:missing",
                        "trackers:maybe", "youtube:maybe", "preview:reddit:off:extra", "unknown", "reset:extra"] {

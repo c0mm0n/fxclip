@@ -140,6 +140,7 @@ public final class Bot {
                         return
                     }
                     settings.mode = mode
+                    settings.modeInherited = false
                 } else if words.count == 3, words[1] == "previews", ["on", "off"].contains(words[2]) {
                     settings.previews = words[2] == "on"
                 } else {
@@ -599,10 +600,10 @@ public final class Bot {
         }
     }
 
-    private func personalPanel(userID: Int64) -> SettingsUI {
+    private func personalPanel(userID: Int64, section: String = "show") -> SettingsUI {
         SettingsUI.personal(mode: store.state.users[String(userID)], defaultMode: store.state.defaultMode,
                             owner: allowedOwners.contains(userID), preference: store.state.userLanguages[String(userID)],
-                            language: store.userLanguage(userID))
+                            language: store.userLanguage(userID), section: section)
     }
 
     private func configuredRewriter(chatID: Int64?, userID: Int64?) -> Rewriter {
@@ -624,16 +625,22 @@ public final class Bot {
     }
 
     private func chatSettings(_ chatID: Int64) -> ChatSettings {
-        if let settings = store.state.chats[String(chatID)] { return settings }
+        if var settings = store.state.chats[String(chatID)] {
+            if settings.modeInherited { settings.mode = store.state.defaultMode }
+            return settings
+        }
         var settings = ChatSettings()
         settings.mode = store.state.defaultMode
+        settings.modeInherited = true
         return settings
     }
 
-    private func chatPanel(_ chat: Chat) -> SettingsUI {
-        SettingsUI.chat(chat, settings: chatSettings(chat.id), enabled: isEnabled(chatID: chat.id),
-                        inherited: store.state.chats[String(chat.id)] == nil, username: username,
-                        language: store.groupLanguage(chat.id))
+    private func chatPanel(_ chat: Chat, section: String = "show") -> SettingsUI {
+        let context = Chat(id: chat.id, type: chat.type,
+                           title: chat.title ?? store.state.knownGroups[String(chat.id)]?.chat.title)
+        return SettingsUI.chat(context, settings: chatSettings(chat.id), enabled: isEnabled(chatID: chat.id),
+                        inherited: chatSettings(chat.id).modeInherited, username: username,
+                        language: store.groupLanguage(chat.id), section: section)
     }
 
     private func isEnabled(chatID: Int64) -> Bool {
@@ -746,7 +753,7 @@ public final class Bot {
         }
         let action = parts[2]
         do {
-            if action == "show" {
+            if ["show", "mode", "about"].contains(action) || (!ownerPanel && action == "secretary_setup") {
                 // Navigation never changes preferences.
             } else if !ownerPanel && action == "default" {
                 try store.setMode(nil, userID: callback.from.id)
@@ -761,8 +768,14 @@ public final class Bot {
             await answer(callback, language.text("Could not save the setting. Please try again.", "Le réglage n’a pas pu être enregistré. Réessayez."), alert: true)
             throw error
         }
-        await answer(callback, action == "show" ? nil : language.text("Setting saved ✓", "Réglage enregistré ✓"))
-        let panel = ownerPanel ? SettingsUI.defaults(mode: store.state.defaultMode, language: language) : personalPanel(userID: callback.from.id)
+        let navigation = ["show", "mode", "about", "secretary_setup"].contains(action)
+        let saved = ownerPanel ? language.text("Bot defaults saved ✓", "Réglages par défaut du bot enregistrés ✓")
+            : language.text("Saved for your messages ✓", "Enregistré pour vos messages ✓")
+        await answer(callback, navigation ? nil : saved)
+        let section = navigation ? action : !ownerPanel && action == "secretary" ? "secretary_setup" : "mode"
+        let panel = ownerPanel
+            ? SettingsUI.defaults(mode: store.state.defaultMode, language: language, section: section)
+            : personalPanel(userID: callback.from.id, section: section)
         // Clicking the already selected choice should not create a duplicate panel after
         // Telegram rejects an unchanged edit as "message is not modified".
         try await sendPanel(panel, to: message.chat.id, messageID: message.message_id,
@@ -775,7 +788,7 @@ public final class Bot {
         guard parts.count == 4, let chatID = Int64(parts[2]),
               let message = callback.message, message.chat.isGroup, message.chat.id == chatID,
               callback.from.is_bot != true,
-              ["show", "enable", "disable", "reply", "replace", "off", "previews_on", "previews_off", "lang_en", "lang_fr", "close"].contains(parts[3]) else {
+              ["show", "mode", "language", "about", "enable", "disable", "reply", "replace", "off", "previews_on", "previews_off", "lang_en", "lang_fr", "close"].contains(parts[3]) else {
             await answer(callback, language.text("This button does not belong to this group. Open /setup.", "Ce bouton ne correspond pas à ce groupe. Ouvrez /setup."), alert: true)
             return
         }
@@ -812,13 +825,21 @@ public final class Bot {
             try store.setGroupEnabled(action == "enable", chatID: chatID)
         } else if let mode = Mode(rawValue: action) {
             settings.mode = mode
+            settings.modeInherited = false
             try store.set(settings, chatID: chatID)
         } else if action == "previews_on" || action == "previews_off" {
             settings.previews = action == "previews_on"
             try store.set(settings, chatID: chatID)
         }
-        await answer(callback, action == "show" ? nil : language.text("Setting saved ✓", "Réglage enregistré ✓"))
-        try await sendPanel(chatPanel(message.chat), to: chatID, messageID: message.message_id,
+        let navigation = ["show", "mode", "language", "about"].contains(action)
+        let panelLanguage = store.groupLanguage(chatID)
+        await answer(callback, navigation ? nil : panelLanguage.text("Saved for this group ✓", "Enregistré pour ce groupe ✓"))
+        let section = navigation ? action : ["reply", "replace", "off"].contains(action) ? "mode"
+            : ["lang_en", "lang_fr"].contains(action) ? "language" : "show"
+        let panel = ["previews_on", "previews_off"].contains(action)
+            ? rulesPanel(.chat(chatID), section: "previews", language: panelLanguage)
+            : chatPanel(message.chat, section: section)
+        try await sendPanel(panel, to: chatID, messageID: message.message_id,
                             previousText: message.text, previousMarkup: message.reply_markup)
     }
 
@@ -928,6 +949,7 @@ public final class Bot {
             try store.setPersonalLinks(settings, youTubeCards: cards, userID: id)
             if ruleFacebookOverride(scope) != facebook { try store.setPersonalFacebookReels(facebook, userID: id) }
         case .chat(let id):
+            if store.state.chats[String(id)] == nil, settings == nil, cards == nil, facebook == nil { return }
             var chat = chatSettings(id)
             chat.engineSettings = settings
             chat.youTubeCards = cards
@@ -949,7 +971,17 @@ public final class Bot {
                                 previewsEnabled: previews,
                                 youTubeCards: ruleCardsOverride(scope) ?? store.state.defaultYouTubeCards,
                                 facebookReels: ruleFacebookOverride(scope) ?? store.state.defaultFacebookReels,
-                                language: language)
+                                language: language,
+                                groupTitle: {
+                                    if case .chat(let id) = scope { return store.state.knownGroups[String(id)]?.chat.title }
+                                    return nil
+                                }(),
+                                youTubeInherited: ruleCardsOverride(scope) == nil,
+                                facebookInherited: ruleFacebookOverride(scope) == nil,
+                                cleaningEnabled: {
+                                    if case .chat(let id) = scope { return isEnabled(chatID: id) }
+                                    return true
+                                }())
     }
 
     private func rulesCallback(_ callback: CallbackQuery, parts: [String]) async throws {
@@ -990,6 +1022,15 @@ public final class Bot {
         let panelLanguage: BotLanguage
         if case .chat(let id) = scope { panelLanguage = store.groupLanguage(id) }
         else { panelLanguage = language }
+        let engineEdit = ["trackers", "site", "providerreset"].contains(actions.first ?? "")
+            || (actions.count == 3 && actions[0] == "preview" && ["on", "off"].contains(actions[2]))
+        if scope.key != "d", engineEdit, ruleOverride(scope) == nil {
+            await answer(callback, panelLanguage.text("Create link preferences first.", "Créez d’abord des préférences de liens."))
+            try await sendPanel(rulesPanel(scope, section: "customize", language: panelLanguage),
+                to: message.chat.id, messageID: message.message_id,
+                previousText: message.text, previousMarkup: message.reply_markup)
+            return
+        }
         var section = actions.first ?? "show"
         var settings = ruleOverride(scope) ?? store.state.defaultLinkSettings
         var storedSettings = ruleOverride(scope)
@@ -998,11 +1039,28 @@ public final class Bot {
         var changed = false
         let builtins = rewriter.engine.rules
         switch actions {
-        case ["show"], ["clean"], ["previews"], ["excluded"]: break
+        case ["show"], ["clean"], ["previews"], ["excluded"], ["info"], ["customize"]: break
+        case ["reset", "show"]: section = "reset"
+        case ["youtube", "show"]: section = "youtube"
+        case ["facebook", "show"]: section = "facebook"
+        case ["customize", "confirm"]:
+            guard scope.key != "d" else {
+                await answer(callback, panelLanguage.text("Bot defaults are already editable.", "Les réglages par défaut du bot sont déjà modifiables."))
+                return
+            }
+            // A stale confirmation must not reset customization created elsewhere.
+            if ruleOverride(scope) == nil {
+                storedSettings = store.state.defaultLinkSettings
+                changed = true
+            }
+            section = "show"
         case ["reset"]:
             storedSettings = nil; cards = nil; facebook = nil; changed = true; section = "show"
         default:
-            if actions.count == 2, actions[0] == "provider", builtins.previews.contains(where: { $0.id == actions[1] }) {
+            if actions.count == 3, actions[0] == "preview", actions[2] == "show",
+               builtins.previews.contains(where: { $0.id == actions[1] }) {
+                section = "preview:\(actions[1])"
+            } else if actions.count == 2, actions[0] == "provider", builtins.previews.contains(where: { $0.id == actions[1] }) {
                 section = "provider:\(actions[1])"
             } else if actions.count == 2, actions[0] == "providerreset",
                       let rule = builtins.previews.first(where: { $0.id == actions[1] }) {
@@ -1010,14 +1068,18 @@ public final class Bot {
                 value.targetHost = nil
                 settings.previews[rule.id] = value
                 storedSettings = settings; changed = true; section = "provider:\(rule.id)"
+            } else if actions.count == 2, ["youtube", "facebook"].contains(actions[0]), actions[1] == "default", scope.key != "d" {
+                if actions[0] == "youtube" { cards = nil; section = "youtube" }
+                else { facebook = nil; section = "facebook" }
+                changed = true
             } else if actions.count == 2, ["trackers", "youtube", "facebook"].contains(actions[0]), ["on", "off"].contains(actions[1]) {
                 if actions[0] == "trackers" {
                     settings.trackersEverywhere = actions[1] == "on"; storedSettings = settings
                     section = "clean"
                 } else if actions[0] == "youtube" {
-                    cards = actions[1] == "on"; section = "previews"
+                    cards = actions[1] == "on"; section = "youtube"
                 } else {
-                    facebook = actions[1] == "on"; section = "previews"
+                    facebook = actions[1] == "on"; section = "facebook"
                 }
                 changed = true
             } else if actions.count == 3, ["on", "off"].contains(actions[2]),
@@ -1031,14 +1093,20 @@ public final class Bot {
                 value.enabled = actions[2] == "on"
                 if value.enabled, !value.apps.contains("telegram") { value.apps.append("telegram") }
                 settings.previews[rule.id] = value
-                storedSettings = settings; changed = true; section = "previews"
+                storedSettings = settings; changed = true; section = "preview:\(rule.id)"
             } else {
                 await answer(callback, language.text("This button is no longer available.", "Ce bouton n’est plus disponible."))
                 return
             }
         }
         if changed { try saveRules(scope, settings: storedSettings, cards: cards, facebook: facebook) }
-        await answer(callback, changed ? panelLanguage.text("Setting saved ✓", "Réglage enregistré ✓") : nil)
+        let saved: String
+        switch scope {
+        case .personal: saved = panelLanguage.text("Saved for your messages ✓", "Enregistré pour vos messages ✓")
+        case .chat: saved = panelLanguage.text("Saved for this group ✓", "Enregistré pour ce groupe ✓")
+        case .defaults: saved = panelLanguage.text("Bot defaults saved ✓", "Réglages par défaut du bot enregistrés ✓")
+        }
+        await answer(callback, changed ? saved : nil)
         try await sendPanel(rulesPanel(scope, section: section, language: panelLanguage), to: message.chat.id,
                             messageID: message.message_id, previousText: message.text, previousMarkup: message.reply_markup)
     }
@@ -1070,6 +1138,10 @@ public final class Bot {
             }
             scope = .chat(message.chat.id); arguments = Array(words.dropFirst())
         } else { return false }
+        if scope.key != "d", ["provider", "exclude"].contains(arguments.first ?? ""), ruleOverride(scope) == nil {
+            try await sendPanel(rulesPanel(scope, section: "customize", language: language), to: message.chat.id)
+            return true
+        }
         var settings = ruleOverride(scope) ?? store.state.defaultLinkSettings
         var section = "show"
         if arguments.first == "provider" {

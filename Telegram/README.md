@@ -5,34 +5,50 @@ from links and optionally improves X, Instagram and Reddit previews, without req
 members to install a client. Menus support English and French. Run your own instance
 using the [Docker setup](#docker-setup); this project does not configure a public bot.
 
-## Choose your behavior
+## Settings / Réglages
 
-Open the bot privately and press **Start** or send `/settings`. Buttons show the
-current selection:
+Open the bot privately with `/settings`. Start from **My preferences / Mes
+préférences**, then choose **Behavior / Comportement** or **Links & previews /
+Liens et aperçus**.
 
-- **Reply to the message** keeps the original and replies with the cleaned text.
-  Telegram's reply header already identifies the author; no extra credit line.
-- **Replace the message** reposts the text with “Posted by …”, then deletes the
-  original only after Telegram confirms the repost. Without deletion permission,
-  or for media, forwards and anonymous senders, it replies instead.
-- **Secretary · private chats** edits your own outgoing messages in connected
-  private chats. It does not change group messages.
-- **Turn off fxclip** leaves your messages untouched.
-- **Follow the group's setting** removes your personal override.
+| Scope / Portée | What changes / Ce qui change |
+|---|---|
+| **My preferences / Mes préférences** | Only your future messages, in every group where cleaning is enabled. Uniquement vos futurs messages, dans tous les groupes où le nettoyage est activé. |
+| **This group / Ce groupe** | This group's defaults for members without a personal override. Les choix de ce groupe pour les membres sans préférence personnelle. |
+| **Bot defaults / Réglages par défaut du bot** | The fallback when no personal or group choice exists; changing it never resets existing choices. Le choix de repli sans préférence personnelle ni réglage du groupe ; le modifier ne réinitialise aucun choix existant. |
 
-Priority: **personal choice → group mode → global default**. A group must first
-have cleaning enabled; disabling that activation stops all automatic cleaning,
-including personal overrides. The group's `off` mode is a default that a personal
-mode can override while cleaning remains enabled.
+**Follow group / Suivre le groupe** means inheritance: the result can differ from
+one group to another. It does not mean “off”. A group must have cleaning enabled;
+turning that activation off stops automatic cleaning for everyone, including
+members with personal preferences.
 
-The owner chooses the global default with `/default` and manages discovered
-groups with `/groups`. Group admins can use **Group settings**, `/setup` or
-`/fxclip` to activate and configure only their own chat. Every action checks
-current permissions. They cannot change global defaults, other groups or another
-member's preferences. A short join greeting links everyone to their settings.
-Once the group settings panel is confirmed sent, `/setup` (or bare `/fxclip`)
-is removed if the bot has permission to delete it. Without that permission,
-the command stays; closing the panel never removes other messages.
+**Suivre le groupe** laisse chaque groupe décider : ce n’est pas une
+désactivation. Si le nettoyage du groupe est désactivé, aucun choix personnel ne
+peut le réactiver.
+
+In **Behavior / Comportement**, choose a cleaned reply that keeps the original,
+replacement with an author credit, or off. Replacement deletes the original only
+after the repost succeeds and permissions allow it; media, forwards and anonymous
+senders receive a reply instead. **Secretary / Secrétaire** only edits your own
+outgoing messages in connected private chats; see [Secretary Mode](#secretary-mode).
+Behavior and link choices are separate.
+
+Dans **Comportement**, choisissez une réponse qui garde l’original, un
+remplacement avec le nom de l’auteur, ou la désactivation. **Secrétaire** concerne
+uniquement vos messages sortants dans les conversations privées connectées.
+Changer les liens ne change pas ce comportement.
+
+Changes save immediately and apply to future messages. **Close / Fermer** only
+hides the panel; there is no extra Save step.
+Les changements sont enregistrés immédiatement pour les futurs messages.
+**Fermer** masque simplement le panneau.
+
+Group admins open `/setup` or `/fxclip` for their own group's settings. The bot
+owner uses `/default` for bot defaults and `/groups` for discovered groups.
+Permissions are checked on every action; group admins cannot change other
+members' preferences or bot defaults. A join greeting links to personal settings.
+After the group panel is sent, `/setup` or bare `/fxclip` is removed if permitted;
+closing the panel never removes other messages.
 
 Commands remain available: `/mode reply|replace|secretary|off|default`,
 `/fxclip reply|replace|off`, and `/fxclip previews on|off`.
@@ -41,7 +57,7 @@ Commands remain available: `/mode reply|replace|secretary|off|default`,
 
 Group admins can enable or disable enhanced previews in `/setup` or with
 `/fxclip previews on|off`. When enabled, X, Instagram and Reddit links can use
-`fxtwitter.com`, `zzinstagram.com` and `vxreddit.com`. Each mirror has its own switch and editable domain under **Link settings → Previews and providers**.
+`fxtwitter.com`, `zzinstagram.com` and `vxreddit.com`. Choose a mirror under **Links & previews → Previews**, then enable it or open its advanced provider settings.
 
 For a message containing only a plain YouTube video link, enhanced previews also
 fetch the title and thumbnail directly from YouTube and send them with the clean
@@ -52,7 +68,7 @@ formatted or hidden links, captions and messages containing more than one link
 keep their existing behavior. Secretary only edits links; it does not post cards.
 
 **Facebook videos** (**Vidéos Facebook**) is a separate Telegram-only option under
-**Link settings → Previews and providers**, **off by default**, including after an
+**Links & previews → Previews → Facebook**, **off by default**, including after an
 upgrade. Turning on group cleaning or enhanced previews does not turn it on.
 When explicitly enabled, a message containing only one plain public Facebook or
 Facebed link can receive a native video reply, even if the link is already clean.
@@ -137,21 +153,50 @@ this upgrade have no saved opening button; their old keyboard is cleared, while
 links in their captions remain usable. Cleanup resumes when the bot reconnects;
 the removal action itself is always refused after five minutes.
 
-## Link settings
+## Link settings / Réglages des liens
 
-Open `/setup` in a group, then **Link settings**. Group admins can configure
-global tracker removal, individual sites, cleaning exclusions, each preview
-mirror and its provider, and the separate YouTube card and Facebook video options. The existing
-group activation and preview pause switches still apply.
+From the relevant dashboard, open **Links & previews / Liens et aperçus** and
+choose a category: tracker cleaning, previews or cleaning exclusions. In
+**Previews / Aperçus**, choose one service, then enable or disable it. Provider
+domains and editing commands appear only inside that service's advanced page.
+YouTube cards and Facebook videos have separate choices; Facebook remains off by
+default. A group's enhanced-preview pause still pauses both.
 
-Members get the same link controls in private `/settings`. Without a personal
-configuration, each group's choices apply. The first personal edit starts a
-complete configuration from the bot defaults and applies it to that person's
-messages in all enabled groups. **Follow inherited settings** removes that
-custom configuration. Group custom configurations similarly replace the bot's
-link defaults as a whole. Message modes remain separate.
+Depuis le tableau de bord de la portée souhaitée, ouvrez **Liens et aperçus**,
+puis une catégorie. Dans **Aperçus**, choisissez un service avant de l’activer ou
+le désactiver. Le fournisseur et sa commande de modification se trouvent dans
+les réglages avancés de ce service.
 
-Provider and exclusion editing uses short commands:
+Personal link rules also apply to your outgoing messages in connected private chats
+when Secretary Mode is enabled. Without a personal link configuration, those
+private chats use the bot defaults; groups use their own defaults. YouTube cards
+and Facebook video replies remain group features, not Secretary actions.
+
+Les règles personnelles des liens s’appliquent aussi aux messages sortants en
+privé connecté lorsque Secrétaire est activé. Sans personnalisation, Secrétaire
+suit les réglages par défaut du bot ; les groupes suivent leurs propres réglages.
+Les fiches YouTube et les vidéos Facebook ne sont pas envoyées par Secrétaire.
+
+Personal links initially **Follow group / Suivre le groupe**. To customize
+tracker, mirror or exclusion settings, confirm the explanation first: a complete link configuration starts from the
+**bot defaults**, then replaces group link choices for your future messages in
+all enabled groups. It does not copy the currently viewed group's settings.
+YouTube and Facebook can be changed separately; starting the complete
+configuration keeps those choices.
+
+Pour personnaliser vos liens, une confirmation explique la portée : la
+configuration complète part des **réglages par défaut du bot**, puis remplace
+ceux des groupes pour vos futurs messages dans tous les groupes activés. Vos
+choix YouTube et Facebook déjà définis sont conservés séparément.
+
+Resetting links also asks for confirmation. For personal preferences, it removes
+your custom link choices and returns to **Follow group / Suivre le groupe**. For
+a group, it returns to bot defaults; for bot defaults, it restores the built-in
+link choices. Resetting links does not reset behavior or group activation.
+La réinitialisation des liens demande confirmation ; elle ne change ni le
+comportement des messages ni l’activation du groupe.
+
+Advanced provider and exclusion commands remain available:
 
 | Scope | Provider | Cleaning exclusion |
 |---|---|---|
@@ -159,23 +204,19 @@ Provider and exclusion editing uses short commands:
 | Group, admin only | `/fxclip provider reddit mirror.example` | `/fxclip exclude add example.com` |
 | Bot defaults, owner only in private | `/default provider reddit mirror.example` | `/default exclude add example.com` |
 
-Use `default` instead of a provider domain to restore its built-in provider.
-Use `remove` instead of `add` to remove an exclusion. Exclusions include
-subdomains by default; append `exact` when adding one to match only that host.
-These exclusions skip tracker removal; preview switches remain separate,
-matching the native apps.
+Use `default` instead of a provider domain to restore its built-in provider, or
+`remove` instead of `add` to remove an exclusion. Exclusions include subdomains;
+append `exact` when adding one to match only that host. Exclusions skip tracker
+removal, while preview choices still apply separately.
 
-Provider values are domains only, without a scheme, credentials, port, path or
-query. Links use HTTPS. The selected service can receive links when previews are
-generated or opened. Changing a provider preserves its enabled state and does
-not contact it from the settings screen.
+Providers are domains only, without a scheme, credentials, port, path or query;
+preview links use HTTPS. The selected service can receive links when previews
+are generated or opened. Editing a provider keeps its enabled state and does
+not contact the service from the settings screen.
 
-The bot stores the same `FxEngine.UserSettings` used by the apps. `targetHost`
-overrides a built-in mirror domain; `previewDefaultsEnabled` preserves the
-default choice for newly added mirrors, including old installations that
-declined all previews. Rule lists come from `Shared/rules.json`. Message mode,
-chat activation, YouTube photo cards and Facebook videos are Telegram-specific;
-they do not add fields or rules to shared `UserSettings`.
+This settings redesign does not migrate saved choices or change native app
+rules. Le nouveau parcours conserve les choix enregistrés et les règles des
+applications natives.
 
 ## English and French
 

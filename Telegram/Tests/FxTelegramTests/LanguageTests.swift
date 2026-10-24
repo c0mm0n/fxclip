@@ -114,14 +114,14 @@ extension BotTests {
 
     func testPrivateSettingsDetectsLocaleAndReusesItWhenTelegramOmitsTag() async throws {
         try await privateCommand("/settings", languageCode: "fr_CA")
-        XCTAssertTrue(try XCTUnwrap(sent["text"] as? String).contains("Vos réglages"))
+        XCTAssertTrue(try XCTUnwrap(sent["text"] as? String).contains("Mes préférences"))
         XCTAssertEqual(store.state.detectedLanguages["8"], .fr)
         api.calls = []
         try await privateCommand("/settings")
-        XCTAssertTrue(try XCTUnwrap(sent["text"] as? String).contains("Vos réglages"))
+        XCTAssertTrue(try XCTUnwrap(sent["text"] as? String).contains("Mes préférences"))
         api.calls = []
         try await privateCommand("/settings", languageCode: "de-DE")
-        XCTAssertTrue(try XCTUnwrap(sent["text"] as? String).lowercased().contains("settings"))
+        XCTAssertTrue(try XCTUnwrap(sent["text"] as? String).contains("My preferences"))
         XCTAssertEqual(store.userLanguage(8), .en)
     }
 
@@ -158,7 +158,7 @@ extension BotTests {
             api.calls = []
             try await privateCommand("/settings", languageCode: tag)
             let text = try XCTUnwrap(sent["text"] as? String)
-            XCTAssertTrue(language == .fr ? text.contains("Vos réglages") : text.lowercased().contains("settings"))
+            XCTAssertTrue(language == .fr ? text.contains("Mes préférences") : text.contains("My preferences"))
             XCTAssertEqual(store.userLanguage(8), language)
         }
     }
@@ -262,10 +262,10 @@ extension BotTests {
         try store.setGroupLanguage(.fr, chatID: -100)
         try store.setUserLanguage(.en, userID: 7)
         try await handle(["text": "/setup", "from": fixtureUser(7, languageCode: "en")])
-        XCTAssertTrue(try XCTUnwrap(sent["text"] as? String).contains("Réglage de ce groupe"))
+        XCTAssertTrue(try XCTUnwrap(sent["text"] as? String).contains("Ce groupe"))
         api.calls = []
         try await callback("fxclip:chat:-100:show", chatID: -100, chatType: "supergroup", languageCode: "en")
-        XCTAssertTrue(try XCTUnwrap(api.calls.last?.1["text"] as? String).contains("Réglage de ce groupe"))
+        XCTAssertTrue(try XCTUnwrap(api.calls.last?.1["text"] as? String).contains("Ce groupe"))
         XCTAssertEqual(store.userLanguage(8), .en)
     }
 
@@ -274,7 +274,7 @@ extension BotTests {
         try await handle(["text": "/setup", "from": fixtureUser(7, languageCode: "fr")])
         let text = try XCTUnwrap(sent["text"] as? String)
         XCTAssertTrue(text.lowercased().contains("group"))
-        XCTAssertFalse(text.contains("Réglage de ce groupe"))
+        XCTAssertFalse(text.contains("Ce groupe"))
         XCTAssertEqual(store.groupLanguage(-100), .en)
         XCTAssertTrue(store.state.groupLanguages.isEmpty)
     }
@@ -293,7 +293,7 @@ extension BotTests {
     func testGroupLanguageChangesRequireCurrentAdminRightsAndMatchingGroup() async throws {
         try await callback("fxclip:chat:-100:lang_fr", chatID: -100, chatType: "supergroup", languageCode: "en")
         XCTAssertEqual(store.groupLanguage(-100), .fr)
-        XCTAssertTrue(try XCTUnwrap(api.calls.last?.1["text"] as? String).contains("Réglage de ce groupe"))
+        XCTAssertTrue(try XCTUnwrap(api.calls.last?.1["text"] as? String).contains("Ce groupe"))
         XCTAssertEqual(api.calls.first?.0, "getChatMember")
         XCTAssertEqual(try StateStore(directory: directory).groupLanguage(-100), .fr)
         api.admin = false; api.calls = []
