@@ -63,6 +63,7 @@ import FxTelegram
         var failures = 0
         while !Task.isCancelled {
             try store.resetIdleEpoch()
+            try store.pruneReplyControls()
             let updates: [Update]
             do {
                 updates = try decode([Update].self, from: await api.call("getUpdates", [

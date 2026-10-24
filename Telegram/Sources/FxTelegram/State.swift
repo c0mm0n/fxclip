@@ -1,6 +1,12 @@
 import Foundation
 import FxEngine
 
+public struct ReplyControl: Codable, Equatable {
+    public let posterID: Int64
+    public let createdAt: TimeInterval
+    public static let lifetime: TimeInterval = 48 * 60 * 60
+}
+
 /// No message bodies or links are persisted. Reserve an update before side effects:
 /// an interrupted/ambiguous send must never lead to deleting the original on retry.
 public struct BotState: Codable {
@@ -18,12 +24,14 @@ public struct BotState: Codable {
     public var personalLinkSettings: [String: UserSettings] = [:]
     public var defaultYouTubeCards = true
     public var personalYouTubeCards: [String: Bool] = [:]
+    public var replyControls: [String: ReplyControl] = [:]
     public init() {}
 
     enum CodingKeys: String, CodingKey {
         case offset, chats, users, defaultMode, lastUpdateAt, knownGroups, groupEnabled
         case userLanguages, detectedLanguages, groupLanguages
         case defaultLinkSettings, personalLinkSettings, defaultYouTubeCards, personalYouTubeCards
+        case replyControls
     }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -41,6 +49,7 @@ public struct BotState: Codable {
         personalLinkSettings = try values.decodeIfPresent([String: UserSettings].self, forKey: .personalLinkSettings) ?? [:]
         defaultYouTubeCards = try values.decodeIfPresent(Bool.self, forKey: .defaultYouTubeCards) ?? true
         personalYouTubeCards = try values.decodeIfPresent([String: Bool].self, forKey: .personalYouTubeCards) ?? [:]
+        replyControls = try values.decodeIfPresent([String: ReplyControl].self, forKey: .replyControls) ?? [:]
     }
 }
 
@@ -96,6 +105,30 @@ public final class StateStore {
         var next = state
         next.personalLinkSettings[String(userID)] = settings
         next.personalYouTubeCards[String(userID)] = youTubeCards
+        try save(next)
+    }
+    public func recordReplyControl(chatID: Int64, messageID: Int64, posterID: Int64, now: TimeInterval) throws {
+        var next = state
+        next.replyControls = state.replyControls.filter { now - $0.value.createdAt < ReplyControl.lifetime }
+        if next.replyControls.count >= 4096,
+           let oldest = next.replyControls.min(by: { $0.value.createdAt < $1.value.createdAt })?.key {
+            next.replyControls.removeValue(forKey: oldest)
+        }
+        next.replyControls["\(chatID):\(messageID)"] = ReplyControl(posterID: posterID, createdAt: now)
+        try save(next)
+    }
+    public func removeReplyControl(chatID: Int64, messageID: Int64) throws {
+        let key = "\(chatID):\(messageID)"
+        guard state.replyControls[key] != nil else { return }
+        var next = state
+        next.replyControls.removeValue(forKey: key)
+        try save(next)
+    }
+    public func pruneReplyControls(now: TimeInterval = Date().timeIntervalSince1970) throws {
+        let retained = state.replyControls.filter { now - $0.value.createdAt < ReplyControl.lifetime }
+        guard retained != state.replyControls else { return }
+        var next = state
+        next.replyControls = retained
         try save(next)
     }
     public func discover(_ chat: Chat, member: ChatMember? = nil) throws {

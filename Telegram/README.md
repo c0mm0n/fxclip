@@ -54,6 +54,18 @@ previews are enabled. A clean YouTube link is never deleted just to add a card.
 Metadata failures fall back to normal cleaning. Photo rejection can fall back to
 cleaned text; an ambiguous send is never retried.
 
+Bot replies include **Remove preview**. Anyone can see the button, but only the
+person who posted the original link can use it; admins and the bot owner have no
+override. It removes only the bot's reply. YouTube cards keep their opening
+button as well. Replacement posts do not offer removal because they may be the
+only remaining copy. Anonymous/channel-authored messages have no identifiable
+personal owner and do not receive this control.
+
+Removal controls keep only chat/message IDs, the poster's ID and a timestamp,
+for up to 48 hours, with a limit of 4096 recent replies. Message text and links
+are not stored. Ownership survives a restart and does not depend on the original
+message still being available.
+
 ## Link settings
 
 Open `/setup` in a group, then **Link settings**. Group admins can configure

@@ -117,7 +117,9 @@ final class BotTests: XCTestCase {
             "data": data, "message": ["message_id": 42, "date": 1000,
                 "chat": ["id": chatID, "type": chatType],
                 "from": ["id": 99, "first_name": "fxclip", "is_bot": true], "text": (messageText as Any?) ?? NSNull(),
-                "reply_markup": (messageMarkup as Any?) ?? NSNull()],
+                "reply_markup": messageMarkup ?? ["inline_keyboard": [[[
+                    "text": "Fixture button", "callback_data": data,
+                ]]]]],
         ]])
         try await bot.handle(update, now: 1100)
     }

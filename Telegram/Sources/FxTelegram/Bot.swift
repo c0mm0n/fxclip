@@ -39,7 +39,7 @@ public final class Bot {
             try store.discover(message.chat)
         }
         if let callback = update.callback_query {
-            try await settingsCallback(callback)
+            try await settingsCallback(callback, now: now)
             return
         }
         if let message = update.business_message ?? update.edited_business_message {
@@ -183,6 +183,7 @@ public final class Bot {
             // Telegram's reply header already identifies the original sender.
             rendered = replyContent
         }
+        let removalPoster = !replace && message.sender_chat == nil && message.from?.is_bot == false ? message.from?.id : nil
         if let videoID, let youTubeMetadata {
             // Fetching metadata is safe to fall back from; a timed-out send is not.
             let metadata = try? await youTubeMetadata.fetch(videoID: videoID)
@@ -211,6 +212,7 @@ public final class Bot {
                     photo["reply_markup"] = ["inline_keyboard": [[[
                         "text": language.text("▶ Open YouTube", "▶ Ouvrir YouTube"), "url": cleanURL,
                     ]]]]
+                    if removalPoster != nil { addRemovalButton(to: &photo, language: language) }
                     if replace {
                         if let parent = message.reply_to_message {
                             photo["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
@@ -220,8 +222,11 @@ public final class Bot {
                     }
                     do {
                         let sent = try await api.call("sendPhoto", photo)
-                        guard let sent = sent as? [String: Any], confirmedMessageID(sent["message_id"]) != nil else {
+                        guard let sent = sent as? [String: Any], let sentID = confirmedMessageID(sent["message_id"]) else {
                             throw BotError.invalidResponse
+                        }
+                        if let removalPoster {
+                            try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster, now: TimeInterval(now))
                         }
                         if replace { await deleteReplacedOriginal(message) }
                         return
@@ -238,6 +243,7 @@ public final class Bot {
         parameters["entities"] = try jsonObject(rendered.entities)
         parameters["link_preview_options"] = ["is_disabled": false, "url": rendered.previewURL]
         parameters["disable_notification"] = true
+        if removalPoster != nil { addRemovalButton(to: &parameters, language: language) }
         if replace {
             if let parent = message.reply_to_message {
                 parameters["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
@@ -247,10 +253,46 @@ public final class Bot {
         }
         // No delete until Telegram confirms an actual new message ID. Never retry an ambiguous send.
         let sent = try await api.call("sendMessage", parameters)
-        guard let sent = sent as? [String: Any], confirmedMessageID(sent["message_id"]) != nil else {
+        guard let sent = sent as? [String: Any], let sentID = confirmedMessageID(sent["message_id"]) else {
             throw BotError.invalidResponse
         }
+        if let removalPoster {
+            try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster, now: TimeInterval(now))
+        }
         if replace { await deleteReplacedOriginal(message) }
+    }
+
+    private func addRemovalButton(to parameters: inout [String: Any], language: BotLanguage) {
+        var markup = parameters["reply_markup"] as? [String: Any] ?? [:]
+        var rows = markup["inline_keyboard"] as? [[[String: String]]] ?? []
+        rows.append([["text": language.text("🗑 Remove preview", "🗑 Retirer l’aperçu"),
+                      "callback_data": "fxclip:preview:delete"]])
+        markup["inline_keyboard"] = rows
+        parameters["reply_markup"] = markup
+    }
+
+    private func removePreview(_ callback: CallbackQuery, now: TimeInterval) async {
+        let language = store.userLanguage(callback.from.id)
+        guard callback.data == "fxclip:preview:delete", callback.from.is_bot != true,
+              let message = callback.message, message.from?.id == botID,
+              let control = store.state.replyControls["\(message.chat.id):\(message.message_id)"],
+              now >= control.createdAt, now - control.createdAt < ReplyControl.lifetime else {
+            await answer(callback, language.text("This preview can no longer be removed with this button.", "Cet aperçu ne peut plus être retiré avec ce bouton."), alert: true)
+            return
+        }
+        guard callback.from.id == control.posterID else {
+            await answer(callback, language.text("Only the person who posted the original link can remove this preview.", "Seule la personne qui a publié le lien d’origine peut retirer cet aperçu."), alert: true)
+            return
+        }
+        do {
+            let deleted = try await api.call("deleteMessage", ["chat_id": message.chat.id, "message_id": message.message_id])
+            guard deleted as? Bool == true else { throw BotError.invalidResponse }
+            do { try store.removeReplyControl(chatID: message.chat.id, messageID: message.message_id) }
+            catch { print("Preview removed; control cleanup will finish later.") }
+            await answer(callback, nil)
+        } catch {
+            await answer(callback, language.text("Could not remove the preview. Please try again.", "Impossible de retirer l’aperçu. Réessayez."), alert: true)
+        }
     }
 
     private func deleteReplacedOriginal(_ message: Message) async {
@@ -376,9 +418,21 @@ public final class Bot {
         _ = try await api.call("sendMessage", parameters)
     }
 
-    private func settingsCallback(_ callback: CallbackQuery) async throws {
+    private func settingsCallback(_ callback: CallbackQuery, now: Int) async throws {
         let language = store.userLanguage(callback.from.id)
+        // Callback data is client-controlled. Bind every action to a button that
+        // Telegram confirms is attached to this exact bot message, before routing.
+        guard let message = callback.message, message.from?.id == botID,
+              let data = callback.data,
+              message.reply_markup?.inline_keyboard.joined().contains(where: { $0.callback_data == data }) == true else {
+            await answer(callback, language.text("This button is no longer available. Open settings again.", "Ce bouton n’est plus disponible. Ouvrez de nouveau les réglages."), alert: true)
+            return
+        }
         let parts = (callback.data ?? "").split(separator: ":").map(String.init)
+        if parts.prefix(2) == ["fxclip", "preview"] {
+            await removePreview(callback, now: TimeInterval(now))
+            return
+        }
         if parts.count >= 2, parts[0] == "fxclip", parts[1] == "rules" {
             try await rulesCallback(callback, parts: parts)
             return
