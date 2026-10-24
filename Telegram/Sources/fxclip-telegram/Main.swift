@@ -64,11 +64,11 @@ import FxTelegram
         var failures = 0
         while !Task.isCancelled {
             try store.resetIdleEpoch()
-            try store.pruneReplyControls()
+            try await bot.expireReplyControls()
             let updates: [Update]
             do {
                 updates = try decode([Update].self, from: await api.call("getUpdates", [
-                    "offset": store.state.offset, "timeout": 30,
+                    "offset": store.state.offset, "timeout": store.replyControlPollingTimeout(now: Date().timeIntervalSince1970),
                     "allowed_updates": ["message", "edited_message", "callback_query", "my_chat_member", "business_message", "edited_business_message"],
                 ]))
                 failures = 0
@@ -84,6 +84,7 @@ import FxTelegram
             for update in coalesced(updates) {
                 // A state write failure is fatal, before any Telegram side effect.
                 guard try store.reserve(update.update_id) else { continue }
+                try await bot.expireReplyControls()
                 do { try await bot.handle(update) }
                 catch { print("Update skipped after an error; original message retained.") }
             }

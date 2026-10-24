@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 import FxEngine
 
 public final class Bot {
@@ -11,6 +12,7 @@ public final class Bot {
     private let username: String
     private let youTubeMetadata: YouTubeMetadataProviding?
     private let facebookReels: FacebookReelProviding?
+    private var cleanupRetryAfter: [String: TimeInterval] = [:]
     public init(api: BotAPI, store: StateStore, engine: Engine,
                 allowedChats: Set<Int64>, allowedOwners: Set<Int64> = [], botID: Int64, username: String,
                 youTubeMetadata: YouTubeMetadataProviding? = nil,
@@ -22,7 +24,8 @@ public final class Bot {
         self.facebookReels = facebookReels
     }
 
-    public func handle(_ update: Update, now: Int = Int(Date().timeIntervalSince1970)) async throws {
+    public func handle(_ update: Update, now fixedNow: Int? = nil) async throws {
+        let now = fixedNow ?? Int(Date().timeIntervalSince1970)
         try store.observeLanguage(update.callback_query?.from ?? update.message?.from ?? update.edited_message?.from
                                   ?? update.business_message?.from ?? update.edited_business_message?.from)
         if let membership = update.my_chat_member {
@@ -42,7 +45,7 @@ public final class Bot {
             try store.discover(message.chat)
         }
         if let callback = update.callback_query {
-            try await settingsCallback(callback, now: now)
+            try await settingsCallback(callback, now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
             return
         }
         if let message = update.business_message ?? update.edited_business_message {
@@ -193,7 +196,8 @@ public final class Bot {
             // Telegram's reply header already identifies the original sender.
             rendered = replyContent
         }
-        let removalPoster = !replace && message.sender_chat == nil && message.from?.is_bot == false ? message.from?.id : nil
+        let removalPoster = !replace && message.sender_chat == nil && message.from?.is_bot == false
+            && store.state.replyControls.count < 4096 ? message.from?.id : nil
         if let reelID, let facebookReels, let reel = try? await facebookReels.fetch(reelID: reelID) {
             let cleanURL = configured.engine.clean(message.text ?? "").text.trimmingCharacters(in: .whitespacesAndNewlines)
             let cleanText = rendered?.text ?? cleanURL
@@ -232,7 +236,9 @@ public final class Bot {
                         throw BotError.invalidResponse
                     }
                     if let removalPoster {
-                        try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster, now: TimeInterval(now))
+                        try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
+                                                     now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970,
+                                                     openButton: openingButton(in: video))
                     }
                     if replace { await deleteReplacedOriginal(message) }
                     return
@@ -283,7 +289,9 @@ public final class Bot {
                             throw BotError.invalidResponse
                         }
                         if let removalPoster {
-                            try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster, now: TimeInterval(now))
+                            try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
+                                                         now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970,
+                                                         openButton: openingButton(in: photo))
                         }
                         if replace { await deleteReplacedOriginal(message) }
                         return
@@ -314,7 +322,8 @@ public final class Bot {
             throw BotError.invalidResponse
         }
         if let removalPoster {
-            try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster, now: TimeInterval(now))
+            try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
+                                         now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
         }
         if replace { await deleteReplacedOriginal(message) }
     }
@@ -326,6 +335,56 @@ public final class Bot {
                       "callback_data": "fxclip:preview:delete"]])
         markup["inline_keyboard"] = rows
         parameters["reply_markup"] = markup
+    }
+
+    private func openingButton(in parameters: [String: Any]) -> InlineKeyboardButton? {
+        guard let raw = parameters["reply_markup"],
+              let markup = try? decode(InlineKeyboardMarkup.self, from: raw) else { return nil }
+        return markup.inline_keyboard.joined().first { $0.url != nil && $0.callback_data == nil }
+    }
+
+    /// Runs in the polling loop, not an unsynchronized background task. Only the
+    /// keyboard changes; original messages, media and captions are never touched.
+    public func expireReplyControls(now fixedNow: TimeInterval? = nil) async throws {
+        let now = fixedNow ?? Date().timeIntervalSince1970
+        try store.pruneReplyControls(now: now)
+        cleanupRetryAfter = cleanupRetryAfter.filter { store.state.replyControls[$0.key] != nil }
+        let pending = store.state.replyControls.filter {
+            now >= $0.value.createdAt + ReplyControl.lifetime && now >= (cleanupRetryAfter[$0.key] ?? 0)
+        }.sorted { $0.value.createdAt == $1.value.createdAt ? $0.key < $1.key : $0.value.createdAt < $1.value.createdAt }
+        for (key, control) in pending.prefix(20) {
+            let ids = key.split(separator: ":", omittingEmptySubsequences: false)
+            guard ids.count == 2, let chatID = Int64(ids[0]), chatID != 0,
+                  let messageID = Int64(ids[1]), messageID > 0, key == "\(chatID):\(messageID)" else {
+                try store.removeReplyControl(key: key)
+                continue
+            }
+            var rows: [[[String: String]]] = []
+            if let button = control.openButton, let url = button.url,
+               let parts = URLComponents(string: url), let scheme = parts.scheme?.lowercased(),
+               ["http", "https"].contains(scheme), parts.host != nil, parts.user == nil, parts.password == nil {
+                rows = [[["text": button.text, "url": url]]]
+            }
+            let completed: Bool
+            do {
+                let result = try await api.call("editMessageReplyMarkup", ["chat_id": chatID, "message_id": messageID,
+                    "reply_markup": ["inline_keyboard": rows]])
+                let confirmed = (result as? [String: Any]).flatMap { confirmedMessageID($0["message_id"]) } == messageID
+                let boolean = (result as? NSNumber).map { CFGetTypeID($0) == CFBooleanGetTypeID() && $0.boolValue } ?? false
+                guard confirmed || boolean else { throw BotError.invalidResponse }
+                completed = true
+            } catch BotError.telegram(let code) where code == 400 || code == 403 {
+                // Already edited, deleted or no longer accessible: no destructive fallback.
+                completed = true
+            } catch {
+                cleanupRetryAfter[key] = (fixedNow ?? Date().timeIntervalSince1970) + 30
+                break // A network outage must not stall every queued message in turn.
+            }
+            if completed {
+                try store.removeReplyControl(chatID: chatID, messageID: messageID)
+                cleanupRetryAfter.removeValue(forKey: key)
+            }
+        }
     }
 
     private func removePreview(_ callback: CallbackQuery, now: TimeInterval) async {
@@ -492,7 +551,7 @@ public final class Bot {
         }
     }
 
-    private func settingsCallback(_ callback: CallbackQuery, now: Int) async throws {
+    private func settingsCallback(_ callback: CallbackQuery, now: TimeInterval) async throws {
         let language = store.userLanguage(callback.from.id)
         // Callback data is client-controlled. Bind every action to a button that
         // Telegram confirms is attached to this exact bot message, before routing.

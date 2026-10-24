@@ -82,7 +82,7 @@ public struct LinkPreviewOptions: Decodable {
 public struct InlineKeyboardMarkup: Decodable, Equatable {
     public let inline_keyboard: [[InlineKeyboardButton]]
 }
-public struct InlineKeyboardButton: Decodable, Equatable {
+public struct InlineKeyboardButton: Codable, Equatable {
     public let text: String
     public var callback_data: String?
     public var url: String?

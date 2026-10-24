@@ -81,7 +81,7 @@ iOS is **source only**, with no App Store release or signed download: follow the
 
 **Native apps clean locally.** Links are not sent to a cleaning service, and there is no account or analytics. Settings and counters stay on the device; Android's optional history is local too. Preview mirrors are third-party services: native apps only rewrite the URL, but sharing or opening it can send the link to the mirror.
 
-**The Telegram bot communicates with Telegram.** Cleaning runs on your server, but the bot receives messages and sends cleaned results through Telegram; preview generation can also involve mirror services. Message text and URLs are never persisted or logged by the bot. See [privacy and limits](Telegram/README.md#privacy-and-limits) before enabling it in a group.
+**The Telegram bot communicates with Telegram.** Cleaning runs on your server, but the bot receives messages and sends cleaned results through Telegram; preview generation can also involve mirror services. Message bodies and media are never persisted or logged. Source opening-button URLs stay locally only while removal-button cleanup is pending, for at most 48 hours. See [privacy and limits](Telegram/README.md#privacy-and-limits) before enabling it in a group.
 
 **Updates are your choice.** macOS, Windows, Linux's desktop interface and Android can check GitHub on request. Automatic checks are off by default and run at most daily when enabled; Linux checks require its interface to be open, and Android checks when its settings app opens. Downloads and installation require confirmation. If an older installation has no updater, install the latest download manually once. Update requests never include copied links. iOS builds and Telegram container updates are managed manually.
 

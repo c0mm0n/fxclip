@@ -8,6 +8,8 @@ final class FakeAPI: BotAPI {
     var failSend = false
     var failDelete = false
     var failEdit = false
+    var failMarkup = false
+    var markupResult: Any?
     var photoError: Error?
     var videoError: Error?
     var admin = true
@@ -49,6 +51,9 @@ final class FakeAPI: BotAPI {
         case "editMessageText":
             if failEdit { throw BotError.telegram(403) }
             return true
+        case "editMessageReplyMarkup":
+            if failMarkup { throw BotError.telegram(500) }
+            return markupResult ?? true
         case "getChatMember":
             if failMember { throw BotError.telegram(403) }
             if let memberResult { return memberResult }

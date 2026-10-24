@@ -76,16 +76,22 @@ cleaned text; an ambiguous send is never retried.
 
 Bot replies include **Remove preview**. Anyone can see the button, but only the
 person who posted the original link can use it; admins and the bot owner have no
-override. It removes only the bot's reply. YouTube cards keep their opening
+override. It removes only the bot's reply. The removal button expires after five
+minutes and is removed automatically; the preview stays. YouTube cards keep their opening
 button as well. Facebook video replies also offer removal; deleting the reply
 does not remove the original Facebook post. Replacement posts do not offer removal because they may be the
 only remaining copy. Anonymous/channel-authored messages have no identifiable
 personal owner and do not receive this control.
 
-Removal controls keep only chat/message IDs, the poster's ID and a timestamp,
-for up to 48 hours, with a limit of 4096 recent replies. Message text and links
-are not stored. Ownership survives a restart and does not depend on the original
-message still being available.
+Pending cleanup keeps chat/message IDs, the poster's ID and a timestamp. For
+native cards/videos it also temporarily keeps the source Open button's label and
+URL, so that button can stay after removal expires, including across a restart.
+The record is deleted after successful cleanup; failed cleanup can retry for up
+to 48 hours, with a limit of 4096 pending replies. No message text or media is
+stored. A full queue skips offering removal on new replies. Replies sent before
+this upgrade have no saved opening button; their old keyboard is cleared, while
+links in their captions remain usable. Cleanup resumes when the bot reconnects;
+the removal action itself is always refused after five minutes.
 
 ## Link settings
 
@@ -202,8 +208,10 @@ in the group, or your numeric user ID in private for `TELEGRAM_OWNER_IDS`.
 
 Startup registers English/French native descriptions and command menus. The
 persistent volume retains modes, language preferences, discovered group IDs and
-titles, and the polling checkpoint. Back up that volume. Message text and URLs
-are never persisted or logged. Automatic container updates are disabled in the supplied
+titles, and the polling checkpoint. Back up that volume. Message bodies and media
+are never persisted or logged. Pending removal-button cleanup temporarily retains
+source opening-button URLs until cleanup succeeds, for at most 48 hours.
+Automatic container updates are disabled in the supplied
 configuration: install new images explicitly.
 
 ## Real-world verification
@@ -227,7 +235,9 @@ Telegram receives reposted messages; mirrors can receive links when previews are
 generated. The engine does not expand or visit links. No additional analytics or
 external account is used. Native YouTube cards request video metadata from
 YouTube's oEmbed endpoint and let Telegram fetch the YouTube thumbnail; they use
-no preview mirror and do not persist metadata. Opting into Facebook reels sends
+no preview mirror. Fetched titles, thumbnails and videos are not persisted;
+source opening-button URLs are retained only while removal-button cleanup is
+pending, for at most 48 hours. Opting into Facebook reels sends
 the reel link to Facebed, requests the public Facebook video from the bot server,
 and uploads a video copy to Telegram. Temporary video files are removed after
 each attempt; no Facebook login or private access is available. Locale detection uses Telegram's supplied language tag,

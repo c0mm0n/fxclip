@@ -4,10 +4,20 @@ import FxEngine
 public struct ReplyControl: Codable, Equatable {
     public let posterID: Int64
     public let createdAt: TimeInterval
-    public static let lifetime: TimeInterval = 48 * 60 * 60
+    public let openButton: InlineKeyboardButton?
+    public static let lifetime: TimeInterval = 5 * 60
+    public static let retention: TimeInterval = 48 * 60 * 60
+
+    public init(posterID: Int64, createdAt: TimeInterval, openButton: InlineKeyboardButton? = nil) {
+        self.posterID = posterID
+        self.createdAt = createdAt
+        self.openButton = openButton
+    }
 }
 
-/// No message bodies or links are persisted. Reserve an update before side effects:
+/// Message bodies and media are never persisted. Only a known source Open URL
+/// button's label and URL are retained while its keyboard cleanup is pending.
+/// Reserve an update before side effects:
 /// an interrupted/ambiguous send must never lead to deleting the original on retry.
 public struct BotState: Codable {
     public var offset: Int64 = 0
@@ -123,29 +133,46 @@ public final class StateStore {
         next.personalFacebookReels[String(userID)] = enabled
         try save(next)
     }
-    public func recordReplyControl(chatID: Int64, messageID: Int64, posterID: Int64, now: TimeInterval) throws {
+    public func recordReplyControl(chatID: Int64, messageID: Int64, posterID: Int64, now: TimeInterval,
+                                   openButton: InlineKeyboardButton? = nil) throws {
         var next = state
-        next.replyControls = state.replyControls.filter { now - $0.value.createdAt < ReplyControl.lifetime }
+        next.replyControls = state.replyControls.filter { now - $0.value.createdAt < ReplyControl.retention }
         if next.replyControls.count >= 4096,
            let oldest = next.replyControls.min(by: { $0.value.createdAt < $1.value.createdAt })?.key {
             next.replyControls.removeValue(forKey: oldest)
         }
-        next.replyControls["\(chatID):\(messageID)"] = ReplyControl(posterID: posterID, createdAt: now)
+        next.replyControls["\(chatID):\(messageID)"] = ReplyControl(posterID: posterID, createdAt: now,
+                                                                 openButton: openButton)
         try save(next)
     }
     public func removeReplyControl(chatID: Int64, messageID: Int64) throws {
-        let key = "\(chatID):\(messageID)"
+        try removeReplyControl(key: "\(chatID):\(messageID)")
+    }
+    func removeReplyControl(key: String) throws {
         guard state.replyControls[key] != nil else { return }
         var next = state
         next.replyControls.removeValue(forKey: key)
         try save(next)
     }
     public func pruneReplyControls(now: TimeInterval = Date().timeIntervalSince1970) throws {
-        let retained = state.replyControls.filter { now - $0.value.createdAt < ReplyControl.lifetime }
+        let retained = state.replyControls.filter { now - $0.value.createdAt < ReplyControl.retention }
         guard retained != state.replyControls else { return }
         var next = state
         next.replyControls = retained
         try save(next)
+    }
+    /// Wake polling for the next authorization deadline. Expired entries are
+    /// retried by maintenance and must not force polling to spin every second.
+    public func replyControlPollingTimeout(now: TimeInterval, max: Int = 30) -> Int {
+        let limit = Swift.max(1, max)
+        let nextDeadline = state.replyControls.values.lazy
+            .map { $0.createdAt + ReplyControl.lifetime }
+            .filter { $0 > now }
+            .min()
+        guard let nextDeadline else { return limit }
+        let remaining = ceil(nextDeadline - now)
+        guard remaining < Double(limit) else { return limit }
+        return Swift.max(1, Int(remaining))
     }
     public func discover(_ chat: Chat, member: ChatMember? = nil) throws {
         guard chat.isGroup else { return }
