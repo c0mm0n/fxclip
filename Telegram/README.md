@@ -51,23 +51,41 @@ enhanced previews off disables these cards. Explicitly suppressed previews,
 formatted or hidden links, captions and messages containing more than one link
 keep their existing behavior. Secretary only edits links; it does not post cards.
 
-**Facebook reels** is a separate Telegram-only option under **Link settings →
-Previews and providers**, **off by default**, including after an upgrade. Turning
-on group cleaning or enhanced previews does not turn it on. When explicitly
-enabled, a message containing only one plain public Facebook `/reel/id` link can
-receive a native video reply, even if the link is already clean. The bot requests
-metadata through the public Facebed service, downloads the public Facebook video
-to the bot server, then uploads a copy to Telegram. No Facebook account, private
-content access or additional self-hosted service is used. Videos are limited to
-20 MiB; temporary downloads are removed after the attempt. Facebook share links,
-watch pages, private content, captions, hidden/formatted links and messages with
-several links are not supported by this video path. Secretary does not send videos.
-Pausing enhanced previews pauses Facebook videos too. Telegram may also show its
-own preview, so duplicates are possible.
+**Facebook videos** (**Vidéos Facebook**) is a separate Telegram-only option under
+**Link settings → Previews and providers**, **off by default**, including after an
+upgrade. Turning on group cleaning or enhanced previews does not turn it on.
+When explicitly enabled, a message containing only one plain public Facebook or
+Facebed link can receive a native video reply, even if the link is already clean.
+Following Facebed's URL-forwarding format, the bot replaces the host with fixed
+`https://facebed.com`, preserving the engine-cleaned path and meaningful query
+parameters. Facebed decides how to resolve reel, share (including `/share/r/token`),
+post, watch and group routes; a supported URL format does not guarantee a video.
+Only metadata containing a validated `og:video` can produce a native video reply.
+Image/text-only posts are not converted by this option.
+
+Accepted source hosts are exactly `facebook.com`, `www.facebook.com`,
+`m.facebook.com`, `facebed.com` and `www.facebed.com`. The Facebed host is fixed,
+not an editable mirror provider. Diagnostic/service routes (including `/dump`
+and `/healthz`), unsafe paths, credentials and unrelated/lookalike hosts are
+rejected. The bot requests metadata from Facebed, downloads validated public
+Facebook video from an HTTPS `*.fbcdn.net` MP4 URL to the bot server, then uploads
+a copy to Telegram. No Facebook account, private content access or additional
+self-hosted service is used. Tracker removal stays entirely in the shared engine
+and `Shared/rules.json`; this option adds no shared mirror rule or separate
+tracking-parameter list.
+
+Videos are limited to 20 MiB; temporary downloads are discarded after the attempt.
+For a larger video, the bot replies with its title and **Open Facebook**
+(**Ouvrir Facebook**) instead, keeping the original even in Replace mode. This
+reply has the same five-minute **Remove preview** control; its opening button
+stays after expiry. Captions, hidden/formatted links and messages with several
+links are not eligible for this video path. Secretary does not send videos.
+Pausing enhanced previews pauses Facebook videos too. Telegram may also show
+its own preview, so duplicates are possible.
 
 Other links already prepared by a fxclip client produce no reply, repost,
 deletion or edit. A tracker-free original can still become a mirror link when
-previews are enabled. Enabled Facebook reel videos are another exception for
+previews are enabled. Enabled Facebook videos are another exception for
 already-clean links. A clean YouTube or Facebook link is never deleted just to add
 a card or video. Unsupported links and metadata, download or upload failures
 preserve the original; normal link cleaning can still apply.
@@ -97,7 +115,7 @@ the removal action itself is always refused after five minutes.
 
 Open `/setup` in a group, then **Link settings**. Group admins can configure
 global tracker removal, individual sites, cleaning exclusions, each preview
-mirror and its provider, and the separate YouTube card and Facebook reel options. The existing
+mirror and its provider, and the separate YouTube card and Facebook video options. The existing
 group activation and preview pause switches still apply.
 
 Members get the same link controls in private `/settings`. Without a personal
@@ -130,7 +148,7 @@ The bot stores the same `FxEngine.UserSettings` used by the apps. `targetHost`
 overrides a built-in mirror domain; `previewDefaultsEnabled` preserves the
 default choice for newly added mirrors, including old installations that
 declined all previews. Rule lists come from `Shared/rules.json`. Message mode,
-chat activation, YouTube photo cards and Facebook reel videos are Telegram-specific;
+chat activation, YouTube photo cards and Facebook videos are Telegram-specific;
 they do not add fields or rules to shared `UserSettings`.
 
 ## English and French
@@ -237,13 +255,15 @@ external account is used. Native YouTube cards request video metadata from
 YouTube's oEmbed endpoint and let Telegram fetch the YouTube thumbnail; they use
 no preview mirror. Fetched titles, thumbnails and videos are not persisted;
 source opening-button URLs are retained only while removal-button cleanup is
-pending, for at most 48 hours. Opting into Facebook reels sends
-the reel link to Facebed, requests the public Facebook video from the bot server,
-and uploads a video copy to Telegram. Temporary video files are removed after
-each attempt; no Facebook login or private access is available. Locale detection uses Telegram's supplied language tag,
+pending, for at most 48 hours. Opting into Facebook videos sends
+the cleaned public Facebook or Facebed link to Facebed for resolution. Only when
+it returns validated video metadata does the bot request the public Facebook
+video and upload a copy to Telegram (up to 20 MiB). Larger videos receive a title
+and opening-button reply while the original stays intact. Temporary video data
+is discarded after each attempt; no Facebook login or private access is available. Locale detection uses Telegram's supplied language tag,
 never message-text analysis or an external translation service.
 
-Unchanged links stay untouched except for enabled YouTube cards or Facebook reels. Protected, paid,
+Unchanged links stay untouched except for enabled YouTube cards or Facebook videos. Protected, paid,
 overlong or older-than-five-minute messages are ignored. Copies queued during
 downtime are not rewritten on restart. Code blocks
 are left alone. Hidden links and formatting use adjusted UTF-16 entity positions.

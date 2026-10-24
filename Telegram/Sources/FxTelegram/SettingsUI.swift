@@ -59,8 +59,10 @@ struct SettingsUI {
             "<b>Secretary: private chats only</b>\nThis mode requires connecting this bot in Telegram's automation settings, with reply and edit permissions. It never edits incoming messages.",
             "<b>Secrétaire : privé uniquement</b>\nCe mode nécessite une connexion à ce bot dans les réglages d’automatisation de Telegram, avec les droits de réponse et de modification. Il ne modifie jamais les messages reçus.")
         text += "\n\n" + language.text(
-            "Links pass through Telegram and, for some previews, through mirror sites. With enhanced previews on, a plain YouTube link can receive a thumbnail and title fetched from YouTube, even when the link is already clean. Telegram does not report whether its own preview worked. Facebook reels are off by default: if enabled separately in Link settings, metadata is fetched via Facebed and the public Facebook video is downloaded to the bot server, then uploaded to Telegram. No private Facebook access.\n\nChoose below 👇",
-            "Les liens passent par Telegram et, pour certains aperçus, par des sites miroirs. Avec les aperçus améliorés, un lien YouTube seul peut recevoir une miniature et un titre récupérés sur YouTube, même s’il est déjà propre. Telegram n’indique pas si son propre aperçu a fonctionné. Les reels Facebook sont désactivés par défaut : si l’option est activée séparément dans les réglages des liens, les métadonnées passent par Facebed et la vidéo publique Facebook est téléchargée sur le serveur du bot, puis envoyée à Telegram. Aucun accès Facebook privé.\n\nChoisissez ci-dessous 👇")
+            "Links pass through Telegram and, for some previews, through mirror sites. With enhanced previews on, a plain YouTube link can receive a thumbnail and title fetched from YouTube, even when the link is already clean. Telegram does not report whether its own preview worked.",
+            "Les liens passent par Telegram et, pour certains aperçus, par des sites miroirs. Avec les aperçus améliorés, un lien YouTube seul peut recevoir une miniature et un titre récupérés sur YouTube, même s’il est déjà propre. Telegram n’indique pas si son propre aperçu a fonctionné.")
+        text += "\n\n" + facebookDisclosure(language: language)
+        text += "\n\n" + language.text("Choose below 👇", "Choisissez ci-dessous 👇")
         text += "\n\n" + removalDisclosure(language: language)
         var rows = modeRows(selected: mode, scope: "personal", language: language)
         rows.append([button("\(mode == nil ? "✓ " : "")\(language.text("Follow the group's setting", "Suivre le réglage du groupe"))", "personal:default")])
@@ -215,8 +217,8 @@ struct SettingsUI {
         }
         if groupID != nil && !previewsEnabled {
             text += "\n\n" + language.text(
-                "⏸ Enhanced previews are paused for this group, including YouTube cards and Facebook reel videos. Enable them in the group settings to apply the choices below.",
-                "⏸ Les aperçus améliorés sont en pause pour ce groupe, y compris les fiches YouTube et les vidéos de reels Facebook. Activez-les dans les réglages du groupe pour appliquer les choix ci-dessous.")
+                "⏸ Enhanced previews are paused for this group, including YouTube cards and Facebook videos. Enable them in the group settings to apply the choices below.",
+                "⏸ Les aperçus améliorés sont en pause pour ce groupe, y compris les fiches YouTube et les vidéos Facebook. Activez-les dans les réglages du groupe pour appliquer les choix ci-dessous.")
         }
 
         switch section {
@@ -244,9 +246,9 @@ struct SettingsUI {
                 "<b>Fiches YouTube</b> · \(state(youTubeCards))\nOption propre au bot : récupère le titre et la miniature directement sur YouTube, même pour un lien seul déjà propre. Un doublon est possible si Telegram affiche aussi son aperçu.")
             toggle(language.text("YouTube cards", "Fiches YouTube"), enabled: youTubeCards, action: "youtube")
             text += "\n\n" + language.text(
-                "<b>Facebook reels</b> · \(state(facebookReels))\nBot-only option, off by default: when enabled, fetches metadata via Facebed, downloads the public Facebook video to the bot server, then uploads a copy to Telegram. Only a single plain public /reel/id link is supported, even if already clean. A duplicate is possible if Telegram also shows its preview. Limit: 20 MiB. No access to private Facebook content.",
-                "<b>Reels Facebook</b> · \(state(facebookReels))\nOption propre au bot, désactivée par défaut : une fois activée, récupère les métadonnées via Facebed, télécharge la vidéo publique Facebook sur le serveur du bot, puis en envoie une copie à Telegram. Uniquement pour un lien public /reel/id seul et sans mise en forme, même déjà propre. Un doublon est possible si Telegram affiche aussi son aperçu. Limite : 20 Mio. Aucun accès au contenu Facebook privé.")
-            toggle(language.text("Facebook reels", "Reels Facebook"), enabled: facebookReels, action: "facebook")
+                "<b>Facebook videos</b> · \(state(facebookReels))\nBot-only option, off by default: when enabled, fetches metadata via Facebed, downloads the public Facebook video to the bot server, then uploads a copy to Telegram. Requires enhanced previews and a single plain public Facebook or Facebed link, including /reel/id and /share/r/token, even if already clean. A video is sent only when Facebed can resolve it; image/text-only posts are not converted. A duplicate is possible if Telegram also shows its preview. Limit: 20 MiB. Larger videos receive a title and Open Facebook reply; the original stays even in Replace mode. No access to private Facebook content.",
+                "<b>Vidéos Facebook</b> · \(state(facebookReels))\nOption propre au bot, désactivée par défaut : une fois activée, récupère les métadonnées via Facebed, télécharge la vidéo publique Facebook sur le serveur du bot, puis en envoie une copie à Telegram. Nécessite les aperçus améliorés et un lien public Facebook ou Facebed seul et sans mise en forme, dont /reel/id et /share/r/token, même déjà propre. Une vidéo est envoyée uniquement si Facebed peut la résoudre ; les publications image/texte seules ne sont pas converties. Un doublon est possible si Telegram affiche aussi son aperçu. Limite : 20 Mio. Au-delà, une réponse affiche le titre et Ouvrir Facebook ; l’original reste même en mode Remplacer. Aucun accès au contenu Facebook privé.")
+            toggle(language.text("Facebook videos", "Vidéos Facebook"), enabled: facebookReels, action: "facebook")
             text += "\n\n" + removalDisclosure(language: language)
         case "excluded":
             text += "\n\n" + language.text(
@@ -370,8 +372,8 @@ struct SettingsUI {
 
     private static func facebookDisclosure(language: BotLanguage) -> String {
         language.text(
-            "Facebook reels are off by default. If enabled separately in Link settings, metadata is fetched via Facebed and the public Facebook video is downloaded to the bot server, then uploaded to Telegram. No private Facebook access. Pausing enhanced previews also pauses reel videos.",
-            "Les reels Facebook sont désactivés par défaut. Si l’option est activée séparément dans les réglages des liens, les métadonnées passent par Facebed et la vidéo publique Facebook est téléchargée sur le serveur du bot, puis envoyée à Telegram. Aucun accès Facebook privé. Mettre les aperçus améliorés en pause suspend aussi les vidéos de reels.")
+            "Facebook videos are off by default. If enabled separately in Link settings, a single plain public Facebook or Facebed link (including /reel/id and /share/r/token) is sent to Facebed for metadata. Only videos Facebed can resolve are downloaded to the bot server and uploaded to Telegram. No private Facebook access. Pausing enhanced previews also pauses Facebook videos.",
+            "Les vidéos Facebook sont désactivées par défaut. Si l’option est activée séparément dans les réglages des liens, un lien public Facebook ou Facebed seul et sans mise en forme (dont /reel/id et /share/r/token) est envoyé à Facebed pour ses métadonnées. Seules les vidéos que Facebed peut résoudre sont téléchargées sur le serveur du bot puis envoyées à Telegram. Aucun accès Facebook privé. Mettre les aperçus améliorés en pause suspend aussi les vidéos Facebook.")
     }
 
     private static func escaped(_ value: String) -> String {

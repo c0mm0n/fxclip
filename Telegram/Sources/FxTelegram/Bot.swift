@@ -153,8 +153,8 @@ public final class Bot {
             let previews = settings.previews ? language.text("on", "activés") : language.text("off", "désactivés")
             let summary = "\(source): \(SettingsUI.title(settings.mode, language: language)).\n\n\(SettingsUI.outcome(settings.mode, language: language))\n\n"
             try await reply(summary + language.text(
-                "Improved previews: \(previews).\nWhen on, plain YouTube links can receive a title and thumbnail fetched directly from YouTube, even if already clean. Separately enabled Facebook reels use Facebed metadata and download public Facebook video to the bot server for upload to Telegram (20 MiB maximum). A duplicate is possible when Telegram's own preview works.\nA personal choice overrides this mode, including /fxclip off, while cleaning is enabled for this group. Choose yours in private.\n\nAdmins: /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off",
-                "Aperçus améliorés : \(previews).\nLorsqu’ils sont activés, les liens YouTube seuls peuvent recevoir un titre et une miniature récupérés directement sur YouTube, même s’ils sont déjà propres. Les reels Facebook activés séparément passent par Facebed pour les métadonnées ; le bot télécharge la vidéo publique sur son serveur puis en envoie une copie à Telegram (20 Mio maximum). Un doublon est possible si l’aperçu Telegram fonctionne.\nUn choix personnel passe avant ce mode, y compris /fxclip off, tant que le nettoyage est activé pour ce groupe. Choisissez le vôtre en privé.\n\nAdmins : /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off"),
+                "Improved previews: \(previews).\nWhen on, plain YouTube links can receive a title and thumbnail fetched directly from YouTube, even if already clean. Separately enabled Facebook videos use Facebed metadata and download public Facebook video to the bot server for upload to Telegram (20 MiB maximum). A duplicate is possible when Telegram's own preview works.\nA personal choice overrides this mode, including /fxclip off, while cleaning is enabled for this group. Choose yours in private.\n\nAdmins: /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off",
+                "Aperçus améliorés : \(previews).\nLorsqu’ils sont activés, les liens YouTube seuls peuvent recevoir un titre et une miniature récupérés directement sur YouTube, même s’ils sont déjà propres. Les vidéos Facebook activées séparément passent par Facebed pour les métadonnées ; le bot télécharge la vidéo publique sur son serveur puis en envoie une copie à Telegram (20 Mio maximum). Un doublon est possible si l’aperçu Telegram fonctionne.\nUn choix personnel passe avant ce mode, y compris /fxclip off, tant que le nettoyage est activé pour ce groupe. Choisissez le vôtre en privé.\n\nAdmins : /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off"),
                 to: message, markup: privateSettingsLink(language: language))
             return
         }
@@ -175,14 +175,15 @@ public final class Bot {
            (message.entities ?? []).allSatisfy({ $0.type == "url" }), isBareURL(text) {
             videoID = YouTubePreview.videoID(in: text.trimmingCharacters(in: .whitespacesAndNewlines))
         } else { videoID = nil }
-        let reelID: String?
+        let facebookSource: String?
         if settings.previews, facebookEnabled(chatID: message.chat.id, userID: senderID),
            message.link_preview_options?.is_disabled != true, facebookReels != nil,
            message.forward_origin == nil, message.sender_chat == nil,
            let text = message.text, (message.entities ?? []).allSatisfy({ $0.type == "url" }), isBareURL(text) {
-            reelID = FacebookReelPreview.reelID(in: text.trimmingCharacters(in: .whitespacesAndNewlines))
-        } else { reelID = nil }
-        guard replyContent != nil || videoID != nil || reelID != nil else { return }
+            let source = configured.engine.clean(text).text.trimmingCharacters(in: .whitespacesAndNewlines)
+            facebookSource = FacebookReelPreview.facebedURL(in: source) == nil ? nil : source
+        } else { facebookSource = nil }
+        guard replyContent != nil || videoID != nil || facebookSource != nil else { return }
         // Media, forwards and anonymous/channel-authored posts retain their originals.
         var replace = false
         if replyContent != nil && settings.mode == .replace && message.text != nil && message.sender_chat == nil && message.forward_origin == nil {
@@ -198,13 +199,21 @@ public final class Bot {
         }
         let removalPoster = !replace && message.sender_chat == nil && message.from?.is_bot == false
             && store.state.replyControls.count < 4096 ? message.from?.id : nil
-        if let reelID, let facebookReels, let reel = try? await facebookReels.fetch(reelID: reelID) {
-            let cleanURL = configured.engine.clean(message.text ?? "").text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let facebookVideo: FacebookReel?
+        if let facebookSource, let facebookReels {
+            do { facebookVideo = try await facebookReels.fetch(sourceURL: facebookSource) }
+            catch FacebookReelError.videoTooLarge(let author, let caption) {
+                try await sendFacebookSizeNotice(to: message, author: author, caption: caption,
+                                                 cleanURL: facebookSource, language: language, now: fixedNow)
+                return
+            } catch { facebookVideo = nil }
+        } else { facebookVideo = nil }
+        if let reel = facebookVideo, let cleanURL = facebookSource {
             let cleanText = rendered?.text ?? cleanURL
             let heading = "Facebook\n"
             // Keep the caption compact and reserve space for the complete cleaned source.
-            let author = String(reel.author.prefix(80))
-            let description = String(reel.caption.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ").prefix(200))
+            let author = facebookCaptionText(reel.author, limit: 160)
+            let description = facebookCaptionText(reel.caption.split(whereSeparator: { $0.isWhitespace }).joined(separator: " "), limit: 400)
             let prefix = heading + author + (description.isEmpty ? "\n\n" : "\n" + description + "\n\n")
             let caption = prefix + cleanText
             if !reel.video.isEmpty, reel.video.count <= 20 * 1024 * 1024, caption.utf16.count <= 1024 {
@@ -341,6 +350,53 @@ public final class Bot {
         guard let raw = parameters["reply_markup"],
               let markup = try? decode(InlineKeyboardMarkup.self, from: raw) else { return nil }
         return markup.inline_keyboard.joined().first { $0.url != nil && $0.callback_data == nil }
+    }
+
+    private func sendFacebookSizeNotice(to message: Message, author: String, caption: String,
+                                        cleanURL: String, language: BotLanguage, now: Int?) async throws {
+        let heading = "Facebook\n"
+        let creator = facebookCaptionText(author, limit: 160)
+        let description = facebookCaptionText(caption.split(whereSeparator: { $0.isWhitespace }).joined(separator: " "), limit: 400)
+        let notice = language.text("This video exceeds the bot’s 20 MiB limit. Open it on Facebook.",
+                                   "Cette vidéo dépasse la limite de 20 Mio du bot. Ouvrez-la sur Facebook.")
+        let prefix = heading + creator + "\n" + description + "\n\n" + notice + "\n\n"
+        let includeURL = (prefix + cleanURL).utf16.count <= 4096
+        var parameters = base(message)
+        parameters["text"] = prefix + (includeURL ? cleanURL : "")
+        var entities = [Entity(type: "text_link", offset: 0, length: 8, url: cleanURL)]
+        if !creator.isEmpty { entities.append(Entity(type: "bold", offset: heading.utf16.count, length: creator.utf16.count)) }
+        if includeURL { entities.append(Entity(type: "url", offset: prefix.utf16.count, length: cleanURL.utf16.count)) }
+        parameters["entities"] = try jsonObject(entities)
+        parameters["disable_notification"] = true
+        parameters["link_preview_options"] = ["is_disabled": true]
+        parameters["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true]
+        parameters["reply_markup"] = ["inline_keyboard": [[[
+            "text": language.text("▶ Open Facebook", "▶ Ouvrir Facebook"), "url": cleanURL,
+        ]]]]
+        let poster = message.sender_chat == nil && message.from?.is_bot == false
+            && store.state.replyControls.count < 4096 ? message.from?.id : nil
+        if poster != nil { addRemovalButton(to: &parameters, language: language) }
+        let sent = try await api.call("sendMessage", parameters)
+        guard let sent = sent as? [String: Any], let sentID = confirmedMessageID(sent["message_id"]) else {
+            throw BotError.invalidResponse
+        }
+        if let poster {
+            try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: poster,
+                                         now: now.map(TimeInterval.init) ?? Date().timeIntervalSince1970,
+                                         openButton: openingButton(in: parameters))
+        }
+    }
+
+    private func facebookCaptionText(_ text: String, limit: Int) -> String {
+        var result = ""
+        var length = 0
+        for character in text {
+            let count = String(character).utf16.count
+            guard length + count <= limit else { break }
+            result.append(character)
+            length += count
+        }
+        return result
     }
 
     /// Runs in the polling loop, not an unsynchronized background task. Only the

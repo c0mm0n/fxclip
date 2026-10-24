@@ -312,7 +312,6 @@ extension BotTests {
             "https://facebook.com/reel/", "https://facebook.com/reel/123abc",
             "https://facebook.com/reel/１２３４５６", "https://facebook.com/reel/-123456",
             "https://facebook.com/reel/%31%32%33", "https://facebook.com/reel/123456/extra",
-            "https://facebook.com/watch?v=123456", "https://facebook.com/share/r/123456",
             "https://facebook.com.evil.example/reel/123456", "https://notfacebook.com/reel/123456",
             "https://user@facebook.com/reel/123456", "https://facebook.com:8443/reel/123456",
             "ftp://facebook.com/reel/123456",

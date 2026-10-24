@@ -53,6 +53,116 @@ final class FacebookReelTests: XCTestCase {
         }
     }
 
+    private var forwardedRoutes: [String] {
+        [
+            "/creator/posts/example-post?story_fbid=123&id=456&comment_id=789",
+            "/groups/example-group/posts/123/?comment_id=456",
+            "/groups/example-group/permalink/123/?comment_id=456&reply_comment_id=789",
+            "/permalink.php?story_fbid=123&id=456&comment_id=789",
+            "/story.php?story_fbid=123&id=456",
+            "/share/r/ExampleReelToken/", "/share/v/ExampleVideoToken/?mibextid=fixture",
+            "/share/p/ExamplePostToken/", "/share/ExampleShareToken/",
+            "/reel/123/", "/watch/?v=123&list=example%2Clist",
+            "/photo.php?fbid=123&id=456&set=example&list=example%3Alist",
+            "/photo/?fbid=123&list=example+list",
+            "/creator/posts/example%20post?story_fbid=123&id=456&comment_id=789&list=a%2fb%2Fc&x=1&x=2",
+            "/future-content-format/example?key=value",
+        ]
+    }
+
+    func testFacebedHostReplacementPreservesContentPathAndQuery() {
+        for host in ["facebook.com", "www.facebook.com", "m.facebook.com", "facebed.com", "www.facebed.com", "WWW.Facebook.COM"] {
+            for scheme in ["http", "https", "HTTPS"] {
+                for route in forwardedRoutes {
+                    let source = "\(scheme)://\(host)\(route)#private-fragment"
+                    XCTAssertEqual(FacebookReelPreview.facebedURL(in: source)?.absoluteString,
+                                   "https://facebed.com\(route)", source)
+                }
+            }
+        }
+        XCTAssertEqual(FacebookReelPreview.facebedURL(in: "https://facebook.com:443/share/r/ExampleToken")?.absoluteString,
+                       "https://facebed.com/share/r/ExampleToken")
+        XCTAssertEqual(FacebookReelPreview.facebedURL(in: "http://facebed.com:80/share/v/ExampleToken")?.absoluteString,
+                       "https://facebed.com/share/v/ExampleToken")
+    }
+
+    private var unsafeSourceURLs: [String] {
+        let authorities = [
+            "facebook.com.evil.example", "notfacebook.com", "facebed.com.evil.example", "facebook.com.",
+            "fb.watch", "web.facebook.com", "m.facebed.com", "%66acebook.com", "fаcebook.com",
+            "facebook.com:8443", "facebook.com:", "facebook.com:0443", "facebook.com:+443", "facebook.com:80",
+            "user@facebook.com", "user:pass@facebook.com", "@facebook.com", "facebook.com@evil.example",
+        ].map { "https://\($0)/share/r/ExampleToken" }
+        let paths = [
+            "", "/", "/?story_fbid=123&id=456", "//evil.example/share/r/ExampleToken",
+            "/share//r/ExampleToken", "/./share/r/ExampleToken", "/share/../ExampleToken",
+            "/%2e/share/r/ExampleToken", "/share/%252E%252e/ExampleToken",
+            "/share/r/a%2fb", "/share/r/a%5Cb", "/share/r/a%252Fb", "/share/r/a%255cb",
+            "/share/r/a%00", "/share/r/a%0d%0a", "/share/r/a%250A", "/share/r/a%252500",
+            "/share/r/a%C2%85", "/share/r/a%25literal%250a",
+            "/dump", "/dump/", "/DUMP?url=example", "/share/r/dump", "/share/dump/ExampleToken",
+            "/%64ump", "/share/%2564%2575%256d%2570/ExampleToken",
+            "/healthz", "/healthz/", "/%68ealthz", "/assets/image.png", "/%2561ssets/image.png",
+            "/favicon.ico", "/%66avicon.ico", "/banner.png", "/%2562anner.png", "/update", "/UPDATE/now",
+        ].map { "https://facebook.com\($0)" }
+        return authorities + paths + [
+            "ftp://facebook.com/share/r/ExampleToken", "//facebook.com/share/r/ExampleToken",
+            "facebook.com/share/r/ExampleToken", "http://facebook.com:443/share/r/ExampleToken",
+            " https://facebook.com/share/r/ExampleToken", "https://facebook.com/share/r/ExampleToken\n",
+            "https://facebook.com\\@evil.example/share/r/ExampleToken", "https://facebook.com/share/r/ExampleToken?x=\n",
+            "https://facebook.com/share/r/ExampleToken#\u{0000}",
+        ]
+    }
+
+    func testFacebedRejectsUnsafeAuthoritiesPathsAndDiagnostics() {
+        for source in unsafeSourceURLs {
+            XCTAssertNil(FacebookReelPreview.facebedURL(in: source), source)
+        }
+    }
+
+    func testSourceURLFetchForwardsRoutesThroughTheSameLoader() async throws {
+        let provider: FacebookReelProviding = makeFetcher()
+        for route in forwardedRoutes {
+            ReelURLProtocol.reset()
+            stub(page: page())
+            let result = try await provider.fetch(sourceURL: "http://www.facebook.com\(route)#private-fragment")
+            XCTAssertEqual(result.author, "Example Creator")
+            XCTAssertEqual(result.caption, "Example caption")
+            XCTAssertEqual(result.video, mp4)
+            XCTAssertEqual(ReelURLProtocol.requests.map { $0.url?.absoluteString },
+                           ["https://facebed.com\(route)", videoURL])
+            XCTAssertEqual(ReelURLProtocol.requests.first?.value(forHTTPHeaderField: "Accept"), "text/html")
+            XCTAssertEqual(ReelURLProtocol.requests.last?.value(forHTTPHeaderField: "Accept"), "video/mp4")
+        }
+    }
+
+    func testUnsafeSourceURLsNeverReachTheNetwork() async {
+        let provider: FacebookReelProviding = makeFetcher()
+        for source in unsafeSourceURLs {
+            do {
+                _ = try await provider.fetch(sourceURL: source)
+                XCTFail("Expected invalid source: \(source)")
+            } catch FacebookReelError.invalidReelID {} catch { XCTFail("Unexpected error: \(error)") }
+        }
+        XCTAssertTrue(ReelURLProtocol.requests.isEmpty)
+    }
+
+    func testLegacyProvidersDefaultToExactNumericReelID() async throws {
+        let legacy = LegacyReelProvider()
+        let provider: FacebookReelProviding = legacy
+        let result = try await provider.fetch(sourceURL: "https://facebook.com/reel/\(id)/?x=1#fragment")
+        XCTAssertEqual(legacy.ids, [id])
+        XCTAssertEqual(result.author, "Example Creator")
+        for source in ["https://facebook.com/share/r/ExampleToken", "https://facebook.com/reel/not-numeric",
+                       "https://evil.example/reel/123", "https://facebook.com/reel/%31"] {
+            do {
+                _ = try await provider.fetch(sourceURL: source)
+                XCTFail("Expected invalid source: \(source)")
+            } catch FacebookReelError.invalidReelID {} catch { XCTFail("Unexpected error: \(error)") }
+        }
+        XCTAssertEqual(legacy.ids, [id])
+    }
+
     func testInvalidIDsNeverReachTheNetwork() async {
         let fetcher = makeFetcher()
         for value in ["", "-1", "1/", "１", "١", "1\n", "1?tracking=x", "../123", "https://example.com/1",
@@ -226,7 +336,9 @@ final class FacebookReelTests: XCTestCase {
                 oversized.chunks = Array(repeating: chunk, count: limit / chunk.count) + [Data([32])]
                 ReelURLProtocol.reset()
                 stub(page: stage == "page" ? oversized : page(), video: stage == "video" ? oversized : video())
-                await assertFailure(.responseTooLarge)
+                let expected: FacebookReelError = stage == "page" ? .responseTooLarge :
+                    .videoTooLarge(author: "Example Creator", caption: "Example caption")
+                await assertFailure(expected)
                 XCTAssertEqual(ReelURLProtocol.requests.count, stage == "page" ? 1 : 2)
             }
         }
@@ -244,6 +356,20 @@ final class FacebookReelTests: XCTestCase {
         let result = try await makeFetcher().fetch(reelID: id)
         XCTAssertEqual(result.video.count, 20 * 1024 * 1024)
         XCTAssertEqual(result.video.prefix(mp4.count), mp4)
+    }
+
+    func testSourceURLVideoLimitCarriesOnlyDecodedAuthorAndCaption() async {
+        var movie = video()
+        movie.headers["Content-Length"] = String(55_500_000)
+        stub(page: page(author: "Example &amp; Creator", caption: "A &quot;caption&quot;"), video: movie)
+        do {
+            _ = try await makeFetcher().fetch(sourceURL: "https://facebook.com/share/r/ExampleToken#private-fragment")
+            XCTFail("Expected video size limit")
+        } catch FacebookReelError.videoTooLarge(let author, let caption) {
+            XCTAssertEqual(author, "Example & Creator")
+            XCTAssertEqual(caption, "A \"caption\"")
+        } catch { XCTFail("Unexpected error: \(error)") }
+        XCTAssertEqual(ReelURLProtocol.requests.count, 2)
     }
 
     func testRejectsEmptyTruncatedNonMP4AndInvalidUTF8() async {
@@ -338,9 +464,21 @@ final class FacebookReelTests: XCTestCase {
         } catch let error as FacebookReelError {
             switch (expected, error) {
             case (.invalidReelID, .invalidReelID), (.invalidResponse, .invalidResponse), (.responseTooLarge, .responseTooLarge): break
+            case let (.videoTooLarge(expectedAuthor, expectedCaption), .videoTooLarge(author, caption)):
+                XCTAssertEqual(author, expectedAuthor, file: file, line: line)
+                XCTAssertEqual(caption, expectedCaption, file: file, line: line)
             default: XCTFail("Unexpected error: \(error)", file: file, line: line)
             }
         } catch { XCTFail("Unexpected error: \(error)", file: file, line: line) }
+    }
+}
+
+private final class LegacyReelProvider: FacebookReelProviding {
+    var ids: [String] = []
+
+    func fetch(reelID: String) async throws -> FacebookReel {
+        ids.append(reelID)
+        return FacebookReel(author: "Example Creator", caption: "Example caption", video: Data())
     }
 }
 

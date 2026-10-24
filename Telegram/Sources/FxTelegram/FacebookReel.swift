@@ -5,6 +5,16 @@ import FoundationNetworking
 
 public protocol FacebookReelProviding {
     func fetch(reelID: String) async throws -> FacebookReel
+    func fetch(sourceURL: String) async throws -> FacebookReel
+}
+
+public extension FacebookReelProviding {
+    func fetch(sourceURL: String) async throws -> FacebookReel {
+        guard let id = FacebookReelPreview.reelID(in: sourceURL) else {
+            throw FacebookReelError.invalidReelID
+        }
+        return try await fetch(reelID: id)
+    }
 }
 
 public struct FacebookReel {
@@ -20,7 +30,7 @@ public struct FacebookReel {
 }
 
 public enum FacebookReelPreview {
-    public static func reelID(in url: String) -> String? {
+    private static func facebookURL(_ url: String) -> URLComponents? {
         guard let parts = strictURL(url),
               let scheme = parts.scheme?.lowercased(), ["http", "https"].contains(scheme),
               let host = parts.percentEncodedHost?.lowercased(),
@@ -28,6 +38,66 @@ public enum FacebookReelPreview {
               parts.port == nil || parts.port == (scheme == "https" ? 443 : 80) else { return nil }
         let authority = host + (parts.port.map { ":\($0)" } ?? "")
         guard url.lowercased().hasPrefix("\(scheme)://\(authority)/") else { return nil }
+        return parts
+    }
+
+    /// Facebed documents a host replacement, not a separate Facebook route catalog.
+    /// The caller supplies the engine-cleaned URL; path and query remain untouched.
+    public static func facebedURL(in url: String) -> URL? {
+        guard let parts = facebookURL(url), safeContentPath(parts.percentEncodedPath) else { return nil }
+        var endpoint = URLComponents()
+        endpoint.scheme = "https"
+        endpoint.host = "facebed.com"
+        endpoint.percentEncodedPath = parts.percentEncodedPath
+        endpoint.percentEncodedQuery = parts.percentEncodedQuery
+        return endpoint.url
+    }
+
+    private static func safeContentPath(_ path: String) -> Bool {
+        var decoded = path
+        while true {
+            guard decoded.hasPrefix("/"), decoded.count > 1, !decoded.contains("//"),
+                  !decoded.contains("\\"),
+                  !decoded.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return false }
+            let segments = decoded.split(separator: "/").map { $0.lowercased() }
+            guard !segments.contains(where: { [".", "..", "dump"].contains($0) }),
+                  let first = segments.first,
+                  !["healthz", "assets", "favicon.ico", "banner.png", "update"].contains(first) else { return false }
+
+            // Decode for validation only, including nested escapes. A tolerant byte
+            // pass catches hidden controls even beside a decoded literal percent.
+            let bytes = Array(decoded.utf8)
+            var next: [UInt8] = []
+            var index = 0
+            while index < bytes.count {
+                if bytes[index] == 37, index + 2 < bytes.count,
+                   let high = hex(bytes[index + 1]), let low = hex(bytes[index + 2]) {
+                    let byte = high * 16 + low
+                    guard byte != 47, byte != 92 else { return false }
+                    next.append(byte)
+                    index += 3
+                } else {
+                    next.append(bytes[index])
+                    index += 1
+                }
+            }
+            guard let value = String(bytes: next, encoding: .utf8) else { return false }
+            if value == decoded { return true }
+            decoded = value
+        }
+    }
+
+    private static func hex(_ byte: UInt8) -> UInt8? {
+        switch byte {
+        case 48...57: return byte - 48
+        case 65...70: return byte - 55
+        case 97...102: return byte - 87
+        default: return nil
+        }
+    }
+
+    public static func reelID(in url: String) -> String? {
+        guard let parts = facebookURL(url) else { return nil }
         let path = parts.percentEncodedPath.split(separator: "/", omittingEmptySubsequences: false)
         guard (path.count == 3 || (path.count == 4 && path[3].isEmpty)),
               path[0].isEmpty, path[1] == "reel", validID(String(path[2])) else { return nil }
@@ -43,6 +113,7 @@ public enum FacebookReelError: Error {
     case invalidReelID
     case invalidResponse
     case responseTooLarge
+    case videoTooLarge(author: String, caption: String)
 }
 
 public final class FacebookReelFetcher: FacebookReelProviding {
@@ -65,16 +136,31 @@ public final class FacebookReelFetcher: FacebookReelProviding {
 
     public func fetch(reelID: String) async throws -> FacebookReel {
         guard FacebookReelPreview.validID(reelID) else { throw FacebookReelError.invalidReelID }
+        return try await fetch(endpoint: URL(string: "https://facebed.com/reel/\(reelID)")!)
+    }
+
+    public func fetch(sourceURL: String) async throws -> FacebookReel {
+        guard let endpoint = FacebookReelPreview.facebedURL(in: sourceURL) else {
+            throw FacebookReelError.invalidReelID
+        }
+        return try await fetch(endpoint: endpoint)
+    }
+
+    private func fetch(endpoint: URL) async throws -> FacebookReel {
         try Task.checkCancellation()
-        let page = try await load(URL(string: "https://facebed.com/reel/\(reelID)")!,
-                                  mime: "text/html", limit: 512 * 1024)
+        let page = try await load(endpoint, mime: "text/html", limit: 512 * 1024)
         guard let html = String(data: page, encoding: .utf8) else { throw FacebookReelError.invalidResponse }
         let metadata = try ReelHTML.metadata(html)
         guard let author = metadata["og:title"], !author.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let caption = metadata["og:description"], let source = metadata["og:video"],
               let videoURL = Self.videoURL(source) else { throw FacebookReelError.invalidResponse }
         try Task.checkCancellation()
-        let video = try await load(videoURL, mime: "video/mp4", limit: 20 * 1024 * 1024)
+        let video: Data
+        do {
+            video = try await load(videoURL, mime: "video/mp4", limit: 20 * 1024 * 1024)
+        } catch FacebookReelError.responseTooLarge {
+            throw FacebookReelError.videoTooLarge(author: author, caption: caption)
+        }
         // ISO BMFF starts with a box length followed by its four-byte type and brand.
         guard video.count >= 12, Array(video[4..<8]) == Array("ftyp".utf8) else {
             throw FacebookReelError.invalidResponse

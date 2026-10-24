@@ -112,10 +112,27 @@ final class FacebookSettingsTests: XCTestCase {
                     let panel = SettingsUI.rules(UserSettings(), builtins: rules, scope: scope,
                         section: "previews", inherited: true, facebookReels: enabled, language: language)
                     let rows = try XCTUnwrap(panel.markup["inline_keyboard"] as? [[[String: String]]])
-                    let actions = rows.flatMap { $0 }.compactMap { $0["callback_data"] }
-                    XCTAssertTrue(actions.contains("fxclip:rules:\(scope):facebook:\(enabled ? "off" : "on")"))
+                    let buttons = rows.flatMap { $0 }
+                    let actions = buttons.compactMap { $0["callback_data"] }
+                    let facebookAction = "fxclip:rules:\(scope):facebook:\(enabled ? "off" : "on")"
+                    let facebookButton = try XCTUnwrap(buttons.first { $0["callback_data"] == facebookAction })
+                    let label = language == .en ? "Facebook videos" : "Vidéos Facebook"
+                    let state = language == .en ? (enabled ? "on" : "off") : (enabled ? "activé" : "désactivé")
+                    XCTAssertEqual(facebookButton["text"], "\(enabled ? "✓" : "○") \(label) · \(state)")
+                    XCTAssertTrue(panel.text.contains("<b>\(label)</b>"))
+                    XCTAssertFalse(panel.text.contains(language == .en ? "Facebook reels" : "Reels Facebook"))
                     XCTAssertTrue(panel.text.contains("Facebed"))
                     XCTAssertTrue(panel.text.contains("/reel/id"))
+                    XCTAssertTrue(panel.text.contains("/share/r/token"))
+                    XCTAssertTrue(panel.text.contains(language == .en ? "single plain public Facebook or Facebed link" : "lien public Facebook ou Facebed seul et sans mise en forme"))
+                    XCTAssertTrue(panel.text.contains(language == .en ? "Requires enhanced previews" : "Nécessite les aperçus améliorés"))
+                    XCTAssertTrue(panel.text.contains(language == .en ? "only when Facebed can resolve it" : "uniquement si Facebed peut la résoudre"))
+                    XCTAssertTrue(panel.text.contains(language == .en ? "image/text-only posts are not converted" : "publications image/texte seules ne sont pas converties"))
+                    XCTAssertTrue(panel.text.contains(language == .en ? "title and Open Facebook reply" : "le titre et Ouvrir Facebook"))
+                    XCTAssertTrue(panel.text.contains(language == .en ? "original stays even in Replace mode" : "original reste même en mode Remplacer"))
+                    XCTAssertTrue(panel.plainText.contains("5 minutes"))
+                    XCTAssertTrue(panel.plainText.contains("48 h"))
+                    XCTAssertTrue(panel.plainText.contains(language == .en ? "Open-button links stay locally" : "liens des boutons d’ouverture restent localement"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "20 MiB" : "20 Mio"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "off by default" : "désactivée par défaut"))
                     XCTAssertTrue(panel.text.contains(language == .en ? "No access to private" : "Aucun accès au contenu"))
@@ -135,7 +152,8 @@ final class FacebookSettingsTests: XCTestCase {
                 section: "previews", inherited: true, previewsEnabled: false, language: language)
             let rows = try XCTUnwrap(panel.markup["inline_keyboard"] as? [[[String: String]]])
             XCTAssertTrue(rows.flatMap { $0 }.contains { $0["callback_data"] == "fxclip:rules:c:-100:facebook:on" })
-            XCTAssertTrue(panel.text.contains(language == .en ? "including YouTube cards and Facebook reel videos" : "y compris les fiches YouTube et les vidéos de reels Facebook"))
+            XCTAssertTrue(panel.text.contains(language == .en ? "including YouTube cards and Facebook videos" : "y compris les fiches YouTube et les vidéos Facebook"))
+            XCTAssertTrue(rows.flatMap { $0 }.compactMap { $0["callback_data"] }.allSatisfy { $0.utf8.count <= 64 })
             XCTAssertLessThanOrEqual(panel.plainText.utf16.count, 4096)
         }
     }
@@ -153,9 +171,10 @@ final class FacebookSettingsTests: XCTestCase {
         XCTAssertTrue(panel.plainText.contains("Public <video> & preview"))
         XCTAssertFalse(panel.plainText.contains("<b>"))
         XCTAssertTrue(panel.plainText.contains("/reel/id"))
+        XCTAssertTrue(panel.plainText.contains("/share/r/token"))
     }
 
-    func testActivationPanelsDiscloseSeparateFacebookOptInInBothLanguages() {
+    func testActivationPanelsDiscloseSeparateFacebookOptInInBothLanguages() throws {
         let chat = Chat(id: -100, type: "supergroup", title: "Example")
         for language in [BotLanguage.en, .fr] {
             let panels = [
@@ -167,8 +186,20 @@ final class FacebookSettingsTests: XCTestCase {
             ]
             for panel in panels {
                 XCTAssertTrue(panel.text.contains("Facebed"))
-                XCTAssertTrue(panel.text.contains(language == .en ? "off by default" : "désactivés par défaut"))
+                XCTAssertTrue(panel.text.contains(language == .en ? "off by default" : "désactivées par défaut"))
                 XCTAssertTrue(panel.text.contains(language == .en ? "enabled separately" : "activée séparément"))
+                XCTAssertTrue(panel.text.contains(language == .en ? "Facebook videos" : "vidéos Facebook"))
+                XCTAssertTrue(panel.text.contains(language == .en ? "single plain public Facebook or Facebed link" : "lien public Facebook ou Facebed seul et sans mise en forme"))
+                XCTAssertTrue(panel.text.contains("/reel/id"))
+                XCTAssertTrue(panel.text.contains("/share/r/token"))
+                XCTAssertTrue(panel.text.contains(language == .en ? "Only videos Facebed can resolve" : "Seules les vidéos que Facebed peut résoudre"))
+                XCTAssertTrue(panel.text.contains(language == .en ? "No private Facebook access" : "Aucun accès Facebook privé"))
+                XCTAssertTrue(panel.text.contains(language == .en ? "Pausing enhanced previews" : "Mettre les aperçus améliorés en pause"))
+                XCTAssertTrue(panel.plainText.contains("5 minutes"))
+                XCTAssertTrue(panel.plainText.contains("48 h"))
+                XCTAssertTrue(panel.plainText.contains(language == .en ? "Open-button links stay locally" : "liens des boutons d’ouverture restent localement"))
+                let rows = try XCTUnwrap(panel.markup["inline_keyboard"] as? [[[String: String]]])
+                XCTAssertTrue(rows.flatMap { $0 }.compactMap { $0["callback_data"] }.allSatisfy { $0.utf8.count <= 64 })
                 XCTAssertLessThanOrEqual(panel.plainText.utf16.count, 4096)
             }
         }
