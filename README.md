@@ -41,6 +41,14 @@ As an optional extra, fxclip can adapt links for better previews in the destinat
 
 ## Get Started
 
+### Telegram bot (self-hosted)
+
+Clean links for an entire group without installing a client. Each member can
+choose reply, replacement with author credit, Secretary Mode for connected
+private chats, or no action from a French button menu. Admins choose the defaults.
+Runs in one Docker container with outbound Telegram access; unlike the desktop
+apps, it communicates with Telegram and preview mirrors. [Setup and limits](Telegram/README.md).
+
 ### macOS (13 Ventura or later)
 Grab `fxclip.dmg` from the [latest release](https://github.com/c0mm0n/fxclip/releases/latest), open it and drag fxclip to Applications.
 

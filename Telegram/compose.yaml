@@ -1,0 +1,31 @@
+services:
+  fxclip-telegram:
+    image: ${FXCLIP_IMAGE:-fxclip-telegram:local}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      TELEGRAM_ALLOWED_CHATS: ${TELEGRAM_ALLOWED_CHATS:-}
+      TELEGRAM_OWNER_IDS: ${TELEGRAM_OWNER_IDS:-}
+    secrets:
+      - telegram_token
+    volumes:
+      - state:/data
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+secrets:
+  telegram_token:
+    file: ./secrets/telegram_token
+
+volumes:
+  state:

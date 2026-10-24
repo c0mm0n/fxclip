@@ -1,0 +1,6 @@
+.build/
+.swiftpm/
+.env
+secrets/*
+!secrets/.gitkeep
+data/

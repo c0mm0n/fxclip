@@ -1,0 +1,15 @@
+**
+!Engine
+!Engine/Package.swift
+!Engine/Sources
+!Engine/Sources/**
+!Engine/Tests
+!Engine/Tests/**
+!Telegram
+!Telegram/Package.swift
+!Telegram/Sources
+!Telegram/Sources/**
+!Telegram/Tests
+!Telegram/Tests/**
+!Shared
+!Shared/*.json

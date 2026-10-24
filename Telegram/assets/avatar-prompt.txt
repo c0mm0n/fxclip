@@ -1,0 +1,14 @@
+Generation mode: built-in image_gen.imagegen (imagegen skill default tool mode).
+Intent: generate a fresh avatar; no input/reference image passed to the generator.
+transparent_background: false
+Selected output: bot-avatar.png
+
+Use case: logo-brand
+Asset type: premium minimalist Telegram bot avatar for fxclip, square opaque 1024 × 1024 bitmap.
+Primary request: a clean, beautiful chain-link symbol with exactly one small crisp four-point sparkle communicating a freshly cleaned link.
+Scene/backdrop: full-bleed warm orange, peach and coral background, with a subtle refined gradient; no outer icon tile, no border.
+Subject: two clearly interlocking rounded chain links, bold cream-white strokes, confident simple geometry; one small cream-white sparkle beside the upper link.
+Style/medium: polished modern brand icon, precise vector-like edges rendered as a bitmap, largely flat, understated depth only.
+Composition/framing: balanced centered mark on a diagonal, strong silhouette readable at 32 px. Keep all of the mark and sparkle safely inside the central 65 percent of the square so Telegram's circular crop preserves generous breathing room. The background fills the entire square with opaque color.
+Color palette: warm rich orange/coral with soft peach highlights and crisp warm white/cream mark. Optional tiny understated navy accent only if it improves clarity.
+Constraints: make a fresh Telegram-appropriate avatar. Simple sophisticated graphic, immediately recognizable chain links, not a complex mascot. Exactly one clean small sparkle. No text, no letters, no watermark, no Telegram logo, no paper plane, no robot, no extra decoration, no mockup, no photographic texture. Output one finished square avatar.
