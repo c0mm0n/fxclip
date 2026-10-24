@@ -56,6 +56,7 @@ public final class Bot {
            target[1].lowercased() != username.lowercased() { return }
         let command = target.first ?? ""
         let language = interfaceLanguage(message)
+        if try await rulesCommand(message, command: command, words: words, language: language) { return }
         if command == "/chatid" {
             try await reply(language.text("Chat ID: \(message.chat.id)", "Identifiant de cette conversation : \(message.chat.id)"), to: message)
             return
@@ -156,11 +157,14 @@ public final class Bot {
            let personal = store.state.users[String(user.id)] { settings.mode = personal }
         guard ["group", "supergroup", "private"].contains(message.chat.type),
               settings.mode != .off, settings.mode != .secretary else { return }
-        let replyContent = rewriter.rewrite(message, previews: settings.previews, attribution: false)
+        let senderID = message.sender_chat == nil ? message.from?.id : nil
+        let configured = configuredRewriter(chatID: message.chat.id, userID: senderID)
+        let replyContent = configured.rewrite(message, previews: settings.previews, attribution: false)
         // This is presentation, not another cleaning engine. Only plain, single-link
         // messages qualify; formatting, hidden links and media keep their existing path.
         let videoID: String?
-        if settings.previews, message.link_preview_options?.is_disabled != true,
+        if settings.previews, cardsEnabled(chatID: message.chat.id, userID: senderID),
+           message.link_preview_options?.is_disabled != true,
            youTubeMetadata != nil, let text = message.text,
            (message.entities ?? []).allSatisfy({ $0.type == "url" }), isBareURL(text) {
             videoID = YouTubePreview.videoID(in: text.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -173,7 +177,7 @@ public final class Bot {
         }
         let rendered: RenderedMessage?
         if replace {
-            guard let credited = rewriter.rewrite(message, previews: settings.previews, language: language) else { return }
+            guard let credited = configured.rewrite(message, previews: settings.previews, language: language) else { return }
             rendered = credited
         } else {
             // Telegram's reply header already identifies the original sender.
@@ -183,7 +187,7 @@ public final class Bot {
             // Fetching metadata is safe to fall back from; a timed-out send is not.
             let metadata = try? await youTubeMetadata.fetch(videoID: videoID)
             if let metadata {
-                let cleanURL = rewriter.engine.clean(message.text ?? "").text
+                let cleanURL = configured.engine.clean(message.text ?? "").text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 let cleanText = rendered?.text ?? cleanURL
                 let heading = "YouTube\n"
@@ -266,8 +270,9 @@ public final class Bot {
         // Fetch current rights, including after a restart or permission revocation.
         let connection = try decode(BusinessConnection.self, from: await api.call("getBusinessConnection", ["business_connection_id": connectionID]))
         guard connection.id == connectionID, connection.is_enabled,
-              connection.user.id == sender.id, connection.rights?.can_reply == true,
-              let rendered = rewriter.rewrite(message, previews: true, attribution: false) else { return }
+              connection.user.id == sender.id, connection.rights?.can_reply == true else { return }
+        guard let rendered = configuredRewriter(chatID: nil, userID: sender.id)
+            .rewrite(message, previews: true, attribution: false) else { return }
         var parameters: [String: Any] = ["business_connection_id": connectionID,
             "chat_id": message.chat.id, "message_id": message.message_id,
             "\(message.text == nil ? "caption_entities" : "entities")": try jsonObject(rendered.entities)]
@@ -313,6 +318,18 @@ public final class Bot {
         SettingsUI.personal(mode: store.state.users[String(userID)], defaultMode: store.state.defaultMode,
                             owner: allowedOwners.contains(userID), preference: store.state.userLanguages[String(userID)],
                             language: store.userLanguage(userID))
+    }
+
+    private func configuredRewriter(chatID: Int64?, userID: Int64?) -> Rewriter {
+        let personal = userID.flatMap { store.state.personalLinkSettings[String($0)] }
+        let group = chatID.flatMap { store.state.chats[String($0)]?.engineSettings }
+        return Rewriter(engine: Engine(rules: rewriter.engine.rules.applying(personal ?? group ?? store.state.defaultLinkSettings)))
+    }
+
+    private func cardsEnabled(chatID: Int64?, userID: Int64?) -> Bool {
+        let personal = userID.flatMap { store.state.personalYouTubeCards[String($0)] }
+        let group = chatID.flatMap { store.state.chats[String($0)]?.youTubeCards }
+        return personal ?? group ?? store.state.defaultYouTubeCards
     }
 
     private func chatSettings(_ chatID: Int64) -> ChatSettings {
@@ -362,6 +379,10 @@ public final class Bot {
     private func settingsCallback(_ callback: CallbackQuery) async throws {
         let language = store.userLanguage(callback.from.id)
         let parts = (callback.data ?? "").split(separator: ":").map(String.init)
+        if parts.count >= 2, parts[0] == "fxclip", parts[1] == "rules" {
+            try await rulesCallback(callback, parts: parts)
+            return
+        }
         if parts.count >= 2, parts[0] == "fxclip", parts[1] == "chat" {
             try await chatCallback(callback, parts: parts)
             return
@@ -550,6 +571,202 @@ public final class Bot {
         try await sendPanel(SettingsUI.group(group, enabled: isEnabled(chatID: chatID), rights: current, language: language),
                             to: message.chat.id, messageID: message.message_id,
                             previousText: message.text, previousMarkup: message.reply_markup)
+    }
+
+    private enum RuleScope {
+        case personal(Int64), chat(Int64), defaults
+        var key: String {
+            switch self {
+            case .personal: return "p"
+            case .chat(let id): return "c:\(id)"
+            case .defaults: return "d"
+            }
+        }
+    }
+
+    private func ruleOverride(_ scope: RuleScope) -> UserSettings? {
+        switch scope {
+        case .personal(let id): return store.state.personalLinkSettings[String(id)]
+        case .chat(let id): return store.state.chats[String(id)]?.engineSettings
+        case .defaults: return store.state.defaultLinkSettings
+        }
+    }
+
+    private func ruleCardsOverride(_ scope: RuleScope) -> Bool? {
+        switch scope {
+        case .personal(let id): return store.state.personalYouTubeCards[String(id)]
+        case .chat(let id): return store.state.chats[String(id)]?.youTubeCards
+        case .defaults: return store.state.defaultYouTubeCards
+        }
+    }
+
+    private func saveRules(_ scope: RuleScope, settings: UserSettings?, cards: Bool?) throws {
+        switch scope {
+        case .personal(let id): try store.setPersonalLinks(settings, youTubeCards: cards, userID: id)
+        case .chat(let id):
+            var chat = chatSettings(id)
+            chat.engineSettings = settings
+            chat.youTubeCards = cards
+            try store.set(chat, chatID: id)
+        case .defaults: try store.setDefaultLinks(settings ?? UserSettings(), youTubeCards: cards ?? true)
+        }
+    }
+
+    private func rulesPanel(_ scope: RuleScope, section: String = "show", language: BotLanguage) -> SettingsUI {
+        let settings = ruleOverride(scope)
+        let previews: Bool
+        if case .chat(let id) = scope { previews = chatSettings(id).previews }
+        else { previews = true }
+        return SettingsUI.rules(settings ?? store.state.defaultLinkSettings, builtins: rewriter.engine.rules,
+                                scope: scope.key, section: section, inherited: settings == nil,
+                                previewsEnabled: previews,
+                                youTubeCards: ruleCardsOverride(scope) ?? store.state.defaultYouTubeCards,
+                                language: language)
+    }
+
+    private func rulesCallback(_ callback: CallbackQuery, parts: [String]) async throws {
+        let language = store.userLanguage(callback.from.id)
+        guard parts.count >= 4, let message = callback.message, message.from?.id == botID,
+              callback.from.is_bot != true else {
+            await answer(callback, language.text("Open settings again.", "Ouvrez de nouveau les réglages."), alert: true)
+            return
+        }
+        let scope: RuleScope
+        let actions: [String]
+        switch parts[2] {
+        case "p", "d":
+            guard message.chat.type == "private", message.chat.id == callback.from.id,
+                  parts[2] != "d" || allowedOwners.contains(callback.from.id) else {
+                await answer(callback, language.text("This setting is not available here.", "Ce réglage n’est pas accessible ici."), alert: true)
+                return
+            }
+            scope = parts[2] == "d" ? .defaults : .personal(callback.from.id)
+            actions = Array(parts.dropFirst(3))
+        case "c":
+            guard parts.count >= 5, let id = Int64(parts[3]), message.chat.isGroup, message.chat.id == id else {
+                await answer(callback, language.text("This button belongs to another group.", "Ce bouton appartient à un autre groupe."), alert: true)
+                return
+            }
+            if !allowedOwners.contains(callback.from.id) {
+                guard (try? await isAdmin(chatID: id, userID: callback.from.id)) == true else {
+                    await answer(callback, language.text("Only current group admins can change this.", "Ce réglage est réservé aux administrateurs actuels du groupe."), alert: true)
+                    return
+                }
+            }
+            scope = .chat(id)
+            actions = Array(parts.dropFirst(4))
+        default:
+            await answer(callback, language.text("Open settings again.", "Ouvrez de nouveau les réglages."))
+            return
+        }
+        let panelLanguage: BotLanguage
+        if case .chat(let id) = scope { panelLanguage = store.groupLanguage(id) }
+        else { panelLanguage = language }
+        var section = actions.first ?? "show"
+        var settings = ruleOverride(scope) ?? store.state.defaultLinkSettings
+        var storedSettings = ruleOverride(scope)
+        var cards = ruleCardsOverride(scope)
+        var changed = false
+        let builtins = rewriter.engine.rules
+        switch actions {
+        case ["show"], ["clean"], ["previews"], ["excluded"]: break
+        case ["reset"]:
+            storedSettings = nil; cards = nil; changed = true; section = "show"
+        default:
+            if actions.count == 2, actions[0] == "provider", builtins.previews.contains(where: { $0.id == actions[1] }) {
+                section = "provider:\(actions[1])"
+            } else if actions.count == 2, actions[0] == "providerreset",
+                      let rule = builtins.previews.first(where: { $0.id == actions[1] }) {
+                var value = settings.previews[rule.id] ?? .init(enabled: settings.previewDefaultsEnabled, apps: rule.apps)
+                value.targetHost = nil
+                settings.previews[rule.id] = value
+                storedSettings = settings; changed = true; section = "provider:\(rule.id)"
+            } else if actions.count == 2, ["trackers", "youtube"].contains(actions[0]), ["on", "off"].contains(actions[1]) {
+                if actions[0] == "trackers" {
+                    settings.trackersEverywhere = actions[1] == "on"; storedSettings = settings
+                    section = "clean"
+                } else {
+                    cards = actions[1] == "on"; section = "previews"
+                }
+                changed = true
+            } else if actions.count == 3, ["on", "off"].contains(actions[2]),
+                      actions[0] == "site", builtins.trackers.sites.contains(where: { $0.id == actions[1] }) {
+                if actions[2] == "off" { settings.disabledSites.insert(actions[1]) }
+                else { settings.disabledSites.remove(actions[1]) }
+                storedSettings = settings; changed = true; section = "clean"
+            } else if actions.count == 3, ["on", "off"].contains(actions[2]), actions[0] == "preview",
+                      let rule = builtins.previews.first(where: { $0.id == actions[1] }) {
+                var value = settings.previews[rule.id] ?? .init(enabled: settings.previewDefaultsEnabled, apps: rule.apps)
+                value.enabled = actions[2] == "on"
+                if value.enabled, !value.apps.contains("telegram") { value.apps.append("telegram") }
+                settings.previews[rule.id] = value
+                storedSettings = settings; changed = true; section = "previews"
+            } else {
+                await answer(callback, language.text("This button is no longer available.", "Ce bouton n’est plus disponible."))
+                return
+            }
+        }
+        if changed { try saveRules(scope, settings: storedSettings, cards: cards) }
+        await answer(callback, changed ? panelLanguage.text("Setting saved ✓", "Réglage enregistré ✓") : nil)
+        try await sendPanel(rulesPanel(scope, section: section, language: panelLanguage), to: message.chat.id,
+                            messageID: message.message_id, previousText: message.text, previousMarkup: message.reply_markup)
+    }
+
+    private func rulesCommand(_ message: Message, command: String, words: [String], language: BotLanguage) async throws -> Bool {
+        let scope: RuleScope
+        let arguments: [String]
+        if ["/rules", "/provider", "/exclude"].contains(command),
+           message.chat.type == "private", let user = message.from, user.id == message.chat.id {
+            scope = .personal(user.id)
+            arguments = [String(command.dropFirst())] + words.dropFirst()
+        } else if command == "/default", words.count >= 2, ["settings", "provider", "exclude"].contains(words[1]),
+                  message.chat.type == "private", let user = message.from, user.id == message.chat.id {
+            guard allowedOwners.contains(user.id) else {
+                try await reply(language.text("Only the bot owner can change the global defaults.", "Seul le propriétaire du bot peut modifier les réglages généraux."), to: message)
+                return true
+            }
+            scope = .defaults; arguments = Array(words.dropFirst())
+        } else if command == "/fxclip", words.count >= 2, ["settings", "provider", "exclude"].contains(words[1]), message.chat.isGroup {
+            guard message.sender_chat == nil, let user = message.from else {
+                try await reply(language.text("Use your personal admin profile.", "Utilisez votre profil personnel d’administrateur."), to: message)
+                return true
+            }
+            var permitted = allowedOwners.contains(user.id)
+            if !permitted { permitted = (try? await isAdmin(chatID: message.chat.id, userID: user.id)) == true }
+            guard permitted else {
+                try await reply(language.text("Only current group admins can change this.", "Ce réglage est réservé aux administrateurs actuels du groupe."), to: message)
+                return true
+            }
+            scope = .chat(message.chat.id); arguments = Array(words.dropFirst())
+        } else { return false }
+        var settings = ruleOverride(scope) ?? store.state.defaultLinkSettings
+        var section = "show"
+        if arguments.first == "provider" {
+            guard arguments.count == 3,
+                  let rule = rewriter.engine.rules.previews.first(where: { $0.id == arguments[1] }),
+                  arguments[2] == "default" || Rules.canonicalPreviewHost(arguments[2]) != nil else {
+                try await reply(language.text("Use a known preview ID and a domain only, for example: /provider reddit mirror.example. Use default to restore its provider.", "Utilisez un aperçu connu et un domaine seul, par exemple : /provider reddit mirror.example. Utilisez default pour rétablir le fournisseur."), to: message)
+                return true
+            }
+            var value = settings.previews[rule.id] ?? .init(enabled: settings.previewDefaultsEnabled, apps: rule.apps)
+            value.targetHost = arguments[2] == "default" ? nil : Rules.canonicalPreviewHost(arguments[2])
+            settings.previews[rule.id] = value
+            try saveRules(scope, settings: settings, cards: ruleCardsOverride(scope))
+            section = "provider:\(rule.id)"
+        } else if arguments.first == "exclude" {
+            guard (arguments.count == 3 || arguments.count == 4), ["add", "remove"].contains(arguments[1]),
+                  arguments.count == 3 || (arguments[1] == "add" && arguments[3] == "exact"),
+                  let host = Rules.canonicalPreviewHost(arguments[2]) else {
+                try await reply(language.text("Use /exclude add example.com or /exclude remove example.com. Add exact to exclude only that host. Preview choices remain separate.", "Utilisez /exclude add example.com ou /exclude remove example.com. Ajoutez exact pour exclure uniquement cet hôte. Les aperçus se règlent séparément."), to: message)
+                return true
+            }
+            settings.neverClean.removeAll { $0.host == host }
+            if arguments[1] == "add" { settings.neverClean.append(SkipHost(host: host, subdomains: arguments.count == 3)) }
+            try saveRules(scope, settings: settings, cards: ruleCardsOverride(scope))
+            section = "excluded"
+        }
+        try await sendPanel(rulesPanel(scope, section: section, language: language), to: message.chat.id)
+        return true
     }
 
     private func answer(_ callback: CallbackQuery, _ text: String?, alert: Bool = false) async {

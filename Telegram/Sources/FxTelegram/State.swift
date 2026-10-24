@@ -1,4 +1,5 @@
 import Foundation
+import FxEngine
 
 /// No message bodies or links are persisted. Reserve an update before side effects:
 /// an interrupted/ambiguous send must never lead to deleting the original on retry.
@@ -13,11 +14,16 @@ public struct BotState: Codable {
     public var userLanguages: [String: BotLanguage] = [:]
     public var detectedLanguages: [String: BotLanguage] = [:]
     public var groupLanguages: [String: BotLanguage] = [:]
+    public var defaultLinkSettings = UserSettings()
+    public var personalLinkSettings: [String: UserSettings] = [:]
+    public var defaultYouTubeCards = true
+    public var personalYouTubeCards: [String: Bool] = [:]
     public init() {}
 
     enum CodingKeys: String, CodingKey {
         case offset, chats, users, defaultMode, lastUpdateAt, knownGroups, groupEnabled
         case userLanguages, detectedLanguages, groupLanguages
+        case defaultLinkSettings, personalLinkSettings, defaultYouTubeCards, personalYouTubeCards
     }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -31,6 +37,10 @@ public struct BotState: Codable {
         userLanguages = try values.decodeIfPresent([String: BotLanguage].self, forKey: .userLanguages) ?? [:]
         detectedLanguages = try values.decodeIfPresent([String: BotLanguage].self, forKey: .detectedLanguages) ?? [:]
         groupLanguages = try values.decodeIfPresent([String: BotLanguage].self, forKey: .groupLanguages) ?? [:]
+        defaultLinkSettings = try values.decodeIfPresent(UserSettings.self, forKey: .defaultLinkSettings) ?? UserSettings()
+        personalLinkSettings = try values.decodeIfPresent([String: UserSettings].self, forKey: .personalLinkSettings) ?? [:]
+        defaultYouTubeCards = try values.decodeIfPresent(Bool.self, forKey: .defaultYouTubeCards) ?? true
+        personalYouTubeCards = try values.decodeIfPresent([String: Bool].self, forKey: .personalYouTubeCards) ?? [:]
     }
 }
 
@@ -74,6 +84,18 @@ public final class StateStore {
     public func setDefault(_ mode: Mode) throws {
         var next = state
         next.defaultMode = mode
+        try save(next)
+    }
+    public func setDefaultLinks(_ settings: UserSettings, youTubeCards: Bool) throws {
+        var next = state
+        next.defaultLinkSettings = settings
+        next.defaultYouTubeCards = youTubeCards
+        try save(next)
+    }
+    public func setPersonalLinks(_ settings: UserSettings?, youTubeCards: Bool?, userID: Int64) throws {
+        var next = state
+        next.personalLinkSettings[String(userID)] = settings
+        next.personalYouTubeCards[String(userID)] = youTubeCards
         try save(next)
     }
     public func discover(_ chat: Chat, member: ChatMember? = nil) throws {

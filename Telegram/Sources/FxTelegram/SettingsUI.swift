@@ -1,12 +1,14 @@
 import Foundation
+import FxEngine
 
 /// Presentation only: callback permissions and persistence stay in Bot.
 struct SettingsUI {
     let text: String
     let markup: [String: Any]
-    // Telegram returns message text without our bold tags in callback.message.
+    // Telegram returns message text without our formatting tags in callback.message.
     var plainText: String {
         text.replacingOccurrences(of: "<b>", with: "").replacingOccurrences(of: "</b>", with: "")
+            .replacingOccurrences(of: "<code>", with: "").replacingOccurrences(of: "</code>", with: "")
             .replacingOccurrences(of: "&lt;", with: "<").replacingOccurrences(of: "&gt;", with: ">")
             .replacingOccurrences(of: "&amp;", with: "&")
     }
@@ -61,6 +63,7 @@ struct SettingsUI {
             "Les liens passent par Telegram et, pour certains aperçus, par des sites miroirs. Avec les aperçus améliorés, un lien YouTube seul peut recevoir une miniature et un titre récupérés sur YouTube, même s’il est déjà propre. Telegram n’indique pas si son propre aperçu a fonctionné.\n\nChoisissez ci-dessous 👇")
         var rows = modeRows(selected: mode, scope: "personal", language: language)
         rows.append([button("\(mode == nil ? "✓ " : "")\(language.text("Follow the group's setting", "Suivre le réglage du groupe"))", "personal:default")])
+        rows.append([button(language.text("🔗 Link settings", "🔗 Réglages des liens"), "rules:p:show")])
         if owner {
             rows.append([button(language.text("⚙️ General setting", "⚙️ Réglage général"), "default:show")])
             rows.append([button(language.text("👥 My groups", "👥 Mes groupes"), "groups:show")])
@@ -94,6 +97,7 @@ struct SettingsUI {
             "This setting applies when neither the person nor the group has chosen a mode. Personal choices take priority.\n\nSecretary requires connecting this bot with reply and edit permissions. It only acts on outgoing messages in connected private chats, never in groups.\n\nChoose the default setting 👇",
             "Ce réglage s’applique quand ni la personne ni le groupe n’a choisi de mode. Les choix personnels restent prioritaires.\n\nSecrétaire nécessite une connexion à ce bot avec les droits de réponse et de modification. Il agit uniquement sur les messages sortants des conversations privées connectées, jamais dans les groupes.\n\nChoisissez le réglage par défaut 👇")
         var rows = modeRows(selected: mode, scope: "default", language: language)
+        rows.append([button(language.text("🔗 Link settings", "🔗 Réglages des liens"), "rules:d:show")])
         rows.append([button(language.text("👥 My groups", "👥 Mes groupes"), "groups:show")])
         rows.append([button(language.text("← My settings", "← Mes réglages"), "personal:show")])
         rows.append([closeButton(language: language)])
@@ -150,12 +154,136 @@ struct SettingsUI {
             [button("\(settings.mode == mode ? "✓ " : "")\(title(mode, language: language))", key + mode.rawValue)]
         }
         rows.append([button(settings.previews ? language.text("Turn off enhanced previews", "Désactiver les aperçus améliorés") : language.text("Turn on enhanced previews", "Activer les aperçus améliorés"), key + (settings.previews ? "previews_off" : "previews_on"))])
+        rows.append([button(language.text("🔗 Link settings", "🔗 Réglages des liens"), "rules:c:\(chat.id):show")])
         rows.append([personalLink(username: username, language: language)])
         rows.append([
             button("\(language == .en ? "✓ " : "")English", key + "lang_en"),
             button("\(language == .fr ? "✓ " : "")Français", key + "lang_fr"),
         ])
         rows.append([closeButton(language: language, action: key + "close")])
+        return SettingsUI(text: text, markup: ["inline_keyboard": rows])
+    }
+
+    static func rules(_ settings: UserSettings, builtins: Rules, scope: String,
+                      section: String = "show", inherited: Bool, previewsEnabled: Bool = true,
+                      youTubeCards: Bool = true, language: BotLanguage = .en) -> SettingsUI {
+        let groupID = scope.hasPrefix("c:") ? String(scope.dropFirst(2)) : nil
+        let key = "rules:\(scope):"
+        let command = groupID != nil ? "/fxclip " : scope == "d" ? "/default " : "/"
+        let parent = groupID.map { "chat:\($0):show" } ?? (scope == "d" ? "default:show" : "personal:show")
+        let close = groupID.map { "chat:\($0):close" } ?? "panel:close"
+        let scopeTitle = groupID != nil
+            ? language.text("Group link settings", "Réglages des liens du groupe")
+            : scope == "d" ? language.text("Default link settings", "Réglages généraux des liens")
+            : language.text("Your link settings", "Vos réglages des liens")
+        var text = "<b>\(scopeTitle)</b>"
+        var rows: [[[String: String]]] = []
+
+        func state(_ enabled: Bool) -> String {
+            enabled ? language.text("on", "activé") : language.text("off", "désactivé")
+        }
+        // Keep catalog IDs intact. An oversized callback must never be truncated
+        // into another rule's action or sent beyond Telegram's 64-byte limit.
+        func add(_ label: String, _ action: String) {
+            guard ("fxclip:" + key + action).utf8.count <= 64 else { return }
+            rows.append([button(label, key + action)])
+        }
+        func toggle(_ label: String, enabled: Bool, action: String) {
+            add("\(enabled ? "✓" : "○") \(label) · \(state(enabled))", action + (enabled ? ":off" : ":on"))
+        }
+
+        if scope == "d" {
+            text += "\n" + language.text(
+                "Applies when no group or personal link configuration is set.",
+                "S’applique sans configuration de liens propre au groupe ou à la personne.")
+        } else if groupID != nil {
+            text += "\n" + (inherited ? language.text("Following all default link settings.", "Tous les réglages généraux des liens sont suivis.")
+                : language.text("This group's complete custom link configuration replaces the defaults.", "La configuration personnalisée complète de ce groupe remplace les réglages généraux."))
+            text += "\n" + language.text("Personal link configurations take priority.", "Les configurations personnelles des liens restent prioritaires.")
+        } else {
+            text += "\n" + (inherited ? language.text("Following each group's complete link configuration.", "La configuration complète des liens de chaque groupe est suivie.")
+                : language.text("Your complete custom link configuration replaces group settings in every group where cleaning is enabled.", "Votre configuration personnalisée complète des liens remplace celle de chaque groupe où le nettoyage est activé."))
+            text += "\n" + language.text(
+                "Custom settings start from the bot’s defaults. Reset to follow each group again.",
+                "La personnalisation part des réglages généraux du bot. Réinitialisez pour suivre à nouveau chaque groupe.")
+        }
+        if groupID != nil && !previewsEnabled {
+            text += "\n\n" + language.text(
+                "⏸ Enhanced previews are paused for this group, including YouTube cards. Enable them in the group settings to apply the choices below.",
+                "⏸ Les aperçus améliorés sont en pause pour ce groupe, y compris les fiches YouTube. Activez-les dans les réglages du groupe pour appliquer les choix ci-dessous.")
+        }
+
+        switch section {
+        case "clean":
+            text += "\n\n" + language.text("<b>Tracker cleaning</b>\nEach switch controls its own cleaning rules.", "<b>Nettoyage des traceurs</b>\nChaque interrupteur contrôle ses propres règles de nettoyage.")
+            toggle(language.text("All websites", "Tous les sites"), enabled: settings.trackersEverywhere, action: "trackers")
+            for site in builtins.trackers.sites {
+                let enabled = !settings.disabledSites.contains(site.id)
+                toggle(site.name, enabled: enabled, action: "site:\(site.id)")
+            }
+        case "previews":
+            text += "\n\n" + language.text(
+                "<b>Preview mirrors</b>\nEnabled mirrors replace the link's domain. Links pass through Telegram and the selected mirror.",
+                "<b>Miroirs d’aperçu</b>\nLes miroirs activés remplacent le domaine du lien. Les liens passent par Telegram et le miroir choisi.")
+            for preview in builtins.previews {
+                let enabled = (settings.previews[preview.id]?.enabled ?? settings.previewDefaultsEnabled)
+                    && (settings.previews[preview.id]?.apps ?? preview.apps).contains("telegram")
+                let host = settings.previews[preview.id]?.targetHost.flatMap(Rules.canonicalPreviewHost) ?? preview.to
+                text += "\n\n\(enabled ? "✓" : "○") <b>\(escaped(preview.name))</b> · \(state(enabled))\n\(escaped(host))"
+                toggle(preview.name, enabled: enabled, action: "preview:\(preview.id)")
+                add(language.text("Change provider", "Changer de fournisseur") + " · " + preview.name, "provider:\(preview.id)")
+            }
+            text += "\n\n" + language.text(
+                "<b>YouTube cards</b> · \(state(youTubeCards))\nBot-only option: fetches the title and thumbnail directly from YouTube, even for an already-clean single link. A duplicate is possible if Telegram also displays its own preview.",
+                "<b>Fiches YouTube</b> · \(state(youTubeCards))\nOption propre au bot : récupère le titre et la miniature directement sur YouTube, même pour un lien seul déjà propre. Un doublon est possible si Telegram affiche aussi son aperçu.")
+            toggle(language.text("YouTube cards", "Fiches YouTube"), enabled: youTubeCards, action: "youtube")
+        case "excluded":
+            text += "\n\n" + language.text(
+                "<b>Cleaning exclusions</b>\nTracker cleaning is skipped for these domains. Preview switches apply separately and can still change their links.",
+                "<b>Exclusions du nettoyage</b>\nLes traceurs de ces domaines ne sont pas nettoyés. Les réglages des aperçus s’appliquent séparément et peuvent encore modifier leurs liens.")
+            if settings.neverClean.isEmpty {
+                text += "\n\n" + language.text("No cleaning exclusions.", "Aucune exclusion du nettoyage.")
+            } else {
+                for host in settings.neverClean.prefix(8) {
+                    text += "\n• \(escaped(host.host))" + (host.subdomains ? language.text(" (including subdomains)", " (sous-domaines inclus)") : language.text(" (exact domain)", " (domaine exact)"))
+                }
+            }
+            if settings.neverClean.count > 8 {
+                text += "\n" + language.text("… and \(settings.neverClean.count - 8) more.", "… et \(settings.neverClean.count - 8) autres.")
+            }
+            text += "\n\n" + language.text("Send a command with the domain to add or remove:", "Envoyez une commande avec le domaine à ajouter ou retirer :")
+            text += "\n<code>\(escaped(command))exclude add &lt;domain&gt;</code>\n<code>\(escaped(command))exclude remove &lt;domain&gt;</code>"
+        case let provider where provider.hasPrefix("provider:"):
+            let id = String(provider.dropFirst("provider:".count))
+            if let preview = builtins.previews.first(where: { $0.id == id }) {
+                let host = settings.previews[id]?.targetHost.flatMap(Rules.canonicalPreviewHost) ?? preview.to
+                text += "\n\n<b>\(escaped(preview.name))</b>\n" + language.text("Current provider: ", "Fournisseur actuel : ") + escaped(host)
+                text += "\n" + language.text("Built-in provider: ", "Fournisseur d’origine : ") + escaped(preview.to)
+                text += "\n\n" + language.text("To change it, send this command with the mirror's domain:", "Pour le changer, envoyez cette commande avec le domaine du miroir :")
+                text += "\n<code>\(escaped(command))provider \(escaped(id)) &lt;domain&gt;</code>"
+                text += "\n\n" + language.text("Enabled preview links will use that provider, which receives the links.", "Les liens d’aperçu activés utiliseront ce fournisseur, qui recevra les liens.")
+                add(language.text("Restore built-in provider", "Rétablir le fournisseur d’origine"), "providerreset:\(id)")
+            } else {
+                text += "\n\n" + language.text("This preview is no longer available.", "Cet aperçu n’est plus disponible.")
+            }
+        default:
+            add(language.text("🧹 Tracker cleaning", "🧹 Nettoyage des traceurs"), "clean")
+            add(language.text("🖼 Previews and providers", "🖼 Aperçus et fournisseurs"), "previews")
+            add(language.text("🚫 Cleaning exclusions", "🚫 Exclusions du nettoyage"), "excluded")
+            text += "\n\n" + language.text("Choose a category below.", "Choisissez une catégorie ci-dessous.")
+            text += "\n" + (scope == "d" ? language.text("Reset restores the complete built-in link configuration.", "Réinitialiser rétablit la configuration complète des liens d’origine.")
+                : groupID != nil ? language.text("Reset removes this group's complete custom link configuration and follows the defaults again.", "Réinitialiser retire toute la configuration personnalisée des liens du groupe et rétablit les réglages généraux.")
+                : language.text("Reset removes your complete custom link configuration and follows each group again.", "Réinitialiser retire toute votre configuration personnalisée des liens pour suivre à nouveau chaque groupe."))
+            add(scope == "d" ? language.text("↺ Restore built-in settings", "↺ Rétablir les réglages d’origine")
+                : language.text("↺ Follow inherited settings", "↺ Suivre les réglages hérités"), "reset")
+        }
+        if section.hasPrefix("provider:") {
+            add(language.text("← Previews", "← Aperçus"), "previews")
+        } else if section != "show" {
+            add(language.text("← Link settings", "← Réglages des liens"), "show")
+        }
+        rows.append([button(language.text("← Settings", "← Réglages"), parent)])
+        rows.append([closeButton(language: language, action: close)])
         return SettingsUI(text: text, markup: ["inline_keyboard": rows])
     }
 

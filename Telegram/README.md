@@ -1,7 +1,7 @@
 # fxclip for Telegram
 
 Clean links, ready to share. fxclip is a self-hosted Telegram bot that removes tracking
-from links and optionally improves X and Instagram previews, without requiring group
+from links and optionally improves X, Instagram and Reddit previews, without requiring group
 members to install a client. Menus support English and French. Run your own instance
 using the [Docker setup](#docker-setup); this project does not configure a public bot.
 
@@ -37,8 +37,8 @@ Commands remain available: `/mode reply|replace|secretary|off|default`,
 ## Preview links
 
 Group admins can enable or disable enhanced previews in `/setup` or with
-`/fxclip previews on|off`. When enabled, X and Instagram links can use
-`fxtwitter.com` and `zzinstagram.com`.
+`/fxclip previews on|off`. When enabled, X, Instagram and Reddit links can use
+`fxtwitter.com`, `zzinstagram.com` and `vxreddit.com`. Each mirror has its own switch and editable domain under **Link settings → Previews and providers**.
 
 For a message containing only a plain YouTube video link, enhanced previews also
 fetch the title and thumbnail directly from YouTube and send them with the clean
@@ -53,6 +53,45 @@ deletion or edit. A tracker-free original can still become a mirror link when
 previews are enabled. A clean YouTube link is never deleted just to add a card.
 Metadata failures fall back to normal cleaning. Photo rejection can fall back to
 cleaned text; an ambiguous send is never retried.
+
+## Link settings
+
+Open `/setup` in a group, then **Link settings**. Group admins can configure
+global tracker removal, individual sites, cleaning exclusions, each preview
+mirror and its provider, and the separate YouTube card option. The existing
+group activation and preview pause switches still apply.
+
+Members get the same link controls in private `/settings`. Without a personal
+configuration, each group's choices apply. The first personal edit starts a
+complete configuration from the bot defaults and applies it to that person's
+messages in all enabled groups. **Follow inherited settings** removes that
+custom configuration. Group custom configurations similarly replace the bot's
+link defaults as a whole. Message modes remain separate.
+
+Provider and exclusion editing uses short commands:
+
+| Scope | Provider | Cleaning exclusion |
+|---|---|---|
+| Personal, in private | `/provider reddit mirror.example` | `/exclude add example.com` |
+| Group, admin only | `/fxclip provider reddit mirror.example` | `/fxclip exclude add example.com` |
+| Bot defaults, owner only in private | `/default provider reddit mirror.example` | `/default exclude add example.com` |
+
+Use `default` instead of a provider domain to restore its built-in provider.
+Use `remove` instead of `add` to remove an exclusion. Exclusions include
+subdomains by default; append `exact` when adding one to match only that host.
+These exclusions skip tracker removal; preview switches remain separate,
+matching the native apps.
+
+Provider values are domains only, without a scheme, credentials, port, path or
+query. Links use HTTPS. The selected service can receive links when previews are
+generated or opened. Changing a provider preserves its enabled state and does
+not contact it from the settings screen.
+
+The bot stores the same `FxEngine.UserSettings` used by the apps. `targetHost`
+overrides a built-in mirror domain; `previewDefaultsEnabled` preserves the
+default choice for newly added mirrors, including old installations that
+declined all previews. Rule lists come from `Shared/rules.json`. Message mode,
+chat activation and YouTube photo cards are Telegram-specific.
 
 ## English and French
 
