@@ -57,8 +57,8 @@ struct SettingsUI {
             "<b>Secretary: private chats only</b>\nThis mode requires connecting this bot in Telegram's automation settings, with reply and edit permissions. It never edits incoming messages.",
             "<b>Secrétaire : privé uniquement</b>\nCe mode nécessite une connexion à ce bot dans les réglages d’automatisation de Telegram, avec les droits de réponse et de modification. Il ne modifie jamais les messages reçus.")
         text += "\n\n" + language.text(
-            "Links pass through Telegram and, for some previews, through mirror sites.\n\nChoose below 👇",
-            "Les liens passent par Telegram et, pour certains aperçus, par des sites miroirs.\n\nChoisissez ci-dessous 👇")
+            "Links pass through Telegram and, for some previews, through mirror sites. With enhanced previews on, a plain YouTube link can receive a thumbnail and title fetched from YouTube, even when the link is already clean. Telegram does not report whether its own preview worked.\n\nChoose below 👇",
+            "Les liens passent par Telegram et, pour certains aperçus, par des sites miroirs. Avec les aperçus améliorés, un lien YouTube seul peut recevoir une miniature et un titre récupérés sur YouTube, même s’il est déjà propre. Telegram n’indique pas si son propre aperçu a fonctionné.\n\nChoisissez ci-dessous 👇")
         var rows = modeRows(selected: mode, scope: "personal", language: language)
         rows.append([button("\(mode == nil ? "✓ " : "")\(language.text("Follow the group's setting", "Suivre le réglage du groupe"))", "personal:default")])
         if owner {
@@ -142,6 +142,9 @@ struct SettingsUI {
             "Enhanced previews: \(settings.previews ? "on" : "off").\nAdministrators manage only this group. A personal choice takes priority when cleaning is enabled.",
             "Aperçus améliorés : \(settings.previews ? "activés" : "désactivés").\nLes administrateurs règlent uniquement ce groupe. Un choix personnel reste prioritaire lorsque le nettoyage est activé.")
         text += "\n\n" + language.text("Group language: ", "Langue du groupe : ") + language.name
+        text += "\n\n" + language.text(
+            "YouTube: enhanced previews fetch the title and thumbnail directly from YouTube, including for already-clean single links. A duplicate is possible if Telegram's own preview works.",
+            "YouTube : les aperçus améliorés récupèrent le titre et la miniature directement sur YouTube, même pour un lien seul déjà propre. Un doublon est possible si l’aperçu Telegram fonctionne.")
         var rows = [[button(enabled ? language.text("⏸ Turn off cleaning", "⏸ Désactiver le nettoyage") : language.text("✅ Turn on cleaning", "✅ Activer le nettoyage"), key + (enabled ? "disable" : "enable"))]]
         rows += [Mode.reply, .replace, .off].map { mode in
             [button("\(settings.mode == mode ? "✓ " : "")\(title(mode, language: language))", key + mode.rawValue)]

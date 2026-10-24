@@ -73,6 +73,10 @@ public struct Message: Decodable {
     public var sender_business_bot: TelegramUser?
     public var forward_origin: ForwardOrigin?
     public var reply_markup: InlineKeyboardMarkup?
+    public var link_preview_options: LinkPreviewOptions?
+}
+public struct LinkPreviewOptions: Decodable {
+    public var is_disabled: Bool?
 }
 public struct InlineKeyboardMarkup: Decodable, Equatable {
     public let inline_keyboard: [[InlineKeyboardButton]]

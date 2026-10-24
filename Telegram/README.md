@@ -40,10 +40,19 @@ Group admins can enable or disable enhanced previews in `/setup` or with
 `/fxclip previews on|off`. When enabled, X and Instagram links can use
 `fxtwitter.com` and `zzinstagram.com`.
 
-The bot stays silent when the final cleaned/preview result is unchanged. Links
-already prepared by a desktop or mobile fxclip client produce no reply, repost,
-deletion or edit. A tracker-free original URL can still be rewritten when
-improved previews are enabled for its site.
+For a message containing only a plain YouTube video link, enhanced previews also
+fetch the title and thumbnail directly from YouTube and send them with the clean
+link. This includes already-clean links. Telegram's Bot API does not expose
+whether its own card appeared, so a duplicate preview is possible. Turning
+enhanced previews off disables these cards. Explicitly suppressed previews,
+formatted or hidden links, captions and messages containing more than one link
+keep their existing behavior. Secretary only edits links; it does not post cards.
+
+Other links already prepared by a fxclip client produce no reply, repost,
+deletion or edit. A tracker-free original can still become a mirror link when
+previews are enabled. A clean YouTube link is never deleted just to add a card.
+Metadata failures fall back to normal cleaning. Photo rejection can fall back to
+cleaned text; an ambiguous send is never retried.
 
 ## English and French
 
@@ -143,11 +152,14 @@ configuration: install new images explicitly.
 Cleaning runs locally on the server, but the bot communicates with Telegram.
 Telegram receives reposted messages; mirrors can receive links when previews are
 generated. The engine does not expand or visit links. No additional analytics or
-external account is used. Locale detection uses Telegram's supplied language tag,
+external account is used. Native YouTube cards request video metadata from
+YouTube's oEmbed endpoint and let Telegram fetch the YouTube thumbnail; they use
+no preview mirror and do not persist metadata. Locale detection uses Telegram's supplied language tag,
 never message-text analysis or an external translation service.
 
-Unchanged, protected, paid, overlong or older-than-five-minute messages are
-ignored. Copies queued during downtime are not rewritten on restart. Code blocks
+Unchanged links stay untouched except for enabled YouTube cards. Protected, paid,
+overlong or older-than-five-minute messages are ignored. Copies queued during
+downtime are not rewritten on restart. Code blocks
 are left alone. Hidden links and formatting use adjusted UTF-16 entity positions.
 
 The polling checkpoint is saved **before** each action. After an ambiguous network

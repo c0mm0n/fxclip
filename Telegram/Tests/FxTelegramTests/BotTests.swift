@@ -8,6 +8,7 @@ final class FakeAPI: BotAPI {
     var failSend = false
     var failDelete = false
     var failEdit = false
+    var photoError: Error?
     var admin = true
     var canDelete = true
     var memberResult: [String: Any]?
@@ -21,6 +22,9 @@ final class FakeAPI: BotAPI {
     func call(_ method: String, _ parameters: [String: Any]) async throws -> Any {
         calls.append((method, parameters))
         switch method {
+        case "sendPhoto":
+            if let photoError { throw photoError }
+            return sendResult
         case "setMyCommands":
             let code = parameters["language_code"] as? String ?? ""
             if code == failCommandsLocale {
@@ -52,6 +56,17 @@ final class FakeAPI: BotAPI {
         }
     }
     var methods: [String] { calls.map(\.0) }
+}
+
+final class FakeYouTubeMetadata: YouTubeMetadataProviding {
+    var requestedIDs: [String] = []
+    var fail = false
+    let title = "🎬 Example video"
+    func fetch(videoID: String) async throws -> YouTubeMetadata {
+        requestedIDs.append(videoID)
+        if fail { throw URLError(.timedOut) }
+        return YouTubeMetadata(title: title, thumbnailURL: URL(string: "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg")!)
+    }
 }
 
 final class BotTests: XCTestCase {
@@ -112,6 +127,109 @@ final class BotTests: XCTestCase {
         return user
     }
     var sent: [String: Any] { api.calls.first { $0.0 == "sendMessage" }!.1 }
+
+    func enableYouTubeCards() -> FakeYouTubeMetadata {
+        let metadata = FakeYouTubeMetadata()
+        bot = Bot(api: api, store: store, engine: engine, allowedChats: [-100], allowedOwners: [7],
+                  botID: 99, username: "fxclipbot", youTubeMetadata: metadata)
+        return metadata
+    }
+
+    func testPreviewActivationCommandDisclosesYouTubeAccessAndPossibleDuplicates() async throws {
+        for language in [BotLanguage.en, .fr] {
+            try store.setGroupLanguage(language, chatID: -100)
+            api.calls = []
+            try await handle(["text": "/fxclip previews on"])
+            let text = try XCTUnwrap(sent["text"] as? String)
+            XCTAssertTrue(text.contains(language == .fr ? "récupérés directement sur YouTube" : "fetched directly from YouTube"))
+            XCTAssertTrue(text.contains(language == .fr ? "doublon" : "duplicate"))
+        }
+    }
+
+    func testYouTubeCardForAlreadyCleanURLIsAReplyWithoutAttributionOrDeletion() async throws {
+        let metadata = enableYouTubeCards()
+        try replaceMode()
+        let url = "https://youtu.be/dQw4w9WgXcQ?t=42"
+        try await handle(["text": url, "message_thread_id": 123])
+        XCTAssertEqual(metadata.requestedIDs, ["dQw4w9WgXcQ"])
+        XCTAssertEqual(api.methods, ["sendPhoto"])
+        let photo = api.calls[0].1
+        XCTAssertEqual(photo["caption"] as? String, metadata.title + "\n\n" + url)
+        XCTAssertEqual(photo["photo"] as? String, "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg")
+        XCTAssertEqual((photo["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5)
+        XCTAssertEqual(photo["message_thread_id"] as? Int64, 123)
+        XCTAssertNoThrow(try JSONSerialization.data(withJSONObject: photo))
+    }
+
+    func testTrackedYouTubeReplacementConfirmsPhotoAndPreservesAuthorCredit() async throws {
+        let metadata = enableYouTubeCards()
+        try replaceMode()
+        try await handle(["text": "https://youtu.be/dQw4w9WgXcQ?is=share-token&t=42"])
+        XCTAssertEqual(api.methods, ["getChatMember", "sendPhoto", "deleteMessage"])
+        let photo = api.calls[1].1
+        XCTAssertEqual(photo["caption"] as? String, metadata.title + "\n\nPosted by Alice\n\nhttps://youtu.be/dQw4w9WgXcQ?t=42")
+        let entities = try decode([Entity].self, from: XCTUnwrap(photo["caption_entities"]))
+        XCTAssertEqual(entities.first?.offset, metadata.title.utf16.count + 2 + "Posted by ".utf16.count)
+    }
+
+    func testYouTubeCardsHonorPreviewModeAndActivationChoices() async throws {
+        let metadata = enableYouTubeCards()
+        var settings = ChatSettings(); settings.previews = false
+        try store.set(settings, chatID: -100)
+        try await handle(["text": "https://youtu.be/dQw4w9WgXcQ"])
+        XCTAssertTrue(api.calls.isEmpty)
+        try await handle(["text": "https://youtu.be/dQw4w9WgXcQ?is=share-token"])
+        XCTAssertEqual(api.methods, ["sendMessage"])
+        settings.previews = true; try store.set(settings, chatID: -100)
+        for mode in [Mode.off, .secretary] {
+            api.calls = []; try store.setMode(mode, userID: 7)
+            try await handle(["text": "https://youtu.be/dQw4w9WgXcQ"])
+            XCTAssertTrue(api.calls.isEmpty)
+        }
+        try store.setMode(nil, userID: 7); try store.setGroupEnabled(false, chatID: -100)
+        try await handle(["text": "https://youtu.be/dQw4w9WgXcQ"])
+        XCTAssertTrue(metadata.requestedIDs.isEmpty)
+    }
+
+    func testYouTubeCardsRespectExplicitPreviewSuppressionAndFormattedContent() async throws {
+        let metadata = enableYouTubeCards()
+        let url = "https://youtu.be/dQw4w9WgXcQ"
+        try await handle(["text": url, "link_preview_options": ["is_disabled": true]])
+        for type in ["code", "pre", "spoiler", "text_link"] {
+            try await handle(["text": url, "entities": [["type": type, "offset": 0, "length": url.utf16.count]]])
+        }
+        try await handle(["text": url + " " + url])
+        try await handle(["text": NSNull(), "caption": url])
+        XCTAssertTrue(metadata.requestedIDs.isEmpty)
+        XCTAssertTrue(api.calls.isEmpty)
+    }
+
+    func testYouTubeMetadataFailureKeepsNormalCleaningAndLeavesCleanLinksQuiet() async throws {
+        let metadata = enableYouTubeCards(); metadata.fail = true
+        try await handle(["text": "https://youtu.be/dQw4w9WgXcQ?is=share-token"])
+        XCTAssertEqual(api.methods, ["sendMessage"])
+        XCTAssertEqual(sent["text"] as? String, "https://youtu.be/dQw4w9WgXcQ")
+        api.calls = []
+        try await handle(["text": "https://youtu.be/dQw4w9WgXcQ"])
+        try await handle(["text": "https://example.com/clean"])
+        XCTAssertTrue(api.calls.isEmpty)
+    }
+
+    func testRejectedYouTubePhotoFallsBackButAmbiguousSendsNeverDuplicateOrDelete() async throws {
+        _ = enableYouTubeCards(); try replaceMode()
+        let url = "https://youtu.be/dQw4w9WgXcQ?is=share-token"
+        api.photoError = BotError.telegram(400)
+        try await handle(["text": url])
+        XCTAssertEqual(api.methods, ["getChatMember", "sendPhoto", "sendMessage", "deleteMessage"])
+        for failure in [URLError(.timedOut) as Error, BotError.invalidResponse] {
+            api.calls = []; api.photoError = failure
+            do { try await handle(["text": url]); XCTFail("Expected send failure") } catch { }
+            XCTAssertEqual(api.methods, ["getChatMember", "sendPhoto"])
+        }
+        api.calls = []; api.photoError = nil; api.sendResult = ["message_id": true]
+        do { try await handle(["text": url]); XCTFail("Expected malformed success failure") } catch { }
+        XCTAssertEqual(api.methods, ["getChatMember", "sendPhoto"])
+    }
 
     func testPrivateCloseDeletesOnlyPanelAndKeepsSettings() async throws {
         try store.setMode(.off, userID: 8)
@@ -1056,6 +1174,7 @@ private struct WireMessage: Encodable {
     let reply_to_message: [String: Int64]?
     let is_automatic_forward: Bool?; let has_protected_content: Bool?; let is_paid_post: Bool?
     let business_connection_id: String?; let sender_business_bot: TelegramUser?; let forward_origin: ForwardOrigin?
+    let link_preview_options: [String: Bool]?
     init(_ m: Message) {
         message_id = m.message_id; date = m.date; chat = m.chat; from = m.from; sender_chat = m.sender_chat
         text = m.text; entities = m.entities; caption = m.caption; caption_entities = m.caption_entities
@@ -1063,5 +1182,6 @@ private struct WireMessage: Encodable {
         reply_to_message = m.reply_to_message.map { ["message_id": $0.message_id] }
         has_protected_content = m.has_protected_content; is_paid_post = m.is_paid_post
         business_connection_id = m.business_connection_id; sender_business_bot = m.sender_business_bot; forward_origin = m.forward_origin
+        link_preview_options = m.link_preview_options?.is_disabled.map { ["is_disabled": $0] }
     }
 }

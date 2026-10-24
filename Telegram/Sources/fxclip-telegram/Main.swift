@@ -57,7 +57,7 @@ import FxTelegram
             print("Telegram profile localization could not be refreshed; continuing with saved settings.")
         }
         let bot = Bot(api: api, store: store, engine: Engine(rules: rules), allowedChats: chats, allowedOwners: owners,
-                      botID: me.id, username: me.username ?? "")
+                      botID: me.id, username: me.username ?? "", youTubeMetadata: YouTubeMetadataFetcher())
         print("fxclip Telegram ready; \(store.state.knownGroups.count) group(s) discovered; default mode: \(store.state.defaultMode.rawValue).")
         print("Group cleaning follows admin activation settings. Secretary separately handles opted-in connected private chats.")
         var failures = 0

@@ -9,11 +9,14 @@ public final class Bot {
     private let allowedOwners: Set<Int64>
     private let botID: Int64
     private let username: String
+    private let youTubeMetadata: YouTubeMetadataProviding?
     public init(api: BotAPI, store: StateStore, engine: Engine,
-                allowedChats: Set<Int64>, allowedOwners: Set<Int64> = [], botID: Int64, username: String) {
+                allowedChats: Set<Int64>, allowedOwners: Set<Int64> = [], botID: Int64, username: String,
+                youTubeMetadata: YouTubeMetadataProviding? = nil) {
         self.api = api; self.store = store; self.rewriter = Rewriter(engine: engine)
         self.allowedChats = allowedChats; self.botID = botID; self.username = username
         self.allowedOwners = allowedOwners
+        self.youTubeMetadata = youTubeMetadata
     }
 
     public func handle(_ update: Update, now: Int = Int(Date().timeIntervalSince1970)) async throws {
@@ -143,8 +146,8 @@ public final class Bot {
             let previews = settings.previews ? language.text("on", "activés") : language.text("off", "désactivés")
             let summary = "\(source): \(SettingsUI.title(settings.mode, language: language)).\n\n\(SettingsUI.outcome(settings.mode, language: language))\n\n"
             try await reply(summary + language.text(
-                "Improved previews: \(previews).\nA personal choice overrides this mode, including /fxclip off, while cleaning is enabled for this group. Choose yours in private.\n\nAdmins: /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off",
-                "Aperçus améliorés : \(previews).\nUn choix personnel passe avant ce mode, y compris /fxclip off, tant que le nettoyage est activé pour ce groupe. Choisissez le vôtre en privé.\n\nAdmins : /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off"),
+                "Improved previews: \(previews).\nWhen on, plain YouTube links can receive a title and thumbnail fetched directly from YouTube, even if already clean. A duplicate is possible when Telegram's own preview works.\nA personal choice overrides this mode, including /fxclip off, while cleaning is enabled for this group. Choose yours in private.\n\nAdmins: /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off",
+                "Aperçus améliorés : \(previews).\nLorsqu’ils sont activés, les liens YouTube seuls peuvent recevoir un titre et une miniature récupérés directement sur YouTube, même s’ils sont déjà propres. Un doublon est possible si l’aperçu Telegram fonctionne.\nUn choix personnel passe avant ce mode, y compris /fxclip off, tant que le nettoyage est activé pour ce groupe. Choisissez le vôtre en privé.\n\nAdmins : /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off"),
                 to: message, markup: privateSettingsLink(language: language))
             return
         }
@@ -152,14 +155,23 @@ public final class Bot {
         if message.sender_chat == nil, let user = message.from,
            let personal = store.state.users[String(user.id)] { settings.mode = personal }
         guard ["group", "supergroup", "private"].contains(message.chat.type),
-              settings.mode != .off, settings.mode != .secretary,
-              let replyContent = rewriter.rewrite(message, previews: settings.previews, attribution: false) else { return }
+              settings.mode != .off, settings.mode != .secretary else { return }
+        let replyContent = rewriter.rewrite(message, previews: settings.previews, attribution: false)
+        // This is presentation, not another cleaning engine. Only plain, single-link
+        // messages qualify; formatting, hidden links and media keep their existing path.
+        let videoID: String?
+        if settings.previews, message.link_preview_options?.is_disabled != true,
+           youTubeMetadata != nil, let text = message.text,
+           (message.entities ?? []).allSatisfy({ $0.type == "url" }), isBareURL(text) {
+            videoID = YouTubePreview.videoID(in: text.trimmingCharacters(in: .whitespacesAndNewlines))
+        } else { videoID = nil }
+        guard replyContent != nil || videoID != nil else { return }
         // Media, forwards and anonymous/channel-authored posts retain their originals.
         var replace = false
-        if settings.mode == .replace && message.text != nil && message.sender_chat == nil && message.forward_origin == nil {
+        if replyContent != nil && settings.mode == .replace && message.text != nil && message.sender_chat == nil && message.forward_origin == nil {
             replace = try await canDelete(in: message.chat)
         }
-        let rendered: RenderedMessage
+        let rendered: RenderedMessage?
         if replace {
             guard let credited = rewriter.rewrite(message, previews: settings.previews, language: language) else { return }
             rendered = credited
@@ -167,6 +179,45 @@ public final class Bot {
             // Telegram's reply header already identifies the original sender.
             rendered = replyContent
         }
+        if let videoID, let youTubeMetadata {
+            // Fetching metadata is safe to fall back from; a timed-out send is not.
+            let metadata = try? await youTubeMetadata.fetch(videoID: videoID)
+            if let metadata {
+                let cleanText = rendered?.text ?? rewriter.engine.clean(message.text ?? "").text
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let caption = metadata.title + "\n\n" + cleanText
+                if caption.utf16.count <= 1024 {
+                    var photo = base(message)
+                    photo["photo"] = metadata.thumbnailURL.absoluteString
+                    photo["caption"] = caption
+                    photo["disable_notification"] = true
+                    if replace {
+                        if let parent = message.reply_to_message {
+                            photo["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
+                        }
+                        if let rendered {
+                            var entities = rendered.entities
+                            for index in entities.indices { entities[index].offset += metadata.title.utf16.count + 2 }
+                            photo["caption_entities"] = try jsonObject(entities)
+                        }
+                    } else {
+                        photo["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true]
+                    }
+                    do {
+                        let sent = try await api.call("sendPhoto", photo)
+                        guard let sent = sent as? [String: Any], confirmedMessageID(sent["message_id"]) != nil else {
+                            throw BotError.invalidResponse
+                        }
+                        if replace { await deleteReplacedOriginal(message) }
+                        return
+                    } catch BotError.telegram(let code) where code == 400 || code == 403 {
+                        // Explicit rejection means no photo was sent. Preserve the normal
+                        // cleaned-text path; never retry an ambiguous transport failure.
+                    }
+                }
+            }
+        }
+        guard let rendered else { return }
         var parameters = base(message)
         parameters["text"] = rendered.text
         parameters["entities"] = try jsonObject(rendered.entities)
@@ -184,12 +235,14 @@ public final class Bot {
         guard let sent = sent as? [String: Any], confirmedMessageID(sent["message_id"]) != nil else {
             throw BotError.invalidResponse
         }
-        if replace {
-            do {
-                _ = try await api.call("deleteMessage", ["chat_id": message.chat.id, "message_id": message.message_id])
-            } catch {
-                print("Replacement posted; original retained because deletion failed.")
-            }
+        if replace { await deleteReplacedOriginal(message) }
+    }
+
+    private func deleteReplacedOriginal(_ message: Message) async {
+        do {
+            _ = try await api.call("deleteMessage", ["chat_id": message.chat.id, "message_id": message.message_id])
+        } catch {
+            print("Replacement posted; original retained because deletion failed.")
         }
     }
 

@@ -33,7 +33,7 @@ On desktop, fxclip cleans the clipboard automatically. Choose which sites to cle
 
 App previews are optional. By default, X links can use `fxtwitter.com` and Instagram links can use `zzinstagram.com` in Telegram. On desktop, switching to another app restores the clean original. Mobile sharing sends the appropriate link to the destination you choose.
 
-The Telegram bot uses the same rules and stays silent when the final link is unchanged, including matching preview links already prepared by a fxclip client. A tracker-free original can still become a mirror link when previews are enabled. Members choose their own behavior; admins control group activation and defaults. Its menus support English and French.
+The Telegram bot uses the same cleaning rules. It stays silent when the final link is unchanged, including matching preview links already prepared by a fxclip client, with one optional exception: enhanced previews can add a thumbnail, title and clean link for a plain YouTube URL, even when it is already clean. This fetches metadata directly from YouTube and can duplicate a working Telegram preview. A tracker-free original can also become a mirror link when previews are enabled. Members choose their own behavior; admins control group activation and defaults. Its menus support English and French.
 
 <table>
   <tr>
