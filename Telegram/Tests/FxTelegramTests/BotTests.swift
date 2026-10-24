@@ -184,6 +184,42 @@ final class BotTests: XCTestCase {
         ] { try await handle(fixture) }
         XCTAssertTrue(api.calls.isEmpty)
     }
+    func testEveryClientCleanedSharedVectorIsSilentInReplyAndReplaceModes() async throws {
+        struct Vector: Decodable { let telegram: String }
+        struct File: Decodable { let vectors: [Vector] }
+        let vectors = try JSONDecoder().decode(File.self,
+            from: Data(contentsOf: shared.appendingPathComponent("vectors.json"))).vectors
+        for mode in [Mode.reply, .replace] {
+            var settings = ChatSettings(); settings.mode = mode
+            try store.set(settings, chatID: -100)
+            for vector in vectors {
+                api.calls = []
+                try await handle(["text": vector.telegram])
+                XCTAssertTrue(api.calls.isEmpty, "\(mode): \(vector.telegram)")
+            }
+        }
+    }
+    func testClientCleanedHiddenLinksAndCaptionsAreSilentInReplaceMode() async throws {
+        try replaceMode()
+        try await handle(["text": "Already shared", "entities": [[
+            "type": "text_link", "offset": 0, "length": 14,
+            "url": "https://fxtwitter.com/example/status/1",
+        ]]])
+        try await handle(["text": NSNull(), "caption": "https://zzinstagram.com/reel/example/"])
+        XCTAssertTrue(api.calls.isEmpty)
+    }
+    func testSecretaryDoesNotEditClientCleanedPreviewLinks() async throws {
+        try store.setMode(.secretary, userID: 7)
+        for link in ["https://fxtwitter.com/example/status/1", "https://zzinstagram.com/reel/example/"] {
+            api.calls = []
+            try await handle(["text": link, "chat": ["id": 8, "type": "private"],
+                              "business_connection_id": "connection"], business: true)
+            XCTAssertFalse(api.methods.contains("sendMessage"))
+            XCTAssertFalse(api.methods.contains("deleteMessage"))
+            XCTAssertFalse(api.methods.contains("editMessageText"))
+            XCTAssertFalse(api.methods.contains("editMessageCaption"))
+        }
+    }
     func testOnlyAdminsCanChangeGroupSettings() async throws {
         api.admin = false
         try await handle(["text": "/fxclip replace"])

@@ -61,6 +61,11 @@ its locale selection; private overrides also update that private command menu.
 Message content is never translated or analyzed to guess a language. Existing
 modes, group activation and polling checkpoints survive the language upgrade.
 
+The bot stays silent when the final cleaned/preview result is unchanged. Links
+already prepared by a desktop or mobile fxclip client produce no reply, repost,
+deletion or edit. A tracker-free original URL can still be rewritten when
+improved previews are enabled for its site.
+
 ## Secretary Mode
 
 Enable **Secretary Mode** in @BotFather, then connect the bot in your account's
