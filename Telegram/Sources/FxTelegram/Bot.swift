@@ -122,11 +122,19 @@ public final class Bot {
            let personal = store.state.users[String(user.id)] { settings.mode = personal }
         guard ["group", "supergroup", "private"].contains(message.chat.type),
               settings.mode != .off, settings.mode != .secretary,
-              let rendered = rewriter.rewrite(message, previews: settings.previews) else { return }
+              let replyContent = rewriter.rewrite(message, previews: settings.previews, attribution: false) else { return }
         // Media, forwards and anonymous/channel-authored posts retain their originals.
         var replace = false
         if settings.mode == .replace && message.text != nil && message.sender_chat == nil && message.forward_origin == nil {
             replace = try await canDelete(in: message.chat)
+        }
+        let rendered: RenderedMessage
+        if replace {
+            guard let credited = rewriter.rewrite(message, previews: settings.previews) else { return }
+            rendered = credited
+        } else {
+            // Telegram's reply header already identifies the original sender.
+            rendered = replyContent
         }
         var parameters = base(message)
         parameters["text"] = rendered.text

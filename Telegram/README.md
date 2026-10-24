@@ -4,12 +4,19 @@ Un bot hébergé chez vous : les membres d’un groupe n’ont rien à installer
 Il réutilise le moteur Swift et `Shared/rules.json` pour retirer les traceurs
 et améliorer les aperçus X / Instagram.
 
+`Shared/rules.json` est l’unique source des règles pour toutes les plateformes.
+Le bot importe directement `FxEngine` : aucune règle de site ou logique de
+nettoyage spécifique à Telegram ne doit être ajoutée ici. Tout changement de
+nettoyage commence dans `Shared/vectors.json`, passe le moteur Swift de référence,
+puis les ports Android et Windows contre les mêmes données.
+
 ## Choisir son comportement
 
 Ouvrir le bot en privé puis **Démarrer** ou `/settings`. Le menu est en français,
 avec des boutons et une coche sur le choix actuel :
 
 - **Répondre au message** : garde l’original et répond avec la version nettoyée.
+  L’auteur figure déjà dans la citation Telegram, sans ligne d’attribution ajoutée.
 - **Remplacer le message** : republie le texte avec « Publié par … », puis supprime
   l’original uniquement après confirmation de l’envoi. Sans droit de suppression,
   avec un média, un transfert ou une identité anonyme, le bot répond à la place.

@@ -47,6 +47,21 @@
       "telegram": "https://zzinstagram.com/reel/abc/"
     },
     {
+      "input": "https://www.instagram.com/reel/example/?srtk=share-token",
+      "clean": "https://www.instagram.com/reel/example/",
+      "telegram": "https://zzinstagram.com/reel/example/"
+    },
+    {
+      "input": "https://www.instagram.com/reel/example/?srtk=share-token&start=42",
+      "clean": "https://www.instagram.com/reel/example/?start=42",
+      "telegram": "https://zzinstagram.com/reel/example/?start=42"
+    },
+    {
+      "input": "https://example.com/reel/example/?srtk=share-token",
+      "clean": "https://example.com/reel/example/?srtk=share-token",
+      "telegram": "https://example.com/reel/example/?srtk=share-token"
+    },
+    {
       "input": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&si=abc&t=42s",
       "clean": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s",
       "telegram": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s"

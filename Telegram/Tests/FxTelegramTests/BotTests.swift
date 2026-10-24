@@ -92,7 +92,7 @@ final class BotTests: XCTestCase {
 
     func testURLWithAtSignIsNotMistakenForBotCommand() async throws {
         try await handle(["text": "https://www.youtube.com/@chaine?utm_source=test"])
-        XCTAssertEqual(sent["text"] as? String, "Publié par Alice\n\nhttps://www.youtube.com/@chaine")
+        XCTAssertEqual(sent["text"] as? String, "https://www.youtube.com/@chaine")
     }
     func testCoalescingUsesLatestGroupRevisionButDoesNotRepostEditOnly() throws {
         let original = try update(message(["text": "initial https://x.com/a?s=1"]))
@@ -118,21 +118,24 @@ final class BotTests: XCTestCase {
         XCTAssertEqual(batch.map(\.update_id), [1, 2, 3])
     }
 
-    func testReplyCreditsAuthorPreservesTextAndTopic() async throws {
+    func testReplyUsesNativeAttributionAndPreservesTextAndTopic() async throws {
         try await handle(["message_thread_id": 12])
         XCTAssertEqual(api.methods, ["sendMessage"])
-        XCTAssertEqual(sent["text"] as? String, "Publié par Alice\n\nLook https://fxtwitter.com/a/status/1")
+        XCTAssertEqual(sent["text"] as? String, "Look https://fxtwitter.com/a/status/1")
         XCTAssertEqual(sent["message_thread_id"] as? Int64, 12)
         XCTAssertEqual((sent["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5)
         let entities = try decode([Entity].self, from: XCTUnwrap(sent["entities"]))
-        let mention = try XCTUnwrap(entities.first { $0.type == "text_mention" })
-        XCTAssertEqual(mention.user?.id, 7)
-        XCTAssertEqual(((try XCTUnwrap(sent["text"] as? String)) as NSString).substring(with: NSRange(location: mention.offset, length: mention.length)), "Alice")
+        XCTAssertFalse(entities.contains { $0.type == "text_mention" })
     }
     func testReplaceConfirmsPostBeforeDelete() async throws {
         try replaceMode(); try await handle()
         XCTAssertEqual(api.methods, ["getChatMember", "sendMessage", "deleteMessage"])
         XCTAssertNil(sent["reply_parameters"])
+        XCTAssertEqual(sent["text"] as? String, "Publié par Alice\n\nLook https://fxtwitter.com/a/status/1")
+        let entities = try decode([Entity].self, from: XCTUnwrap(sent["entities"]))
+        let mention = try XCTUnwrap(entities.first { $0.type == "text_mention" })
+        XCTAssertEqual(mention.user?.id, 7)
+        XCTAssertEqual(((try XCTUnwrap(sent["text"] as? String)) as NSString).substring(with: NSRange(location: mention.offset, length: mention.length)), "Alice")
     }
     func testAmbiguousSendNeverDeletes() async throws {
         try replaceMode(); api.failSend = true
@@ -146,6 +149,7 @@ final class BotTests: XCTestCase {
     func testRevokedDeletePermissionFallsBackToReply() async throws {
         try replaceMode(); api.canDelete = false; try await handle()
         XCTAssertFalse(api.methods.contains("deleteMessage")); XCTAssertNotNil(sent["reply_parameters"])
+        XCTAssertEqual(sent["text"] as? String, "Look https://fxtwitter.com/a/status/1")
     }
     func testCaptionNeverDeletesMedia() async throws {
         try replaceMode()

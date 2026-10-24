@@ -13,7 +13,7 @@
       { "id": "youtube", "name": "YouTube", "hosts": ["youtube.com", "youtu.be"],
         "params": ["si", "feature", "pp", "ab_channel"] },
       { "id": "instagram", "name": "Instagram", "hosts": ["instagram.com"],
-        "params": ["igsh", "igshid", "img_index_ref", "exln"] },
+        "params": ["igsh", "igshid", "img_index_ref", "exln", "srtk"] },
       { "id": "tiktok", "name": "TikTok", "hosts": ["tiktok.com"],
         "params": ["_t", "_r", "is_from_webapp", "sender_device", "is_copy_url", "refer"] },
       { "id": "spotify", "name": "Spotify", "hosts": ["spotify.com"],
