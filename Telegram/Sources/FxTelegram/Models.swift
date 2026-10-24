@@ -9,10 +9,37 @@ public struct TelegramUser: Codable, Equatable {
     var name: String { [first_name, last_name].compactMap { $0 }.joined(separator: " ") }
 }
 
-public struct Chat: Codable {
+public struct Chat: Codable, Equatable {
     public let id: Int64
     public let type: String
     public var title: String?
+    var isGroup: Bool { type == "group" || type == "supergroup" }
+}
+
+/// Only the bot's membership and permissions; no member identity or message content.
+public struct ChatMember: Codable, Equatable {
+    public let status: String
+    public var can_delete_messages: Bool?
+    public var can_send_messages: Bool?
+    public var can_send_other_messages: Bool?
+    public var can_add_web_page_previews: Bool?
+    public var is_member: Bool?
+
+    var isAbsent: Bool { status == "left" || status == "kicked" || (status == "restricted" && is_member == false) }
+    var isAdmin: Bool { status == "creator" || status == "administrator" }
+    func canDelete(in chat: Chat) -> Bool {
+        status == "creator" || (status == "administrator" && (chat.type == "group" || can_delete_messages == true))
+    }
+}
+
+public struct ChatMemberUpdated: Decodable {
+    public let chat: Chat
+    public let new_chat_member: ChatMember
+}
+
+public struct KnownGroup: Codable, Equatable {
+    public var chat: Chat
+    public var member: ChatMember?
 }
 
 public struct Entity: Codable, Equatable {
@@ -43,6 +70,15 @@ public struct Message: Decodable {
     public var business_connection_id: String?
     public var sender_business_bot: TelegramUser?
     public var forward_origin: ForwardOrigin?
+    public var reply_markup: InlineKeyboardMarkup?
+}
+public struct InlineKeyboardMarkup: Decodable, Equatable {
+    public let inline_keyboard: [[InlineKeyboardButton]]
+}
+public struct InlineKeyboardButton: Decodable, Equatable {
+    public let text: String
+    public var callback_data: String?
+    public var url: String?
 }
 public struct ForwardOrigin: Codable { public let type: String }
 
@@ -60,6 +96,7 @@ public struct Update: Decodable {
     public var business_message: Message?
     public var edited_business_message: Message?
     public var callback_query: CallbackQuery?
+    public var my_chat_member: ChatMemberUpdated?
 }
 
 public struct BusinessConnection: Decodable {

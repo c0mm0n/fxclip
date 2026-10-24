@@ -8,7 +8,23 @@ public struct BotState: Codable {
     public var users: [String: Mode] = [:]
     public var defaultMode: Mode = .reply
     public var lastUpdateAt: TimeInterval = Date().timeIntervalSince1970
+    public var knownGroups: [String: KnownGroup] = [:]
+    public var groupEnabled: [String: Bool] = [:]
     public init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case offset, chats, users, defaultMode, lastUpdateAt, knownGroups, groupEnabled
+    }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        offset = try values.decode(Int64.self, forKey: .offset)
+        chats = try values.decode([String: ChatSettings].self, forKey: .chats)
+        users = try values.decode([String: Mode].self, forKey: .users)
+        defaultMode = try values.decode(Mode.self, forKey: .defaultMode)
+        lastUpdateAt = try values.decode(TimeInterval.self, forKey: .lastUpdateAt)
+        knownGroups = try values.decodeIfPresent([String: KnownGroup].self, forKey: .knownGroups) ?? [:]
+        groupEnabled = try values.decodeIfPresent([String: Bool].self, forKey: .groupEnabled) ?? [:]
+    }
 }
 
 public final class StateStore {
@@ -51,6 +67,30 @@ public final class StateStore {
     public func setDefault(_ mode: Mode) throws {
         var next = state
         next.defaultMode = mode
+        try save(next)
+    }
+    public func discover(_ chat: Chat, member: ChatMember? = nil) throws {
+        guard chat.isGroup else { return }
+        let key = String(chat.id)
+        var next = state
+        if member?.isAbsent == true {
+            next.knownGroups.removeValue(forKey: key)
+            // Override even an environment default, including after restart/re-addition.
+            next.groupEnabled[key] = false
+        } else {
+            var group = next.knownGroups[key] ?? KnownGroup(chat: chat)
+            group.chat = Chat(id: chat.id, type: chat.type, title: chat.title ?? group.chat.title)
+            if let member { group.member = member }
+            next.knownGroups[key] = group
+        }
+        guard next.knownGroups != state.knownGroups || next.groupEnabled != state.groupEnabled else { return }
+        try save(next)
+    }
+    public func setGroupEnabled(_ enabled: Bool, chatID: Int64) throws {
+        let key = String(chatID)
+        guard state.groupEnabled[key] != enabled else { return }
+        var next = state
+        next.groupEnabled[key] = enabled
         try save(next)
     }
     public func checkWritable() throws {

@@ -20,6 +20,8 @@ avec des boutons et une coche sur le choix actuel :
 
 Priorité : **choix personnel → réglage du groupe → réglage général**.
 Le propriétaire configure le réglage général avec `/default` en privé.
+Le bouton **Groupes connectés** (ou `/groups`) affiche les groupes découverts,
+permet leur activation et indique les droits réellement accordés au bot.
 Les administrateurs d’un groupe autorisé utilisent `/fxclip reply|replace|off`
 et `/fxclip previews on|off`. Le choix d’une personne reste prioritaire,
 y compris si le réglage par défaut du groupe est désactivé.
@@ -65,7 +67,8 @@ dans ce dossier privé convient. Le volume `state` est initialisé par l’image
 Configurer `FXCLIP_IMAGE`, `TELEGRAM_OWNER_IDS` (identifiants numériques des
 propriétaires) et `TELEGRAM_ALLOWED_CHATS` (identifiants des groupes autorisés).
 La liste vide laisse fonctionner les réglages privés et la découverte
-`/chatid`, mais aucun nettoyage classique de groupe. Le mode Secrétaire suit
+`/chatid`, mais aucun nettoyage classique de groupe tant qu’il n’a pas été
+activé dans **Groupes connectés**. Le mode Secrétaire suit
 séparément le consentement personnel et la connexion Telegram.
 
 ```sh
@@ -76,12 +79,17 @@ docker compose logs --tail=30
 
 Ajouter le bot au groupe et lui donner le droit de supprimer les messages pour
 le remplacement. Un bot administrateur reçoit les messages du groupe ; sinon,
-désactiver Privacy Mode dans @BotFather. Envoyer `/chatid` dans le groupe pour
-obtenir son identifiant et l’ajouter à la liste autorisée. `/chatid` en privé
+désactiver Privacy Mode dans @BotFather. Le bot découvre un groupe à son ajout,
+à un changement de droits ou à la réception d’un message. Ouvrir `/groups`
+en privé pour vérifier ses droits et activer le groupe. La liste
+`TELEGRAM_ALLOWED_CHATS` reste utilisable pour une configuration initiale ;
+le choix d’activation enregistré depuis le menu passe avant cette liste.
+`/chatid` dans le groupe permet aussi de récupérer son identifiant. `/chatid` en privé
 donne l’identifiant personnel nécessaire à `TELEGRAM_OWNER_IDS`.
 
 Le fichier `state.json` du volume conserve les préférences et la position de
-lecture. Sauvegarder ce volume pour garder les réglages. Aucun texte de message
+lecture, ainsi que les identifiants et noms des groupes découverts.
+Sauvegarder ce volume pour garder les réglages. Aucun texte de message
 ni URL n’est conservé dans le volume ou dans les journaux. Watchtower est
 désactivé pour ce service : installer explicitement chaque nouvelle image.
 

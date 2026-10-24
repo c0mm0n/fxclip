@@ -17,6 +17,13 @@ public final class Bot {
     }
 
     public func handle(_ update: Update, now: Int = Int(Date().timeIntervalSince1970)) async throws {
+        if let membership = update.my_chat_member {
+            try store.discover(membership.chat, member: membership.new_chat_member)
+        }
+        // Discovery precedes eligibility, age and content checks, and never rewrites edits.
+        for message in [update.message, update.edited_message].compactMap({ $0 }) {
+            try store.discover(message.chat)
+        }
         if let callback = update.callback_query {
             try await settingsCallback(callback)
             return
@@ -39,7 +46,15 @@ public final class Bot {
             return
         }
         if message.chat.type == "private", let user = message.from, message.chat.id == user.id,
-           ["/start", "/help", "/settings", "/mode", "/secretary", "/default"].contains(command) {
+           ["/start", "/help", "/settings", "/mode", "/secretary", "/default", "/groups"].contains(command) {
+            if command == "/groups" {
+                guard allowedOwners.contains(user.id) else {
+                    try await reply("La gestion des groupes est réservée au propriétaire du bot.", to: message)
+                    return
+                }
+                try await sendPanel(groupsPanel(), to: message.chat.id)
+                return
+            }
             if command == "/default" {
                 guard allowedOwners.contains(user.id) else {
                     try await reply("Seul le propriétaire du bot peut changer le réglage général. Ouvrez /settings pour choisir votre mode personnel.", to: message)
@@ -59,7 +74,7 @@ public final class Bot {
             try await sendPanel(personalPanel(userID: user.id), to: message.chat.id)
             return
         }
-        guard allowedChats.contains(message.chat.id) else { return }
+        guard isEnabled(chatID: message.chat.id) else { return }
         if command == "/start" || command == "/help" {
             try await reply("fxclip nettoie les liens et améliore leurs aperçus.\n\nOuvrez mes réglages en privé pour choisir le comportement de vos messages.\n\nAdmins : /fxclip affiche le réglage du groupe. Pour le changer : /fxclip reply, /fxclip replace, /fxclip off ou /fxclip previews on|off.\n\nLe bot lit les messages de ce groupe. Les liens nettoyés passent par Telegram et, pour certains aperçus, par un site miroir.", to: message, markup: privateSettingsLink)
             return
@@ -89,7 +104,7 @@ public final class Bot {
                 try store.set(settings, chatID: message.chat.id)
             }
             let source = store.state.chats[String(message.chat.id)] == nil ? "Réglage général appliqué" : "Réglage du groupe"
-            try await reply("\(source) : \(SettingsUI.title(settings.mode).lowercased()).\n\n\(SettingsUI.outcome(settings.mode))\n\nAperçus améliorés : \(settings.previews ? "activés" : "désactivés").\nUn choix personnel passe avant ce réglage, même si le groupe est désactivé. Choisissez le vôtre en privé.\n\nAdmins : /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off", to: message, markup: privateSettingsLink)
+            try await reply("\(source) : \(SettingsUI.title(settings.mode).lowercased()).\n\n\(SettingsUI.outcome(settings.mode))\n\nAperçus améliorés : \(settings.previews ? "activés" : "désactivés").\nUn choix personnel passe avant ce mode, y compris /fxclip off, tant que le nettoyage est activé pour ce groupe. Choisissez le vôtre en privé.\n\nAdmins : /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off", to: message, markup: privateSettingsLink)
             return
         }
         if message.sender_chat == nil, let user = message.from,
@@ -166,7 +181,21 @@ public final class Bot {
                             owner: allowedOwners.contains(userID))
     }
 
-    private func sendPanel(_ panel: SettingsUI, to chatID: Int64, messageID: Int64? = nil) async throws {
+    private func isEnabled(chatID: Int64) -> Bool {
+        store.state.groupEnabled[String(chatID)] ?? allowedChats.contains(chatID)
+    }
+
+    private func groupsPanel() -> SettingsUI {
+        SettingsUI.groups(store.state.knownGroups.values.sorted {
+            if $0.chat.title == $1.chat.title { return $0.chat.id < $1.chat.id }
+            return ($0.chat.title ?? "") < ($1.chat.title ?? "")
+        }, enabled: isEnabled, username: username)
+    }
+
+    private func sendPanel(_ panel: SettingsUI, to chatID: Int64, messageID: Int64? = nil,
+                           previousText: String? = nil, previousMarkup: InlineKeyboardMarkup? = nil) async throws {
+        if messageID != nil, previousText == panel.plainText, let previousMarkup,
+           previousMarkup == (try? decode(InlineKeyboardMarkup.self, from: panel.markup)) { return }
         var parameters: [String: Any] = ["chat_id": chatID, "text": panel.text,
             "parse_mode": "HTML", "reply_markup": panel.markup]
         if let messageID {
@@ -189,6 +218,15 @@ public final class Bot {
             return
         }
         let parts = (callback.data ?? "").split(separator: ":").map(String.init)
+        if parts.first == "fxclip", parts.count >= 2, ["groups", "group"].contains(parts[1]) {
+            // Every navigation, refresh and activation is owner-only, including old panels.
+            guard allowedOwners.contains(callback.from.id) else {
+                await answer(callback, "La gestion des groupes est réservée au propriétaire du bot.", alert: true)
+                return
+            }
+            try await groupCallback(callback, message: message, parts: parts)
+            return
+        }
         guard parts.count == 3, parts[0] == "fxclip", ["personal", "default"].contains(parts[1]) else {
             await answer(callback, "Ce bouton n’est plus disponible. Ouvrez /settings.")
             return
@@ -224,6 +262,46 @@ public final class Bot {
         try await sendPanel(panel, to: message.chat.id, messageID: message.message_id)
     }
 
+    private func groupCallback(_ callback: CallbackQuery, message: Message, parts: [String]) async throws {
+        if parts == ["fxclip", "groups", "show"] {
+            await answer(callback, nil)
+            try await sendPanel(groupsPanel(), to: message.chat.id, messageID: message.message_id,
+                                previousText: message.text, previousMarkup: message.reply_markup)
+            return
+        }
+        guard parts.count == 4, parts[1] == "group", let chatID = Int64(parts[2]),
+              ["show", "refresh", "on", "off"].contains(parts[3]),
+              let group = store.state.knownGroups[String(chatID)] else {
+            await answer(callback, "Groupe indisponible. Ouvrez /groups.", alert: true)
+            return
+        }
+        let action = parts[3]
+        // Disabling must remain possible even when Telegram cannot report current rights.
+        if action == "off" { try store.setGroupEnabled(false, chatID: chatID) }
+        let current: ChatMember
+        do {
+            current = try await member(chatID: chatID, userID: botID)
+        } catch {
+            await answer(callback, "Impossible de vérifier les droits du bot. Réessayez.", alert: true)
+            try await sendPanel(SettingsUI.group(group, enabled: isEnabled(chatID: chatID), rights: nil),
+                                to: message.chat.id, messageID: message.message_id,
+                                previousText: message.text, previousMarkup: message.reply_markup)
+            return
+        }
+        try store.discover(group.chat, member: current)
+        if current.isAbsent {
+            await answer(callback, "Le bot ne fait plus partie de ce groupe. Nettoyage désactivé.", alert: true)
+            try await sendPanel(groupsPanel(), to: message.chat.id, messageID: message.message_id,
+                                previousText: message.text, previousMarkup: message.reply_markup)
+            return
+        }
+        if action == "on" { try store.setGroupEnabled(true, chatID: chatID) }
+        await answer(callback, ["on", "off"].contains(action) ? "Réglage enregistré ✓" : nil)
+        try await sendPanel(SettingsUI.group(group, enabled: isEnabled(chatID: chatID), rights: current),
+                            to: message.chat.id, messageID: message.message_id,
+                            previousText: message.text, previousMarkup: message.reply_markup)
+    }
+
     private func answer(_ callback: CallbackQuery, _ text: String?, alert: Bool = false) async {
         var parameters: [String: Any] = ["callback_query_id": callback.id]
         if let text { parameters["text"] = text }
@@ -239,21 +317,14 @@ public final class Bot {
         if let markup { parameters["reply_markup"] = markup }
         _ = try await api.call("sendMessage", parameters)
     }
-    private func member(chatID: Int64, userID: Int64) async throws -> [String: Any] {
-        guard let result = try await api.call("getChatMember", ["chat_id": chatID, "user_id": userID]) as? [String: Any] else {
-            throw BotError.invalidResponse
-        }
-        return result
+    private func member(chatID: Int64, userID: Int64) async throws -> ChatMember {
+        try decode(ChatMember.self, from: await api.call("getChatMember", ["chat_id": chatID, "user_id": userID]))
     }
     private func isAdmin(chatID: Int64, userID: Int64) async throws -> Bool {
-        let status = try await member(chatID: chatID, userID: userID)["status"] as? String
-        return status == "creator" || status == "administrator"
+        try await member(chatID: chatID, userID: userID).isAdmin
     }
     private func canDelete(in chat: Chat) async throws -> Bool {
         if chat.type == "private" { return true }
-        let status = try await member(chatID: chat.id, userID: botID)
-        return status["status"] as? String == "creator" ||
-            (status["status"] as? String == "administrator" &&
-             (chat.type == "group" || status["can_delete_messages"] as? Bool == true))
+        return try await member(chatID: chat.id, userID: botID).canDelete(in: chat)
     }
 }

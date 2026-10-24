@@ -4,6 +4,7 @@ import FxTelegram
 
 @main struct Main {
     static func main() async {
+        setbuf(stdout, nil)
         do { try await run() }
         catch {
             // Errors may embed the token-bearing request URL or message contents.
@@ -60,7 +61,7 @@ import FxTelegram
             do {
                 updates = try decode([Update].self, from: await api.call("getUpdates", [
                     "offset": store.state.offset, "timeout": 30,
-                    "allowed_updates": ["message", "edited_message", "callback_query", "business_message", "edited_business_message"],
+                    "allowed_updates": ["message", "edited_message", "callback_query", "my_chat_member", "business_message", "edited_business_message"],
                 ]))
                 failures = 0
             } catch BotError.telegram(let code) where code == 401 || code == 409 {

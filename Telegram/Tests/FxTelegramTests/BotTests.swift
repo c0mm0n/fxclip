@@ -9,6 +9,8 @@ final class FakeAPI: BotAPI {
     var failDelete = false
     var admin = true
     var canDelete = true
+    var memberResult: [String: Any]?
+    var failMember = false
     var businessEnabled = true
     var businessCanReply = true
     var businessOwnerID: Int64 = 7
@@ -23,6 +25,8 @@ final class FakeAPI: BotAPI {
             if failDelete { throw BotError.telegram(403) }
             return true
         case "getChatMember":
+            if failMember { throw BotError.telegram(403) }
+            if let memberResult { return memberResult }
             return ["status": admin ? "administrator" : "member", "can_delete_messages": canDelete]
         case "getBusinessConnection":
             return ["id": "connection", "user": ["id": businessOwnerID, "first_name": "Alice"],
@@ -73,12 +77,14 @@ final class BotTests: XCTestCase {
         try await handle(["text": text, "chat": ["id": userID, "type": "private"],
                           "from": ["id": userID, "first_name": "Member", "is_bot": false]])
     }
-    func callback(_ data: String, userID: Int64 = 8, chatID: Int64 = 8, chatType: String = "private") async throws {
+    func callback(_ data: String, userID: Int64 = 8, chatID: Int64 = 8, chatType: String = "private",
+                  messageText: String? = nil, messageMarkup: [String: Any]? = nil) async throws {
         let update = try decode(Update.self, from: ["update_id": 2, "callback_query": [
             "id": "button-click", "from": ["id": userID, "first_name": "Member", "is_bot": false],
             "data": data, "message": ["message_id": 42, "date": 1000,
                 "chat": ["id": chatID, "type": chatType],
-                "from": ["id": 99, "first_name": "fxclip", "is_bot": true]],
+                "from": ["id": 99, "first_name": "fxclip", "is_bot": true], "text": (messageText as Any?) ?? NSNull(),
+                "reply_markup": (messageMarkup as Any?) ?? NSNull()],
         ]])
         try await bot.handle(update, now: 1100)
     }
@@ -488,6 +494,242 @@ final class BotTests: XCTestCase {
                           "business_connection_id": "connection", "text": NSNull(),
                           "caption": "https://instagram.com/p/abc/?igsh=tracking"], business: true)
         XCTAssertEqual(api.methods, ["getBusinessConnection"])
+    }
+
+    func membership(_ fields: [String: Any], chatID: Int64 = -200, type: String = "supergroup", title: String = "Test group") async throws {
+        let update = try decode(Update.self, from: ["update_id": 3, "my_chat_member": [
+            "chat": ["id": chatID, "type": type, "title": title], "new_chat_member": fields,
+        ]])
+        try await bot.handle(update, now: 1100)
+    }
+
+    func testOldDeployedStateDecodesWithoutNewFields() throws {
+        let old = #"{"offset":123,"chats":{"-100":{"mode":"replace","previews":false}},"users":{"7":"off"},"defaultMode":"reply","lastUpdateAt":1000}"#
+        try Data(old.utf8).write(to: directory.appendingPathComponent("state.json"))
+        let restored = try StateStore(directory: directory)
+        XCTAssertEqual(restored.state.offset, 123)
+        XCTAssertEqual(restored.state.lastUpdateAt, 1000)
+        XCTAssertEqual(restored.state.chats["-100"]?.mode, .replace)
+        XCTAssertEqual(restored.state.chats["-100"]?.previews, false)
+        XCTAssertEqual(restored.state.users["7"], .off)
+        XCTAssertTrue(restored.state.knownGroups.isEmpty)
+        XCTAssertTrue(restored.state.groupEnabled.isEmpty)
+    }
+
+    func testUnallowedGroupIsDiscoveredWithoutSendingOrPersistingContent() async throws {
+        try await handle(["chat": ["id": -200, "type": "supergroup", "title": "Test group"],
+                          "text": "secret https://x.com/a?s=1"])
+        XCTAssertTrue(api.calls.isEmpty)
+        XCTAssertEqual(store.state.knownGroups["-200"]?.chat.title, "Test group")
+        XCTAssertNil(store.state.groupEnabled["-200"])
+        let json = try String(contentsOf: directory.appendingPathComponent("state.json"), encoding: .utf8)
+        XCTAssertFalse(json.contains("secret"))
+        XCTAssertFalse(json.contains("https"))
+        XCTAssertEqual(try StateStore(directory: directory).state.knownGroups["-200"]?.chat.id, -200)
+    }
+
+    func testDiscoveryRunsBeforeOldProtectedBotAndEditedMessageFilters() async throws {
+        try await handle(["chat": ["id": -200, "type": "group", "title": "Initial"],
+                          "date": 0, "has_protected_content": true,
+                          "from": ["id": 99, "first_name": "Bot", "is_bot": true]])
+        let edited = try decode(Update.self, from: ["update_id": 2, "edited_message":
+            jsonObject(WireMessage(message(["chat": ["id": -200, "type": "group", "title": "Renamed"]])) )])
+        try await bot.handle(edited, now: 1100)
+        XCTAssertEqual(store.state.knownGroups["-200"]?.chat.title, "Renamed")
+        XCTAssertTrue(api.calls.isEmpty)
+        try await privateCommand("/settings")
+        XCTAssertNil(store.state.knownGroups["8"])
+    }
+
+    func testUnchangedDiscoveryAndMembershipDoNotRewriteStateFile() async throws {
+        let rights: [String: Any] = ["status": "administrator", "can_delete_messages": false]
+        try await membership(rights)
+        let path = directory.appendingPathComponent("state.json").path
+        let sentinel = Date(timeIntervalSince1970: 1000)
+        try FileManager.default.setAttributes([.modificationDate: sentinel], ofItemAtPath: path)
+        try await membership(rights)
+        try await handle(["chat": ["id": -200, "type": "supergroup", "title": "Test group"]])
+        let attributes = try FileManager.default.attributesOfItem(atPath: path)
+        XCTAssertEqual(attributes[.modificationDate] as? Date, sentinel)
+        try await membership(["status": "administrator", "can_delete_messages": true])
+        XCTAssertEqual(store.state.knownGroups["-200"]?.member?.can_delete_messages, true)
+    }
+
+    func testMembershipDepartureDisablesEnvironmentDefaultAcrossRestartAndRejoin() async throws {
+        for status in ["left", "kicked"] {
+            try await membership(["status": "administrator", "can_delete_messages": true], chatID: -100)
+            try store.setGroupEnabled(true, chatID: -100)
+            try await membership(["status": status], chatID: -100)
+            XCTAssertNil(store.state.knownGroups["-100"])
+            XCTAssertEqual(store.state.groupEnabled["-100"], false)
+            let restarted = try StateStore(directory: directory)
+            bot = Bot(api: api, store: restarted, engine: engine, allowedChats: [-100], allowedOwners: [7], botID: 99, username: "fxclipbot")
+            api.calls = []; try await handle()
+            XCTAssertTrue(api.calls.isEmpty)
+            bot = Bot(api: api, store: store, engine: engine, allowedChats: [-100], allowedOwners: [7], botID: 99, username: "fxclipbot")
+            try await membership(["status": "member"], chatID: -100)
+            api.calls = []; try await handle()
+            XCTAssertTrue(api.calls.isEmpty)
+            XCTAssertEqual(store.state.groupEnabled["-100"], false)
+        }
+    }
+
+    func testRestrictedNonmemberIsRemovedAndPrivateMembershipIsIgnored() async throws {
+        try await membership(["status": "restricted", "is_member": false])
+        XCTAssertNil(store.state.knownGroups["-200"])
+        XCTAssertEqual(store.state.groupEnabled["-200"], false)
+        try await membership(["status": "kicked"], chatID: 7, type: "private")
+        XCTAssertNil(store.state.groupEnabled["7"])
+        XCTAssertNil(store.state.knownGroups["7"])
+    }
+
+    func testOwnerGroupsCommandAndSettingsNavigation() async throws {
+        try await membership(["status": "member"])
+        try await privateCommand("/groups", userID: 7)
+        let rows = try XCTUnwrap((sent["reply_markup"] as? [String: Any])?["inline_keyboard"] as? [[[String: String]]])
+        XCTAssertTrue(rows.flatMap { $0 }.contains { $0["callback_data"] == "fxclip:group:-200:show" })
+        XCTAssertTrue((sent["text"] as? String)?.contains("Telegram ne permet pas") == true)
+        for command in ["/settings", "/default"] {
+            api.calls = []; try await privateCommand(command, userID: 7)
+            let markup = try XCTUnwrap((sent["reply_markup"] as? [String: Any])?["inline_keyboard"] as? [[[String: String]]])
+            XCTAssertTrue(markup.flatMap { $0 }.contains { $0["callback_data"] == "fxclip:groups:show" })
+        }
+        api.calls = []; try await privateCommand("/groups", userID: 8)
+        XCTAssertFalse((sent["text"] as? String)?.contains("Test group") == true)
+    }
+
+    func testOwnerCanEnableDiscoveredGroupWithoutDeleteRightsThenDisableAllPersonalModes() async throws {
+        try await membership(["status": "member"])
+        api.admin = false
+        try await callback("fxclip:group:-200:on", userID: 7, chatID: 7)
+        XCTAssertEqual(store.state.groupEnabled["-200"], true)
+        XCTAssertEqual(try StateStore(directory: directory).state.groupEnabled["-200"], true)
+        XCTAssertTrue(store.state.chats.isEmpty)
+        XCTAssertTrue(store.state.users.isEmpty)
+        XCTAssertEqual(store.state.defaultMode, .reply)
+        let rightsRequest = try XCTUnwrap(api.calls.first { $0.0 == "getChatMember" })
+        XCTAssertEqual(rightsRequest.1["user_id"] as? Int64, 99)
+        XCTAssertEqual(rightsRequest.1["chat_id"] as? Int64, -200)
+        let text = try XCTUnwrap(api.calls.last?.1["text"] as? String)
+        XCTAssertTrue(text.contains("Suppression des messages : non autorisée"))
+        XCTAssertTrue(text.contains("mode confidentialité"))
+        XCTAssertTrue(text.contains("sans supprimer l’original"))
+        api.calls = []; try await handle(["chat": ["id": -200, "type": "supergroup"]])
+        XCTAssertEqual(api.methods, ["sendMessage"])
+        try await callback("fxclip:group:-200:off", userID: 7, chatID: 7)
+        try store.setMode(.replace, userID: 7)
+        api.calls = []; try await handle(["chat": ["id": -200, "type": "supergroup"]])
+        XCTAssertTrue(api.calls.isEmpty)
+        XCTAssertEqual(store.state.groupEnabled["-200"], false)
+    }
+
+    func testEveryGroupCallbackAuthenticatesOwnerAndMatchingPrivateChat() async throws {
+        try await membership(["status": "member"])
+        for action in ["fxclip:groups:show", "fxclip:group:-200:show", "fxclip:group:-200:refresh", "fxclip:group:-200:on", "fxclip:group:-200:off"] {
+            for (userID, chatID, type): (Int64, Int64, String) in [(8, 8, "private"), (7, 8, "private"), (7, -100, "supergroup")] {
+                api.calls = []
+                try await callback(action, userID: userID, chatID: chatID, chatType: type)
+                XCTAssertEqual(api.methods, ["answerCallbackQuery"], action)
+                XCTAssertTrue(store.state.groupEnabled.isEmpty, action)
+            }
+        }
+    }
+
+    func testUnknownOrMalformedGroupCallbacksCannotEnableGroups() async throws {
+        try await membership(["status": "member"])
+        for action in ["fxclip:group:-300:on", "fxclip:group:no:on", "fxclip:group:-200:on:extra", "fxclip:group:-200:invalid", "fxclip:groups:on"] {
+            api.calls = []; try await callback(action, userID: 7, chatID: 7)
+            XCTAssertEqual(api.methods, ["answerCallbackQuery"], action)
+            XCTAssertTrue(store.state.groupEnabled.isEmpty, action)
+        }
+    }
+
+    func testRefreshUsesCurrentRestrictedPermissionsAndNeverChangesActivation() async throws {
+        try await membership(["status": "administrator", "can_delete_messages": true], title: "<b>Group & name</b>")
+        api.memberResult = ["status": "restricted", "is_member": true, "can_send_messages": false,
+                            "can_send_other_messages": false, "can_add_web_page_previews": false]
+        try await callback("fxclip:group:-200:refresh", userID: 7, chatID: 7)
+        XCTAssertTrue(store.state.groupEnabled.isEmpty)
+        XCTAssertEqual(store.state.knownGroups["-200"]?.member?.status, "restricted")
+        let text = try XCTUnwrap(api.calls.last?.1["text"] as? String)
+        XCTAssertTrue(text.contains("&lt;b&gt;Group &amp; name&lt;/b&gt;"))
+        XCTAssertTrue(text.contains("Administrateur : non"))
+        XCTAssertTrue(text.contains("Envoi de messages : non autorisé"))
+        XCTAssertTrue(text.contains("Stickers et autres messages : non autorisé"))
+        XCTAssertTrue(text.contains("Lecture : peut être limitée"))
+        XCTAssertFalse(api.methods.contains("promoteChatMember"))
+        XCTAssertFalse(api.methods.contains("restrictChatMember"))
+    }
+
+    func testRefreshDetectsDepartureAndStalePanelCannotReenable() async throws {
+        try await membership(["status": "member"], chatID: -100)
+        api.memberResult = ["status": "left"]
+        try await callback("fxclip:group:-100:on", userID: 7, chatID: 7)
+        XCTAssertNil(store.state.knownGroups["-100"])
+        XCTAssertEqual(store.state.groupEnabled["-100"], false)
+        api.calls = []; try await callback("fxclip:group:-100:on", userID: 7, chatID: 7)
+        XCTAssertEqual(api.methods, ["answerCallbackQuery"])
+    }
+
+    func testFailedRightsCheckCannotEnableButCanDisable() async throws {
+        try await membership(["status": "administrator", "can_delete_messages": true])
+        api.failMember = true
+        try await callback("fxclip:group:-200:on", userID: 7, chatID: 7)
+        XCTAssertNil(store.state.groupEnabled["-200"])
+        XCTAssertTrue((api.calls.last?.1["text"] as? String)?.contains("Droits non vérifiés") == true)
+        try store.setGroupEnabled(true, chatID: -200)
+        try await callback("fxclip:group:-200:off", userID: 7, chatID: 7)
+        XCTAssertEqual(store.state.groupEnabled["-200"], false)
+    }
+
+    func testDeletePermissionMatchesGroupAndSupergroupSemantics() async throws {
+        try replaceMode()
+        api.canDelete = false
+        try await handle(["chat": ["id": -100, "type": "group"]])
+        XCTAssertEqual(api.methods, ["getChatMember", "sendMessage", "deleteMessage"])
+        api.calls = []; try await handle()
+        XCTAssertEqual(api.methods, ["getChatMember", "sendMessage"])
+        api.memberResult = ["status": "member", "can_delete_messages": true]
+        api.calls = []; try await handle(["chat": ["id": -100, "type": "group"]])
+        XCTAssertEqual(api.methods, ["getChatMember", "sendMessage"])
+    }
+
+    func testRefreshingUnchangedGroupPanelOnlyAcknowledgesAfterCheckingRights() async throws {
+        try await membership(["status": "administrator", "can_delete_messages": true])
+        try await callback("fxclip:group:-200:show", userID: 7, chatID: 7)
+        let group = try XCTUnwrap(store.state.knownGroups["-200"])
+        let panel = SettingsUI.group(group, enabled: false, rights: group.member)
+        api.calls = []
+        try await callback("fxclip:group:-200:refresh", userID: 7, chatID: 7,
+                           messageText: panel.plainText, messageMarkup: panel.markup)
+        XCTAssertEqual(api.methods, ["getChatMember", "answerCallbackQuery"])
+    }
+
+    func testGroupListRefreshUpdatesChangedButtonsEvenWhenTextIsUnchanged() async throws {
+        try await membership(["status": "member"])
+        func currentPanel() -> SettingsUI {
+            SettingsUI.groups(store.state.knownGroups.values.sorted { $0.chat.id < $1.chat.id },
+                              enabled: { store.state.groupEnabled[String($0)] ?? false }, username: "fxclipbot")
+        }
+        var previous = currentPanel()
+        for change in ["added", "renamed", "activated", "removed"] {
+            switch change {
+            case "added": try await membership(["status": "member"], chatID: -300, title: "Another group")
+            case "renamed": try await membership(["status": "member"], title: "Renamed group")
+            case "activated": try store.setGroupEnabled(true, chatID: -200)
+            default: try await membership(["status": "left"], chatID: -300)
+            }
+            let current = currentPanel()
+            XCTAssertEqual(current.plainText, previous.plainText, change)
+            api.calls = []
+            try await callback("fxclip:groups:show", userID: 7, chatID: 7,
+                               messageText: previous.plainText, messageMarkup: previous.markup)
+            XCTAssertEqual(api.methods, ["answerCallbackQuery", "editMessageText"], change)
+            let actual = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(api.calls.last?.1["reply_markup"]))
+            let expectedRows = try decode(InlineKeyboardMarkup.self, from: current.markup).inline_keyboard
+            XCTAssertEqual(Set(actual.inline_keyboard.flatMap { $0 }.map(\.text)), Set(expectedRows.flatMap { $0 }.map(\.text)), change)
+            previous = current
+        }
     }
 }
 
