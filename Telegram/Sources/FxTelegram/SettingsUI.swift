@@ -67,6 +67,7 @@ struct SettingsUI {
         }
         let choice = preference?.name ?? language.text("Automatic", "Automatique")
         rows.append([button("🌐 \(language.text("Language: ", "Langue : "))\(choice)", "language:show")])
+        rows.append([closeButton(language: language)])
         return SettingsUI(text: text, markup: ["inline_keyboard": rows])
     }
 
@@ -82,6 +83,7 @@ struct SettingsUI {
             [button("\(selected == .en ? "✓ " : "")English", "language:en")],
             [button("\(selected == .fr ? "✓ " : "")Français", "language:fr")],
             [button(language.text("← Back to settings", "← Mes réglages"), "personal:show")],
+            [closeButton(language: language)],
         ]])
     }
 
@@ -94,6 +96,7 @@ struct SettingsUI {
         var rows = modeRows(selected: mode, scope: "default", language: language)
         rows.append([button(language.text("👥 My groups", "👥 Mes groupes"), "groups:show")])
         rows.append([button(language.text("← My settings", "← Mes réglages"), "personal:show")])
+        rows.append([closeButton(language: language)])
         return SettingsUI(text: text, markup: ["inline_keyboard": rows])
     }
 
@@ -114,6 +117,7 @@ struct SettingsUI {
         }
         rows.append([button(language.text("🔄 Refresh list", "🔄 Actualiser la liste"), "groups:show")])
         rows.append([button(language.text("← General setting", "← Réglage général"), "default:show")])
+        rows.append([closeButton(language: language)])
         return SettingsUI(text: text, markup: ["inline_keyboard": rows])
     }
 
@@ -148,6 +152,7 @@ struct SettingsUI {
             button("\(language == .en ? "✓ " : "")English", key + "lang_en"),
             button("\(language == .fr ? "✓ " : "")Français", key + "lang_fr"),
         ])
+        rows.append([closeButton(language: language, action: key + "close")])
         return SettingsUI(text: text, markup: ["inline_keyboard": rows])
     }
 
@@ -204,6 +209,7 @@ struct SettingsUI {
             [button(enabled ? language.text("⏸ Turn off cleaning", "⏸ Désactiver le nettoyage") : language.text("✅ Turn on cleaning", "✅ Activer le nettoyage"), key + (enabled ? "off" : "on"))],
             [button(language.text("🔄 Refresh permissions", "🔄 Actualiser les droits"), key + "refresh")],
             [button(language.text("← My groups", "← Mes groupes"), "groups:show")],
+            [closeButton(language: language)],
         ]])
     }
 
@@ -221,6 +227,10 @@ struct SettingsUI {
         [Mode.reply, .replace, .secretary, .off].map { mode in
             [button("\(selected == mode ? "✓ " : "")\(title(mode, language: language))", "\(scope):\(mode.rawValue)")]
         }
+    }
+
+    private static func closeButton(language: BotLanguage, action: String = "panel:close") -> [String: String] {
+        button(language.text("✕ Close", "✕ Fermer"), action)
     }
 
     private static func button(_ text: String, _ action: String) -> [String: String] {

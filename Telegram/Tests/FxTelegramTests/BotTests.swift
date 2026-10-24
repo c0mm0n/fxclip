@@ -7,6 +7,7 @@ final class FakeAPI: BotAPI {
     var calls: [(String, [String: Any])] = []
     var failSend = false
     var failDelete = false
+    var failEdit = false
     var admin = true
     var canDelete = true
     var memberResult: [String: Any]?
@@ -36,6 +37,9 @@ final class FakeAPI: BotAPI {
             return sendResult
         case "deleteMessage":
             if failDelete { throw BotError.telegram(403) }
+            return true
+        case "editMessageText":
+            if failEdit { throw BotError.telegram(403) }
             return true
         case "getChatMember":
             if failMember { throw BotError.telegram(403) }
@@ -108,6 +112,67 @@ final class BotTests: XCTestCase {
         return user
     }
     var sent: [String: Any] { api.calls.first { $0.0 == "sendMessage" }!.1 }
+
+    func testPrivateCloseDeletesOnlyPanelAndKeepsSettings() async throws {
+        try store.setMode(.off, userID: 8)
+        try await callback("fxclip:panel:close")
+        XCTAssertEqual(api.methods, ["deleteMessage", "answerCallbackQuery"])
+        XCTAssertEqual(api.calls[0].1["chat_id"] as? Int64, 8)
+        XCTAssertEqual(api.calls[0].1["message_id"] as? Int64, 42)
+        XCTAssertEqual(store.state.users["8"], .off)
+    }
+
+    func testGroupCloseRequiresAdminAndMatchingGroup() async throws {
+        api.admin = false
+        try await callback("fxclip:chat:-100:close", chatID: -100, chatType: "supergroup")
+        XCTAssertEqual(api.methods, ["getChatMember", "answerCallbackQuery"])
+        api.calls = []
+        try await callback("fxclip:chat:-200:close", chatID: -100, chatType: "supergroup")
+        XCTAssertEqual(api.methods, ["answerCallbackQuery"])
+        api.calls = []; api.admin = true; api.canDelete = false
+        try await callback("fxclip:chat:-100:close", chatID: -100, chatType: "supergroup")
+        XCTAssertEqual(api.methods, ["getChatMember", "deleteMessage", "answerCallbackQuery"])
+        XCTAssertTrue(store.state.chats.isEmpty)
+        XCTAssertNil(store.state.groupEnabled["-100"])
+    }
+
+    func testPrivateCloseCannotDismissAnotherUsersPanelOrGroupPanel() async throws {
+        for (chatID, type): (Int64, String) in [(7, "private"), (-100, "supergroup")] {
+            api.calls = []
+            try await callback("fxclip:panel:close", chatID: chatID, chatType: type)
+            XCTAssertEqual(api.methods, ["answerCallbackQuery"])
+        }
+    }
+
+    func testCloseCollapsesUndeletablePanelAndReportsEditFailure() async throws {
+        api.failDelete = true
+        try await callback("fxclip:panel:close", languageCode: "fr")
+        XCTAssertEqual(api.methods, ["deleteMessage", "editMessageText", "answerCallbackQuery"])
+        let edit = api.calls[1].1
+        XCTAssertTrue((edit["text"] as? String)?.contains("Réglages fermés") == true)
+        let markup = try XCTUnwrap(edit["reply_markup"] as? [String: Any])
+        XCTAssertEqual(try decode(InlineKeyboardMarkup.self, from: markup).inline_keyboard.count, 0)
+        api.calls = []; api.failEdit = true
+        try await callback("fxclip:panel:close")
+        XCTAssertEqual(api.methods, ["deleteMessage", "editMessageText", "answerCallbackQuery"])
+        XCTAssertEqual(api.calls.last?.1["show_alert"] as? Bool, true)
+        XCTAssertFalse(api.methods.contains("sendMessage"))
+    }
+
+    func testSettingsPanelsHaveLocalizedCloseButtons() throws {
+        for language in [BotLanguage.en, .fr] {
+            let panels = [SettingsUI.personal(mode: nil, defaultMode: .reply, owner: false, language: language),
+                          SettingsUI.defaults(mode: .reply, language: language),
+                          SettingsUI.languages(selected: language, detected: language),
+                          SettingsUI.groups([], enabled: { _ in false }, username: "fxclipbot", language: language),
+                          SettingsUI.chat(try message().chat, settings: ChatSettings(), enabled: true,
+                                          inherited: true, username: "fxclipbot", language: language)]
+            for panel in panels {
+                let markup = try decode(InlineKeyboardMarkup.self, from: panel.markup)
+                XCTAssertEqual(markup.inline_keyboard.last?.first?.text, language == .fr ? "✕ Fermer" : "✕ Close")
+            }
+        }
+    }
 
     func testURLWithAtSignIsNotMistakenForBotCommand() async throws {
         try await handle(["text": "https://www.youtube.com/@chaine?utm_source=test"])
@@ -311,7 +376,7 @@ final class BotTests: XCTestCase {
         XCTAssertNil(markup["keyboard"])
         let rows = try XCTUnwrap(markup["inline_keyboard"] as? [[[String: String]]])
         let actions = Set(rows.flatMap { $0 }.compactMap { $0["callback_data"] })
-        XCTAssertEqual(actions, Set(["reply", "replace", "secretary", "off", "default"].map { "fxclip:personal:\($0)" } + ["fxclip:language:show"]))
+        XCTAssertEqual(actions, Set(["reply", "replace", "secretary", "off", "default"].map { "fxclip:personal:\($0)" } + ["fxclip:language:show", "fxclip:panel:close"]))
         XCTAssertTrue(store.state.users.isEmpty)
         XCTAssertTrue(store.state.chats.isEmpty)
     }

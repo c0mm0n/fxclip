@@ -307,6 +307,10 @@ public final class Bot {
             await answer(callback, language.text("Open /settings in your private chat with the bot.", "Ouvrez /settings dans votre conversation privée avec le bot."), alert: true)
             return
         }
+        if parts == ["fxclip", "panel", "close"] {
+            await dismissPanel(callback, message: message, language: language)
+            return
+        }
         if parts.count == 3, parts[0] == "fxclip", parts[1] == "language" {
             let action = parts[2]
             if action == "auto" { try store.setUserLanguage(nil, userID: callback.from.id) }
@@ -372,7 +376,7 @@ public final class Bot {
         guard parts.count == 4, let chatID = Int64(parts[2]),
               let message = callback.message, message.chat.isGroup, message.chat.id == chatID,
               callback.from.is_bot != true,
-              ["show", "enable", "disable", "reply", "replace", "off", "previews_on", "previews_off", "lang_en", "lang_fr"].contains(parts[3]) else {
+              ["show", "enable", "disable", "reply", "replace", "off", "previews_on", "previews_off", "lang_en", "lang_fr", "close"].contains(parts[3]) else {
             await answer(callback, language.text("This button does not belong to this group. Open /setup.", "Ce bouton ne correspond pas à ce groupe. Ouvrez /setup."), alert: true)
             return
         }
@@ -391,6 +395,10 @@ public final class Bot {
             }
         }
         let action = parts[3]
+        if action == "close" {
+            await dismissPanel(callback, message: message, language: store.groupLanguage(chatID))
+            return
+        }
         var settings = chatSettings(chatID)
         if action == "replace" || (action == "enable" && settings.mode == .replace) {
             let mayDelete = (try? await canDelete(in: message.chat)) == true
@@ -413,6 +421,30 @@ public final class Bot {
         await answer(callback, action == "show" ? nil : language.text("Setting saved ✓", "Réglage enregistré ✓"))
         try await sendPanel(chatPanel(message.chat), to: chatID, messageID: message.message_id,
                             previousText: message.text, previousMarkup: message.reply_markup)
+    }
+
+    private func dismissPanel(_ callback: CallbackQuery, message: Message, language: BotLanguage) async {
+        guard message.from?.id == botID else {
+            await answer(callback, language.text("This panel cannot be closed.", "Ce panneau ne peut pas être fermé."), alert: true)
+            return
+        }
+        let target: [String: Any] = ["chat_id": message.chat.id, "message_id": message.message_id]
+        do {
+            _ = try await api.call("deleteMessage", target)
+        } catch {
+            // Old messages may no longer be deletable. Collapse the panel in place.
+            var parameters = target
+            parameters["text"] = message.chat.isGroup
+                ? language.text("Settings closed. Use /setup to reopen.", "Réglages fermés. /setup pour les rouvrir.")
+                : language.text("Settings closed. Use /settings to reopen.", "Réglages fermés. /settings pour les rouvrir.")
+            parameters["reply_markup"] = ["inline_keyboard": []] as [String: Any]
+            do { _ = try await api.call("editMessageText", parameters) }
+            catch {
+                await answer(callback, language.text("Could not close this panel. Please try again.", "Impossible de fermer ce panneau. Réessayez."), alert: true)
+                return
+            }
+        }
+        await answer(callback, nil)
     }
 
     private func groupCallback(_ callback: CallbackQuery, message: Message, parts: [String]) async throws {
