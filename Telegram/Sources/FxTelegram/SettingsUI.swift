@@ -175,7 +175,8 @@ struct SettingsUI {
             text += "\n\n" + outcome(settings.mode, language: language)
             text += "\n\n" + modeDisclosure(language: language)
             if !enabled { text += "\n\n" + paused(language: language) }
-            rows = modeRows(selected: settings.mode, scope: "chat:\(chat.id)", language: language)
+            rows = modeRows(selected: inherited ? nil : settings.mode, scope: "chat:\(chat.id)", language: language)
+            rows.append([button("\(inherited ? "✓ " : "")\(follow(scope: scope, language: language))", key + "mode_default")])
             rows.append([back(scope, language: language), close])
         case "language":
             text += "\n\n<b>\(language.text("Group language", "Langue du groupe"))</b>\n"
@@ -344,6 +345,10 @@ struct SettingsUI {
                 "Rétablit les réglages d’origine du nettoyage, des miroirs, des exclusions, de YouTube et de Facebook. Les choix personnels et de groupe existants restent inchangés.") : language.text(
                 "Removes this scope’s cleaning, mirror, exclusion, YouTube and Facebook preferences. They will follow \(scope == "p" ? "each group" : "the bot defaults") again.",
                 "Retire les préférences de nettoyage, miroirs, exclusions, YouTube et Facebook à ce niveau. Elles suivront à nouveau \(scope == "p" ? "chaque groupe" : "les réglages par défaut du bot").")
+            if scope == "p" {
+                text += "\n" + language.text("Secretary private chats will use bot defaults, never group rules.",
+                                              "En privé, Secrétaire suivra les réglages par défaut du bot, jamais ceux d’un groupe.")
+            }
             text += "\n\n" + language.text("Behavior, language and group activation are unchanged.", "Le comportement, la langue et l’activation du groupe ne changent pas.")
             text += "\n\n" + modeDisclosure(language: language)
             add(language.text("Reset link preferences", "Réinitialiser les préférences de liens"), "reset")

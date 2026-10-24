@@ -788,7 +788,7 @@ public final class Bot {
         guard parts.count == 4, let chatID = Int64(parts[2]),
               let message = callback.message, message.chat.isGroup, message.chat.id == chatID,
               callback.from.is_bot != true,
-              ["show", "mode", "language", "about", "enable", "disable", "reply", "replace", "off", "previews_on", "previews_off", "lang_en", "lang_fr", "close"].contains(parts[3]) else {
+              ["show", "mode", "language", "about", "enable", "disable", "reply", "replace", "off", "mode_default", "previews_on", "previews_off", "lang_en", "lang_fr", "close"].contains(parts[3]) else {
             await answer(callback, language.text("This button does not belong to this group. Open /setup.", "Ce bouton ne correspond pas à ce groupe. Ouvrez /setup."), alert: true)
             return
         }
@@ -812,7 +812,8 @@ public final class Bot {
             return
         }
         var settings = chatSettings(chatID)
-        if action == "replace" || (action == "enable" && settings.mode == .replace) {
+        if action == "replace" || (action == "enable" && settings.mode == .replace)
+            || (action == "mode_default" && store.state.defaultMode == .replace) {
             let mayDelete = (try? await canDelete(in: message.chat)) == true
             guard mayDelete else {
                 await answer(callback, language.text("Grant fxclip Delete messages permission before enabling replacement. Setting unchanged.", "Accordez à fxclip le droit de supprimer les messages avant d’activer le remplacement. Réglage inchangé."), alert: true)
@@ -823,6 +824,10 @@ public final class Bot {
             try store.setGroupLanguage(action == "lang_fr" ? .fr : .en, chatID: chatID)
         } else if action == "enable" || action == "disable" {
             try store.setGroupEnabled(action == "enable", chatID: chatID)
+        } else if action == "mode_default" {
+            settings.mode = store.state.defaultMode
+            settings.modeInherited = true
+            try store.set(settings, chatID: chatID)
         } else if let mode = Mode(rawValue: action) {
             settings.mode = mode
             settings.modeInherited = false
@@ -834,7 +839,7 @@ public final class Bot {
         let navigation = ["show", "mode", "language", "about"].contains(action)
         let panelLanguage = store.groupLanguage(chatID)
         await answer(callback, navigation ? nil : panelLanguage.text("Saved for this group ✓", "Enregistré pour ce groupe ✓"))
-        let section = navigation ? action : ["reply", "replace", "off"].contains(action) ? "mode"
+        let section = navigation ? action : ["reply", "replace", "off", "mode_default"].contains(action) ? "mode"
             : ["lang_en", "lang_fr"].contains(action) ? "language" : "show"
         let panel = ["previews_on", "previews_off"].contains(action)
             ? rulesPanel(.chat(chatID), section: "previews", language: panelLanguage)

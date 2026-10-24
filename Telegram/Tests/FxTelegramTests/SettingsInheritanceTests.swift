@@ -162,6 +162,62 @@ extension BotTests {
         XCTAssertEqual(restored?.mode, .off)
     }
 
+    func testLegacyExplicitGroupCanFollowBotModeAgainWithoutChangingLinkOrServiceChoices() async throws {
+        var group = try JSONDecoder().decode(ChatSettings.self,
+            from: Data(#"{"mode":"off","previews":false,"youTubeCards":true,"facebookReels":false}"#.utf8))
+        var links = UserSettings(); links.disabledSites = ["amazon"]
+        links.previews["reddit"] = .init(enabled: true, apps: ["telegram"], targetHost: "group.example")
+        links.neverClean = [.init(host: "excluded.example", subdomains: true)]
+        group.engineSettings = links
+        XCTAssertFalse(group.modeInherited)
+        try store.set(group, chatID: -100)
+        try store.setDefault(.reply)
+        try await callback("fxclip:chat:-100:mode", chatID: -100, chatType: "supergroup")
+        let oldPanel = try inheritancePanel()
+        XCTAssertTrue(try inheritanceActions(oldPanel).contains("fxclip:chat:-100:mode_default"))
+        api.calls = []
+        try await callback("fxclip:chat:-100:mode_default", chatID: -100, chatType: "supergroup",
+            messageText: oldPanel.plainText, messageMarkup: oldPanel.markup)
+        let saved = try XCTUnwrap(store.state.chats["-100"])
+        XCTAssertTrue(saved.modeInherited)
+        XCTAssertEqual(saved.mode, .reply)
+        XCTAssertEqual(saved.engineSettings, links)
+        XCTAssertEqual(saved.youTubeCards, true)
+        XCTAssertEqual(saved.facebookReels, false)
+        XCTAssertFalse(saved.previews)
+        let panel = try inheritancePanel()
+        let buttons = try decode(InlineKeyboardMarkup.self, from: panel.markup).inline_keyboard.flatMap { $0 }
+        XCTAssertEqual(buttons.filter { $0.text.hasPrefix("✓") }.compactMap(\.callback_data), ["fxclip:chat:-100:mode_default"])
+        XCTAssertTrue(buttons.contains { $0.callback_data == "fxclip:chat:-100:reply" })
+        XCTAssertEqual(try StateStore(directory: directory).state.chats["-100"]?.modeInherited, true)
+        try store.setDefault(.off)
+        api.calls = []; try await handle(["from": fixtureUser(8, languageCode: nil)])
+        XCTAssertTrue(api.calls.isEmpty)
+        try store.setDefault(.replace)
+        api.calls = []; try await handle(["from": fixtureUser(8, languageCode: nil)])
+        XCTAssertEqual(api.methods, ["getChatMember", "sendMessage", "deleteMessage"])
+        XCTAssertEqual(store.state.chats["-100"]?.engineSettings, links)
+    }
+
+    func testFollowingReplaceDefaultRequiresFreshDeletePermissionAndDenialPreservesState() async throws {
+        var group = ChatSettings(); group.mode = .reply
+        group.engineSettings = UserSettings(); group.youTubeCards = false; group.facebookReels = true
+        try store.set(group, chatID: -100)
+        try store.setDefault(.replace)
+        try await callback("fxclip:chat:-100:mode", chatID: -100, chatType: "supergroup")
+        let panel = try inheritancePanel()
+        let before = try inheritanceSnapshot()
+        // Rights can be revoked after this genuine mode picker was issued.
+        api.canDelete = false; api.calls = []
+        try await callback("fxclip:chat:-100:mode_default", chatID: -100, chatType: "supergroup",
+            messageText: panel.plainText, messageMarkup: panel.markup)
+        XCTAssertEqual(try inheritanceSnapshot(), before)
+        XCTAssertEqual(api.methods, ["getChatMember", "getChatMember", "answerCallbackQuery"])
+        XCTAssertEqual(api.calls.filter { $0.0 == "getChatMember" }.compactMap { $0.1["user_id"] as? Int64 }, [8, 99])
+        XCTAssertEqual(api.calls.last?.1["show_alert"] as? Bool, true)
+        XCTAssertEqual(store.state.chats["-100"]?.modeInherited, false)
+    }
+
     func testActualGroupSetupAndPreviewResumePanelsDiscloseNetworkAndTemporaryOpenURLs() async throws {
         for language in BotLanguage.allCases {
             try store.setGroupLanguage(language, chatID: -100)

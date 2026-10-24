@@ -225,6 +225,8 @@ final class SettingsScopeUXTests: XCTestCase {
                     XCTAssertTrue(panel.plainText.contains(phrase), "\(section) \(phrase)")
                 }
             }
+            let reset = SettingsUI.rules(UserSettings(), builtins: rules, scope: "p", section: "reset", inherited: true, language: language)
+            XCTAssertTrue(reset.plainText.contains(language == .en ? "Secretary private chats will use bot defaults" : "Secrétaire suivra les réglages par défaut du bot"))
             for section in ["youtube", "facebook"] {
                 let panel = SettingsUI.rules(UserSettings(), builtins: rules, scope: "p", section: section,
                     inherited: true, language: language)
