@@ -113,7 +113,7 @@ public final class Bot {
             return
         }
         if message.chat.isGroup, command == "/setup" || (command == "/fxclip" && words.count == 1) {
-            try await sendPanel(chatPanel(message.chat), to: message.chat.id)
+            try await sendPanel(chatPanel(message.chat), to: message.chat.id, removingCommand: message)
             return
         }
         var settings = chatSettings(message.chat.id)
@@ -399,7 +399,8 @@ public final class Bot {
     }
 
     private func sendPanel(_ panel: SettingsUI, to chatID: Int64, messageID: Int64? = nil,
-                           previousText: String? = nil, previousMarkup: InlineKeyboardMarkup? = nil) async throws {
+                           previousText: String? = nil, previousMarkup: InlineKeyboardMarkup? = nil,
+                           removingCommand command: Message? = nil) async throws {
         if messageID != nil, previousText == panel.plainText, let previousMarkup,
            previousMarkup == (try? decode(InlineKeyboardMarkup.self, from: panel.markup)) { return }
         var parameters: [String: Any] = ["chat_id": chatID, "text": panel.text,
@@ -415,7 +416,17 @@ public final class Bot {
                 parameters.removeValue(forKey: "message_id")
             }
         }
-        _ = try await api.call("sendMessage", parameters)
+        let sent = try await api.call("sendMessage", parameters)
+        // Remove only this handled group command, after a confirmed panel send.
+        // Permission lookup and cleanup are best effort: the panel remains usable.
+        if let command, command.chat.isGroup, command.chat.id == chatID,
+           let sent = sent as? [String: Any],
+           let sentID = confirmedMessageID(sent["message_id"]), sentID != command.message_id {
+            do {
+                guard try await canDelete(in: command.chat) else { return }
+                _ = try await api.call("deleteMessage", ["chat_id": chatID, "message_id": command.message_id])
+            } catch { /* Missing rights or failed cleanup must not resend the panel. */ }
+        }
     }
 
     private func settingsCallback(_ callback: CallbackQuery, now: Int) async throws {

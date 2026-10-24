@@ -30,6 +30,9 @@ groups with `/groups`. Group admins can use **Group settings**, `/setup` or
 `/fxclip` to activate and configure only their own chat. Every action checks
 current permissions. They cannot change global defaults, other groups or another
 member's preferences. A short join greeting links everyone to their settings.
+Once the group settings panel is confirmed sent, `/setup` (or bare `/fxclip`)
+is removed if the bot has permission to delete it. Without that permission,
+the command stays; closing the panel never removes other messages.
 
 Commands remain available: `/mode reply|replace|secretary|off|default`,
 `/fxclip reply|replace|off`, and `/fxclip previews on|off`.

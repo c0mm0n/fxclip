@@ -817,7 +817,7 @@ final class BotTests: XCTestCase {
         for command in ["/setup", "/fxclip", "/setup@fxclipbot"] {
             api.calls = []
             try await handle(["text": command])
-            XCTAssertEqual(api.methods, ["sendMessage"])
+            XCTAssertEqual(api.methods, ["sendMessage", "getChatMember", "deleteMessage"])
             XCTAssertTrue((sent["text"] as? String)?.contains("Cleaning: off") == true)
             let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(sent["reply_markup"]))
             let buttons = markup.inline_keyboard.flatMap { $0 }
