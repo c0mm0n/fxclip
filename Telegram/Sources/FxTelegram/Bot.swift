@@ -183,22 +183,33 @@ public final class Bot {
             // Fetching metadata is safe to fall back from; a timed-out send is not.
             let metadata = try? await youTubeMetadata.fetch(videoID: videoID)
             if let metadata {
-                let cleanText = rendered?.text ?? rewriter.engine.clean(message.text ?? "").text
+                let cleanURL = rewriter.engine.clean(message.text ?? "").text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                let caption = metadata.title + "\n\n" + cleanText
+                let cleanText = rendered?.text ?? cleanURL
+                let heading = "YouTube\n"
+                let prefix = heading + metadata.title + "\n\n"
+                let caption = prefix + cleanText
                 if caption.utf16.count <= 1024 {
                     var photo = base(message)
                     photo["photo"] = metadata.thumbnailURL.absoluteString
                     photo["caption"] = caption
                     photo["disable_notification"] = true
+                    var entities = [Entity(type: "text_link", offset: 0, length: 7, url: cleanURL),
+                                    Entity(type: "bold", offset: heading.utf16.count, length: metadata.title.utf16.count)]
+                    if let rendered {
+                        var originalEntities = rendered.entities
+                        for index in originalEntities.indices { originalEntities[index].offset += prefix.utf16.count }
+                        entities += originalEntities
+                    } else {
+                        entities.append(Entity(type: "url", offset: prefix.utf16.count, length: cleanText.utf16.count))
+                    }
+                    photo["caption_entities"] = try jsonObject(entities)
+                    photo["reply_markup"] = ["inline_keyboard": [[[
+                        "text": language.text("▶ Open YouTube", "▶ Ouvrir YouTube"), "url": cleanURL,
+                    ]]]]
                     if replace {
                         if let parent = message.reply_to_message {
                             photo["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
-                        }
-                        if let rendered {
-                            var entities = rendered.entities
-                            for index in entities.indices { entities[index].offset += metadata.title.utf16.count + 2 }
-                            photo["caption_entities"] = try jsonObject(entities)
                         }
                     } else {
                         photo["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true]

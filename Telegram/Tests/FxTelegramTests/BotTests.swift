@@ -154,10 +154,17 @@ final class BotTests: XCTestCase {
         XCTAssertEqual(metadata.requestedIDs, ["dQw4w9WgXcQ"])
         XCTAssertEqual(api.methods, ["sendPhoto"])
         let photo = api.calls[0].1
-        XCTAssertEqual(photo["caption"] as? String, metadata.title + "\n\n" + url)
+        XCTAssertEqual(photo["caption"] as? String, "YouTube\n" + metadata.title + "\n\n" + url)
         XCTAssertEqual(photo["photo"] as? String, "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg")
         XCTAssertEqual((photo["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5)
         XCTAssertEqual(photo["message_thread_id"] as? Int64, 123)
+        let entities = try decode([Entity].self, from: XCTUnwrap(photo["caption_entities"]))
+        let title = try XCTUnwrap(entities.first { $0.type == "bold" })
+        XCTAssertEqual(title.offset, "YouTube\n".utf16.count)
+        XCTAssertEqual(title.length, metadata.title.utf16.count)
+        let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(photo["reply_markup"]))
+        XCTAssertEqual(markup.inline_keyboard.first?.first?.text, "▶ Open YouTube")
+        XCTAssertEqual(markup.inline_keyboard.first?.first?.url, url)
         XCTAssertNoThrow(try JSONSerialization.data(withJSONObject: photo))
     }
 
@@ -167,9 +174,16 @@ final class BotTests: XCTestCase {
         try await handle(["text": "https://youtu.be/dQw4w9WgXcQ?is=share-token&t=42"])
         XCTAssertEqual(api.methods, ["getChatMember", "sendPhoto", "deleteMessage"])
         let photo = api.calls[1].1
-        XCTAssertEqual(photo["caption"] as? String, metadata.title + "\n\nPosted by Alice\n\nhttps://youtu.be/dQw4w9WgXcQ?t=42")
+        XCTAssertEqual(photo["caption"] as? String, "YouTube\n" + metadata.title + "\n\nPosted by Alice\n\nhttps://youtu.be/dQw4w9WgXcQ?t=42")
         let entities = try decode([Entity].self, from: XCTUnwrap(photo["caption_entities"]))
-        XCTAssertEqual(entities.first?.offset, metadata.title.utf16.count + 2 + "Posted by ".utf16.count)
+        XCTAssertEqual(entities.first { $0.type == "text_mention" }?.offset,
+                       "YouTube\n".utf16.count + metadata.title.utf16.count + 2 + "Posted by ".utf16.count)
+        try store.setGroupLanguage(.fr, chatID: -100)
+        api.calls = []
+        try await handle(["text": "https://youtu.be/dQw4w9WgXcQ?t=42"])
+        let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(api.calls.first?.1["reply_markup"]))
+        XCTAssertEqual(markup.inline_keyboard.first?.first?.text, "▶ Ouvrir YouTube")
+        XCTAssertEqual(markup.inline_keyboard.first?.first?.url, "https://youtu.be/dQw4w9WgXcQ?t=42")
     }
 
     func testYouTubeCardsHonorPreviewModeAndActivationChoices() async throws {
