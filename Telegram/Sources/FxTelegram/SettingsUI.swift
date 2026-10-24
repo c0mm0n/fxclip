@@ -215,14 +215,15 @@ struct SettingsUI {
                       youTubeCards: Bool = true, facebookReels: Bool = false,
                       language: BotLanguage = .en, groupTitle: String? = nil,
                       youTubeInherited: Bool = false, facebookInherited: Bool = false,
-                      cleaningEnabled: Bool = true) -> SettingsUI {
+                      cleaningEnabled: Bool = true,
+                      redditVideos: Bool = false, redditInherited: Bool = false) -> SettingsUI {
         let groupID = scope.hasPrefix("c:") ? String(scope.dropFirst(2)) : nil
         let key = "rules:\(scope):"
         let command = groupID != nil ? "/fxclip " : scope == "d" ? "/default " : "/"
         let close = closeButton(language: language, action: groupID.map { "chat:\($0):close" } ?? "panel:close")
         let editable = scope == "d" || !inherited
         var text = scopeHeader(scope, groupTitle: groupTitle ?? groupID, language: language)
-        if scope == "p", !["youtube", "youtube:show", "facebook", "facebook:show"].contains(section) {
+        if scope == "p", !["youtube", "youtube:show", "facebook", "facebook:show", "reddit", "reddit:show"].contains(section) {
             text = language.text("<b>My preferences · Links</b>\nMy messages · enabled groups + Secretary private chats",
                                  "<b>Mes préférences · Liens</b>\nMes messages · groupes activés + conversations privées Secrétaire")
         }
@@ -250,7 +251,12 @@ struct SettingsUI {
                 : language.text("Disable for this group", "Désactiver pour ce groupe")
             let enable = button(enableLabel, key + name + ":on")
             let disable = button(disableLabel, key + name + ":off")
-            rows.append(follows ? [enable, disable] : [enabled ? disable : enable])
+            if follows, name == "reddit" {
+                rows.append([enable])
+                rows.append([disable])
+            } else {
+                rows.append(follows ? [enable, disable] : [enabled ? disable : enable])
+            }
             if scope != "d", !follows {
                 add(scope == "p" ? language.text("Follow group again", "Suivre à nouveau le groupe")
                     : language.text("Use bot default", "Utiliser le réglage par défaut du bot"), name + ":default")
@@ -267,8 +273,8 @@ struct SettingsUI {
         }
         if groupID != nil, !cleaningEnabled { text += "\n\n" + paused(language: language) }
         else if groupID != nil, !previewsEnabled {
-            text += "\n\n" + language.text("Enhanced previews paused here (mirrors, YouTube and Facebook). Cleaning remains active.",
-                                           "Aperçus améliorés en pause ici (miroirs, YouTube et Facebook). Le nettoyage reste actif.")
+            text += "\n\n" + language.text("Enhanced previews paused here (mirrors, YouTube, Facebook and Reddit videos). Cleaning remains active.",
+                                           "Aperçus améliorés en pause ici (miroirs, YouTube, vidéos Facebook et Reddit). Le nettoyage reste actif.")
         }
         let normalized = section.hasSuffix(":show") ? String(section.dropLast(5)) : section
         var dashboard = false
@@ -295,8 +301,12 @@ struct SettingsUI {
             }
         case "previews":
             text += "\n\n<b>\(language.text("Previews", "Aperçus"))</b>\n" + source()
-            text += "\n" + language.text("Choose a service. YouTube and Facebook have separate preferences.", "Choisissez un service. YouTube et Facebook ont des préférences séparées.")
+            text += "\n" + language.text("Choose a service. YouTube, Facebook and Reddit videos have separate preferences.", "Choisissez un service. YouTube, les vidéos Facebook et Reddit ont des préférences séparées.")
             for preview in builtins.previews {
+                if preview.id == "reddit" {
+                    add(language.text("Reddit · Video & links ›", "Reddit · Vidéos et liens ›"), "preview:reddit:show")
+                    continue
+                }
                 let value = editable ? state(mirrorEnabled(preview.id, settings: settings, builtins: builtins), language: language) : follow(scope: scope, language: language)
                 add("\(preview.name) · \(value) ›", "preview:\(preview.id):show")
             }
@@ -320,6 +330,12 @@ struct SettingsUI {
             text += "\n\n" + removalDisclosure(language: language)
             serviceActions("facebook", enabled: facebookReels, follows: facebookInherited && scope != "d")
             backAction = "previews"; backLabel = language.text("← Previews", "← Aperçus")
+        case "reddit":
+            text += "\n\n<b>\(language.text("Reddit videos", "Vidéos Reddit"))</b> · " + (redditInherited && scope != "d" ? follow(scope: scope, language: language) : state(redditVideos, language: language))
+            text += "\n\n" + redditDisclosure(language: language)
+            text += "\n\n" + removalDisclosure(language: language)
+            serviceActions("reddit", enabled: redditVideos, follows: redditInherited && scope != "d")
+            backAction = "preview:reddit:show"; backLabel = "← Reddit"
         case "excluded":
             text += "\n\n<b>\(language.text("Cleaning exclusions", "Exclusions du nettoyage"))</b>\n" + source()
             text += "\n" + language.text("These domains skip tracker cleaning. Preview choices still apply separately.", "Ces domaines échappent au nettoyage des traceurs. Les choix d’aperçu s’appliquent séparément.")
@@ -334,17 +350,17 @@ struct SettingsUI {
         case "customize":
             text += "\n\n<b>\(scope == "p" ? language.text("Create my link preferences?", "Créer mes préférences de liens ?") : language.text("Customize this group?", "Personnaliser ce groupe ?"))</b>"
             text += "\n\n" + language.text(
-                "Starts from the bot defaults, not the current group rules. Your new configuration replaces the complete cleaning, mirror and exclusion configuration.\n\nYouTube and Facebook preferences stay separate and unchanged. Behavior is unchanged. After creation, repeat any provider or exclusion command.",
-                "Le point de départ est le réglage par défaut du bot, pas les règles actuelles du groupe. La nouvelle configuration remplace l’ensemble du nettoyage, des miroirs et des exclusions.\n\nLes préférences YouTube et Facebook restent séparées et inchangées. Le comportement ne change pas. Après création, répétez toute commande de fournisseur ou d’exclusion.")
+                "Starts from the bot defaults, not the current group rules. Your new configuration replaces the complete cleaning, mirror and exclusion configuration.\n\nYouTube, Facebook and Reddit video preferences stay separate and unchanged. Behavior is unchanged. After creation, repeat any provider or exclusion command.",
+                "Le point de départ est le réglage par défaut du bot, pas les règles actuelles du groupe. La nouvelle configuration remplace l’ensemble du nettoyage, des miroirs et des exclusions.\n\nLes préférences YouTube, vidéos Facebook et Reddit restent séparées et inchangées. Le comportement ne change pas. Après création, répétez toute commande de fournisseur ou d’exclusion.")
             text += "\n\n" + language.text("Enabled mirrors receive preview links through Telegram.", "Les miroirs activés reçoivent les liens d’aperçu via Telegram.")
             if scope != "d" { add(language.text("Create these link preferences", "Créer ces préférences de liens"), "customize:confirm") }
         case "reset":
             text += "\n\n<b>\(language.text("Reset link preferences?", "Réinitialiser les préférences de liens ?"))</b>\n\n"
             text += scope == "d" ? language.text(
-                "Restores built-in cleaning, mirrors, exclusions, YouTube and Facebook defaults. Existing personal and group overrides stay unchanged.",
-                "Rétablit les réglages d’origine du nettoyage, des miroirs, des exclusions, de YouTube et de Facebook. Les choix personnels et de groupe existants restent inchangés.") : language.text(
-                "Removes this scope’s cleaning, mirror, exclusion, YouTube and Facebook preferences. They will follow \(scope == "p" ? "each group" : "the bot defaults") again.",
-                "Retire les préférences de nettoyage, miroirs, exclusions, YouTube et Facebook à ce niveau. Elles suivront à nouveau \(scope == "p" ? "chaque groupe" : "les réglages par défaut du bot").")
+                "Restores built-in cleaning, mirrors, exclusions, YouTube, Facebook and Reddit video defaults (Reddit videos off). Existing personal and group overrides stay unchanged.",
+                "Rétablit les réglages d’origine du nettoyage, des miroirs, des exclusions, de YouTube, des vidéos Facebook et Reddit (vidéos Reddit désactivées). Les choix personnels et de groupe existants restent inchangés.") : language.text(
+                "Removes this scope’s cleaning, mirror, exclusion, YouTube, Facebook and Reddit video preferences. They will follow \(scope == "p" ? "each group" : "the bot defaults") again.",
+                "Retire les préférences de nettoyage, miroirs, exclusions, YouTube, vidéos Facebook et Reddit à ce niveau. Elles suivront à nouveau \(scope == "p" ? "chaque groupe" : "les réglages par défaut du bot").")
             if scope == "p" {
                 text += "\n" + language.text("Secretary private chats will use bot defaults, never group rules.",
                                               "En privé, Secrétaire suivra les réglages par défaut du bot, jamais ceux d’un groupe.")
@@ -354,8 +370,8 @@ struct SettingsUI {
             add(language.text("Reset link preferences", "Réinitialiser les préférences de liens"), "reset")
         case "info", "about":
             text += "\n\n" + about(language: language)
-            text += "\n\n" + language.text("In groups: personal link rules, then group, then bot defaults. Secretary private chats use personal rules or bot defaults, never group rules. A custom configuration replaces cleaning, mirrors and exclusions together. YouTube and Facebook inherit independently.",
-                                          "En groupe : règles personnelles, puis groupe, puis bot. En privé, Secrétaire suit les règles personnelles ou celles du bot, jamais celles d’un groupe. Une configuration personnalisée remplace ensemble nettoyage, miroirs et exclusions. YouTube et Facebook sont hérités séparément.")
+            text += "\n\n" + language.text("In groups: personal link rules, then group, then bot defaults. Secretary private chats use personal rules or bot defaults, never group rules. A custom configuration replaces cleaning, mirrors and exclusions together. YouTube, Facebook and Reddit videos inherit independently and are group-only features.",
+                                          "En groupe : règles personnelles, puis groupe, puis bot. En privé, Secrétaire suit les règles personnelles ou celles du bot, jamais celles d’un groupe. Une configuration personnalisée remplace ensemble nettoyage, miroirs et exclusions. YouTube, les vidéos Facebook et Reddit sont hérités séparément et réservés aux groupes.")
         case let leaf where leaf.hasPrefix("preview:") || leaf.hasPrefix("provider:"):
             let provider = leaf.hasPrefix("provider:")
             let id = String(leaf.dropFirst(provider ? 9 : 8))
@@ -382,6 +398,11 @@ struct SettingsUI {
                     let enabled = mirrorEnabled(id, settings: settings, builtins: builtins)
                     add(enabled ? language.text("Disable mirror", "Désactiver le miroir") : language.text("Enable mirror", "Activer le miroir"), "preview:\(id):" + (enabled ? "off" : "on"))
                     add(language.text("Advanced · Provider →", "Avancé · Fournisseur →"), "provider:\(id)")
+                }
+                if id == "reddit", !provider {
+                    text += "\n\n" + language.text("This controls link mirrors only. Videos in Telegram are separate and off by default; changing either choice leaves the other unchanged.",
+                                                  "Ce réglage concerne uniquement les liens miroirs. Les vidéos dans Telegram sont séparées et désactivées par défaut ; chaque choix laisse l’autre inchangé.")
+                    add(language.text("Videos in Telegram →", "Vidéos dans Telegram →"), "reddit:show")
                 }
             } else { text += "\n\n" + language.text("This preview is no longer available.", "Cet aperçu n’est plus disponible.") }
         default:
@@ -487,22 +508,28 @@ struct SettingsUI {
             "Le bot télécharge une vidéo publique sur Facebook et en envoie une copie à Telegram. Résolution privée, sans service public facebed.com ni connexion Facebook. Limite : 20 Mio ; au-delà, un lien Ouvrir Facebook est envoyé et l’original reste. Des doublons sont possibles si Telegram affiche aussi son aperçu.")
     }
 
+    private static func redditDisclosure(language: BotLanguage) -> String {
+        language.text(
+            "Off by default; enable explicitly for group messages only, never Secretary. Fetches public Reddit videos privately on the bot server using pinned vx code and Reddit CDN, then uploads a copy to Telegram. No public vx service or Reddit login. Chooses the highest resolution that fits 20 MiB, possibly lowering quality; combines audio when present and prepares video for quick playback (faststart). Keeps the clean original. Link-mirror choices are independent and unchanged. Unsupported videos or failures may use a mirror only if separately enabled; Reddit availability is not guaranteed. Duplicates are possible.",
+            "Désactivées par défaut ; à activer explicitement pour les messages de groupe, jamais Secrétaire. Le bot récupère les vidéos Reddit publiques sur son serveur, avec du code vx à version figée et le CDN Reddit, puis envoie une copie à Telegram. Sans service vx public ni connexion Reddit. La meilleure résolution tenant dans 20 Mio est choisie, quitte à réduire la qualité ; le son est assemblé s’il existe et la vidéo préparée pour une lecture rapide (faststart). L’original propre reste. Les choix de liens miroirs sont indépendants et inchangés. Vidéo non prise en charge ou échec : un miroir peut servir seulement s’il est activé séparément ; la disponibilité Reddit n’est pas garantie. Des doublons sont possibles.")
+    }
+
     private static func resumeDisclosure(language: BotLanguage) -> String {
         language.text(
-            "Enabled previews contact Telegram, mirrors, YouTube or Facebook. Opening links may stay on the bot server for button cleanup, up to 48 h.",
-            "Les aperçus activés contactent Telegram, des miroirs, YouTube ou Facebook. Les liens d’ouverture peuvent rester sur le serveur pour le retrait des boutons, jusqu’à 48 h.")
+            "Enabled previews contact Telegram, mirrors, YouTube, Facebook or Reddit for native videos. Opening links may stay on the bot server for button cleanup, up to 48 h.",
+            "Les aperçus activés contactent Telegram, des miroirs, YouTube, Facebook ou Reddit pour les vidéos natives. Les liens d’ouverture peuvent rester sur le serveur pour le retrait des boutons, jusqu’à 48 h.")
     }
 
     private static func activationDisclosure(language: BotLanguage) -> String {
         language.text(
-            "Links pass through Telegram and enabled mirror providers. YouTube may fetch titles/thumbnails; Facebook videos are off by default and separately opt-in. Enabled Facebook videos are copied to Telegram. Duplicate previews are possible.",
-            "Les liens passent par Telegram et les fournisseurs miroirs activés. YouTube peut fournir titres et miniatures ; les vidéos Facebook sont désactivées par défaut et à activer séparément. Une fois activées, elles sont copiées dans Telegram. Des doublons d’aperçu sont possibles.") + "\n\n" + removalDisclosure(language: language)
+            "Links pass through Telegram and enabled mirror providers. YouTube may fetch titles/thumbnails; Facebook videos are off by default and separately opt-in. Reddit native videos are also off by default and separately opt-in, independent of link mirrors. Enabled videos are fetched on the bot server and copied to Telegram, in groups only. Duplicate previews are possible.",
+            "Les liens passent par Telegram et les fournisseurs miroirs activés. YouTube peut fournir titres et miniatures ; les vidéos Facebook sont désactivées par défaut et à activer séparément. Les vidéos natives Reddit sont aussi désactivées par défaut et à activer séparément, indépendamment des liens miroirs. Une fois activées, les vidéos sont récupérées sur le serveur du bot et copiées dans Telegram, en groupe uniquement. Des doublons d’aperçu sont possibles.") + "\n\n" + removalDisclosure(language: language)
     }
 
     private static func modeDisclosure(language: BotLanguage) -> String {
         language.text(
-            "Enabled previews use Telegram, mirror providers or YouTube. Facebook video is separately opt-in. Duplicates are possible. Open-button URLs stay locally for cleanup, up to 48 h.",
-            "Les aperçus activés passent par Telegram, des miroirs ou YouTube. La vidéo Facebook s’active séparément. Des doublons sont possibles. Les URL d’ouverture restent localement pour le retrait des boutons, 48 h maximum.")
+            "Enabled previews use Telegram, mirror providers or YouTube. Facebook and Reddit native videos are off by default and separately opt-in. Duplicates are possible. Open-button URLs stay locally for cleanup, up to 48 h.",
+            "Les aperçus activés passent par Telegram, des miroirs ou YouTube. Les vidéos natives Facebook et Reddit sont désactivées par défaut et à activer séparément. Des doublons sont possibles. Les URL d’ouverture restent localement pour le retrait des boutons, 48 h maximum.")
     }
 
     private static func about(language: BotLanguage) -> String {

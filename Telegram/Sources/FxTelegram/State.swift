@@ -36,6 +36,8 @@ public struct BotState: Codable {
     public var personalYouTubeCards: [String: Bool] = [:]
     public var defaultFacebookReels = false
     public var personalFacebookReels: [String: Bool] = [:]
+    public var defaultRedditVideos = false
+    public var personalRedditVideos: [String: Bool] = [:]
     public var replyControls: [String: ReplyControl] = [:]
     public init() {}
 
@@ -44,6 +46,7 @@ public struct BotState: Codable {
         case userLanguages, detectedLanguages, groupLanguages
         case defaultLinkSettings, personalLinkSettings, defaultYouTubeCards, personalYouTubeCards
         case defaultFacebookReels, personalFacebookReels
+        case defaultRedditVideos, personalRedditVideos
         case replyControls
     }
     public init(from decoder: Decoder) throws {
@@ -64,6 +67,8 @@ public struct BotState: Codable {
         personalYouTubeCards = try values.decodeIfPresent([String: Bool].self, forKey: .personalYouTubeCards) ?? [:]
         defaultFacebookReels = try values.decodeIfPresent(Bool.self, forKey: .defaultFacebookReels) ?? false
         personalFacebookReels = try values.decodeIfPresent([String: Bool].self, forKey: .personalFacebookReels) ?? [:]
+        defaultRedditVideos = try values.decodeIfPresent(Bool.self, forKey: .defaultRedditVideos) ?? false
+        personalRedditVideos = try values.decodeIfPresent([String: Bool].self, forKey: .personalRedditVideos) ?? [:]
         replyControls = try values.decodeIfPresent([String: ReplyControl].self, forKey: .replyControls) ?? [:]
     }
 }
@@ -131,6 +136,17 @@ public final class StateStore {
     public func setPersonalFacebookReels(_ enabled: Bool?, userID: Int64) throws {
         var next = state
         next.personalFacebookReels[String(userID)] = enabled
+        try save(next)
+    }
+    public func setDefaultRedditVideos(_ enabled: Bool) throws {
+        var next = state
+        next.defaultRedditVideos = enabled
+        try save(next)
+    }
+    /// Nil restores inheritance; link-mirror settings remain independent.
+    public func setPersonalRedditVideos(_ enabled: Bool?, userID: Int64) throws {
+        var next = state
+        next.personalRedditVideos[String(userID)] = enabled
         try save(next)
     }
     public func recordReplyControl(chatID: Int64, messageID: Int64, posterID: Int64, now: TimeInterval,

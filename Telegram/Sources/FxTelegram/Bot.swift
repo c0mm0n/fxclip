@@ -12,18 +12,21 @@ public final class Bot {
     private let username: String
     private let youTubeMetadata: YouTubeMetadataProviding?
     private let facebookReels: FacebookReelProviding?
+    private let redditVideos: RedditVideoProviding?
     private let pendingPreviewDelayNanoseconds: UInt64
     private var cleanupRetryAfter: [String: TimeInterval] = [:]
     public init(api: BotAPI, store: StateStore, engine: Engine,
                 allowedChats: Set<Int64>, allowedOwners: Set<Int64> = [], botID: Int64, username: String,
                 youTubeMetadata: YouTubeMetadataProviding? = nil,
                 facebookReels: FacebookReelProviding? = nil,
-                pendingPreviewDelayNanoseconds: UInt64 = 700_000_000) {
+                pendingPreviewDelayNanoseconds: UInt64 = 700_000_000,
+                redditVideos: RedditVideoProviding? = nil) {
         self.api = api; self.store = store; self.rewriter = Rewriter(engine: engine)
         self.allowedChats = allowedChats; self.botID = botID; self.username = username
         self.allowedOwners = allowedOwners
         self.youTubeMetadata = youTubeMetadata
         self.facebookReels = facebookReels
+        self.redditVideos = redditVideos
         self.pendingPreviewDelayNanoseconds = pendingPreviewDelayNanoseconds
     }
 
@@ -187,10 +190,20 @@ public final class Bot {
             let source = configured.engine.clean(text).text.trimmingCharacters(in: .whitespacesAndNewlines)
             facebookSource = FacebookReelPreview.facebedURL(in: source) == nil ? nil : source
         } else { facebookSource = nil }
-        guard replyContent != nil || videoID != nil || facebookSource != nil else { return }
+        let redditSource: (id: String, url: String)?
+        if message.chat.isGroup, settings.previews, redditEnabled(chatID: message.chat.id, userID: senderID), redditVideos != nil,
+           message.link_preview_options?.is_disabled != true, message.forward_origin == nil, message.sender_chat == nil,
+           let text = message.text, (message.entities ?? []).allSatisfy({ $0.type == "url" }), isBareURL(text) {
+            let source = configured.engine.clean(text).text.trimmingCharacters(in: .whitespacesAndNewlines)
+            redditSource = RedditVideoPreview.postID(in: source).map { ($0, source) }
+        } else { redditSource = nil }
+        guard replyContent != nil || videoID != nil || facebookSource != nil || redditSource != nil else { return }
+        let cleanRedditOriginal = redditSource.map {
+            $0.url == (message.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        } ?? false
         // Media, forwards and anonymous/channel-authored posts retain their originals.
         var replace = false
-        if replyContent != nil && settings.mode == .replace && message.text != nil && message.sender_chat == nil && message.forward_origin == nil {
+        if replyContent != nil && settings.mode == .replace && message.text != nil && message.sender_chat == nil && message.forward_origin == nil && !cleanRedditOriginal {
             replace = try await canDelete(in: message.chat)
         }
         let rendered: RenderedMessage?
@@ -215,8 +228,29 @@ public final class Bot {
         } else {
             pending["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true]
         }
-        let facebookVideo: FacebookReel?
-        if let facebookSource, let facebookReels {
+        let nativeVideo: Data?
+        if let source = redditSource, let redditVideos {
+            let fetched: (Result<Data, Error>, Int64?)
+            if replace {
+                do { fetched = (.success(try await redditVideos.fetch(postID: source.id)), nil) }
+                catch { fetched = (.failure(error), nil) }
+            } else {
+                fetched = try await fetchWithPendingPreview(api: api, parameters: pending,
+                    originalMessageID: message.message_id, delayNanoseconds: pendingPreviewDelayNanoseconds) {
+                    try await redditVideos.fetch(postID: source.id)
+                }
+            }
+            pendingID = fetched.1
+            do { nativeVideo = try fetched.0.get() }
+            catch RedditVideoError.videoTooLarge {
+                try await sendVideoSizeNotice(to: message, author: "", caption: "", cleanURL: source.url,
+                    language: language, now: fixedNow, pendingID: pendingID, service: "Reddit")
+                return
+            } catch is CancellationError {
+                await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
+                throw CancellationError()
+            } catch { nativeVideo = nil }
+        } else if let facebookSource, let facebookReels {
             let fetched: (Result<FacebookReel, Error>, Int64?)
             if replace {
                 // An oversized video keeps the original and must reply to it.
@@ -230,22 +264,22 @@ public final class Bot {
                 }
             }
             pendingID = fetched.1
-            do { facebookVideo = try fetched.0.get() }
+            do { nativeVideo = try fetched.0.get().video }
             catch FacebookReelError.videoTooLarge(let author, let caption) {
-                try await sendFacebookSizeNotice(to: message, author: author, caption: caption,
+                try await sendVideoSizeNotice(to: message, author: author, caption: caption,
                     cleanURL: facebookSource, language: language, now: fixedNow, pendingID: pendingID)
                 return
             } catch is CancellationError {
                 await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
                 throw CancellationError()
-            } catch { facebookVideo = nil }
-        } else { facebookVideo = nil }
-        if let reel = facebookVideo {
+            } catch { nativeVideo = nil }
+        } else { nativeVideo = nil }
+        if let data = nativeVideo {
             let creditLabel = language.text("Posted by ", "Publié par ")
             let credit = replace ? creditLabel + (message.from?.name ?? language.text("Unknown sender", "Auteur inconnu")) : ""
-            if !reel.video.isEmpty, reel.video.count <= 20 * 1024 * 1024, credit.utf16.count <= 1024 {
+            if !data.isEmpty, data.count <= 20 * 1024 * 1024, credit.utf16.count <= 1024 {
                 var video = base(message)
-                video["video"] = VideoUpload(data: reel.video)
+                video["video"] = VideoUpload(data: data)
                 video["supports_streaming"] = true
                 video["disable_notification"] = true
                 // A reply already identifies the poster. Only actual replacement
@@ -422,18 +456,19 @@ public final class Bot {
         return markup.inline_keyboard.joined().first { $0.url != nil && $0.callback_data == nil }
     }
 
-    private func sendFacebookSizeNotice(to message: Message, author: String, caption: String,
-                                        cleanURL: String, language: BotLanguage, now: Int?, pendingID: Int64? = nil) async throws {
-        let heading = "Facebook\n"
+    private func sendVideoSizeNotice(to message: Message, author: String, caption: String,
+                                        cleanURL: String, language: BotLanguage, now: Int?, pendingID: Int64? = nil,
+                                        service: String = "Facebook") async throws {
+        let heading = service + "\n"
         let creator = facebookCaptionText(author, limit: 160)
         let description = facebookCaptionText(caption.split(whereSeparator: { $0.isWhitespace }).joined(separator: " "), limit: 400)
-        let notice = language.text("This video exceeds the bot’s 20 MiB limit. Open it on Facebook.",
-                                   "Cette vidéo dépasse la limite de 20 Mio du bot. Ouvrez-la sur Facebook.")
+        let notice = language.text("This video exceeds the bot’s 20 MiB limit. Open it on \(service).",
+                                   "Cette vidéo dépasse la limite de 20 Mio du bot. Ouvrez-la sur \(service).")
         let prefix = heading + creator + "\n" + description + "\n\n" + notice + "\n\n"
         let includeURL = (prefix + cleanURL).utf16.count <= 4096
         var parameters = base(message)
         parameters["text"] = prefix + (includeURL ? cleanURL : "")
-        var entities = [Entity(type: "text_link", offset: 0, length: 8, url: cleanURL)]
+        var entities = [Entity(type: "text_link", offset: 0, length: service.utf16.count, url: cleanURL)]
         if !creator.isEmpty { entities.append(Entity(type: "bold", offset: heading.utf16.count, length: creator.utf16.count)) }
         if includeURL { entities.append(Entity(type: "url", offset: prefix.utf16.count, length: cleanURL.utf16.count)) }
         parameters["entities"] = try jsonObject(entities)
@@ -441,7 +476,7 @@ public final class Bot {
         parameters["link_preview_options"] = ["is_disabled": true]
         parameters["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true]
         parameters["reply_markup"] = ["inline_keyboard": [[[
-            "text": language.text("▶ Open Facebook", "▶ Ouvrir Facebook"), "url": cleanURL,
+            "text": language.text("▶ Open \(service)", "▶ Ouvrir \(service)"), "url": cleanURL,
         ]]]]
         let poster = message.sender_chat == nil && message.from?.is_bot == false
             && store.state.replyControls.count < 4096 ? message.from?.id : nil
@@ -622,6 +657,12 @@ public final class Bot {
         let personal = userID.flatMap { store.state.personalFacebookReels[String($0)] }
         let group = chatID.flatMap { store.state.chats[String($0)]?.facebookReels }
         return personal ?? group ?? store.state.defaultFacebookReels
+    }
+
+    private func redditEnabled(chatID: Int64?, userID: Int64?) -> Bool {
+        let personal = userID.flatMap { store.state.personalRedditVideos[String($0)] }
+        let group = chatID.flatMap { store.state.chats[String($0)]?.redditVideos }
+        return personal ?? group ?? store.state.defaultRedditVideos
     }
 
     private func chatSettings(_ chatID: Int64) -> ChatSettings {
@@ -948,6 +989,26 @@ public final class Bot {
         }
     }
 
+    private func ruleRedditOverride(_ scope: RuleScope) -> Bool? {
+        switch scope {
+        case .personal(let id): return store.state.personalRedditVideos[String(id)]
+        case .chat(let id): return store.state.chats[String(id)]?.redditVideos
+        case .defaults: return store.state.defaultRedditVideos
+        }
+    }
+
+    private func saveReddit(_ scope: RuleScope, enabled: Bool?) throws {
+        switch scope {
+        case .personal(let id): try store.setPersonalRedditVideos(enabled, userID: id)
+        case .chat(let id):
+            if store.state.chats[String(id)] == nil, enabled == nil { return }
+            var settings = chatSettings(id)
+            settings.redditVideos = enabled
+            try store.set(settings, chatID: id)
+        case .defaults: try store.setDefaultRedditVideos(enabled ?? false)
+        }
+    }
+
     private func saveRules(_ scope: RuleScope, settings: UserSettings?, cards: Bool?, facebook: Bool?) throws {
         switch scope {
         case .personal(let id):
@@ -986,7 +1047,9 @@ public final class Bot {
                                 cleaningEnabled: {
                                     if case .chat(let id) = scope { return isEnabled(chatID: id) }
                                     return true
-                                }())
+                                }(),
+                                redditVideos: ruleRedditOverride(scope) ?? store.state.defaultRedditVideos,
+                                redditInherited: ruleRedditOverride(scope) == nil)
     }
 
     private func rulesCallback(_ callback: CallbackQuery, parts: [String]) async throws {
@@ -1041,6 +1104,7 @@ public final class Bot {
         var storedSettings = ruleOverride(scope)
         var cards = ruleCardsOverride(scope)
         var facebook = ruleFacebookOverride(scope)
+        var reddit = ruleRedditOverride(scope)
         var changed = false
         let builtins = rewriter.engine.rules
         switch actions {
@@ -1048,6 +1112,7 @@ public final class Bot {
         case ["reset", "show"]: section = "reset"
         case ["youtube", "show"]: section = "youtube"
         case ["facebook", "show"]: section = "facebook"
+        case ["reddit", "show"]: section = "reddit"
         case ["customize", "confirm"]:
             guard scope.key != "d" else {
                 await answer(callback, panelLanguage.text("Bot defaults are already editable.", "Les réglages par défaut du bot sont déjà modifiables."))
@@ -1060,7 +1125,7 @@ public final class Bot {
             }
             section = "show"
         case ["reset"]:
-            storedSettings = nil; cards = nil; facebook = nil; changed = true; section = "show"
+            storedSettings = nil; cards = nil; facebook = nil; reddit = nil; changed = true; section = "show"
         default:
             if actions.count == 3, actions[0] == "preview", actions[2] == "show",
                builtins.previews.contains(where: { $0.id == actions[1] }) {
@@ -1073,16 +1138,19 @@ public final class Bot {
                 value.targetHost = nil
                 settings.previews[rule.id] = value
                 storedSettings = settings; changed = true; section = "provider:\(rule.id)"
-            } else if actions.count == 2, ["youtube", "facebook"].contains(actions[0]), actions[1] == "default", scope.key != "d" {
+            } else if actions.count == 2, ["youtube", "facebook", "reddit"].contains(actions[0]), actions[1] == "default", scope.key != "d" {
                 if actions[0] == "youtube" { cards = nil; section = "youtube" }
+                else if actions[0] == "reddit" { reddit = nil; section = "reddit" }
                 else { facebook = nil; section = "facebook" }
                 changed = true
-            } else if actions.count == 2, ["trackers", "youtube", "facebook"].contains(actions[0]), ["on", "off"].contains(actions[1]) {
+            } else if actions.count == 2, ["trackers", "youtube", "facebook", "reddit"].contains(actions[0]), ["on", "off"].contains(actions[1]) {
                 if actions[0] == "trackers" {
                     settings.trackersEverywhere = actions[1] == "on"; storedSettings = settings
                     section = "clean"
                 } else if actions[0] == "youtube" {
                     cards = actions[1] == "on"; section = "youtube"
+                } else if actions[0] == "reddit" {
+                    reddit = actions[1] == "on"; section = "reddit"
                 } else {
                     facebook = actions[1] == "on"; section = "facebook"
                 }
@@ -1104,7 +1172,10 @@ public final class Bot {
                 return
             }
         }
-        if changed { try saveRules(scope, settings: storedSettings, cards: cards, facebook: facebook) }
+        if changed {
+            try saveRules(scope, settings: storedSettings, cards: cards, facebook: facebook)
+            if reddit != ruleRedditOverride(scope) { try saveReddit(scope, enabled: reddit) }
+        }
         let saved: String
         switch scope {
         case .personal: saved = panelLanguage.text("Saved for your messages ✓", "Enregistré pour vos messages ✓")

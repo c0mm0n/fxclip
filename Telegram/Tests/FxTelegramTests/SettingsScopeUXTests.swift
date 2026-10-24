@@ -148,7 +148,12 @@ final class SettingsScopeUXTests: XCTestCase {
             let buttons = try uxRows(panel).flatMap { $0 }
             for preview in rules.previews {
                 let button = try XCTUnwrap(buttons.first { $0["callback_data"] == "fxclip:rules:p:preview:\(preview.id):show" })
-                XCTAssertTrue(try XCTUnwrap(button["text"]).contains(language == .en ? "Follow group" : "Suivre le groupe"))
+                let label = try XCTUnwrap(button["text"])
+                if preview.id == "reddit" {
+                    XCTAssertTrue(label.contains(language == .en ? "Video & links" : "Vidéos et liens"))
+                } else {
+                    XCTAssertTrue(label.contains(language == .en ? "Follow group" : "Suivre le groupe"))
+                }
             }
             let youtube = try XCTUnwrap(buttons.first { $0["callback_data"] == "fxclip:rules:p:youtube:show" }?["text"])
             let facebook = try XCTUnwrap(buttons.first { $0["callback_data"] == "fxclip:rules:p:facebook:show" }?["text"])

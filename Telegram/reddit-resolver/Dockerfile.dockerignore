@@ -1,0 +1,9 @@
+**
+!Telegram/
+!Telegram/reddit-resolver/
+!Telegram/reddit-resolver/Dockerfile
+!Telegram/reddit-resolver/fetch_upstream.py
+!Telegram/reddit-resolver/requirements.lock
+!Telegram/reddit-resolver/service.py
+!Telegram/reddit-resolver/upstream_adapter.py
+!Telegram/reddit-resolver/healthcheck.py

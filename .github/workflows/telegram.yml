@@ -61,3 +61,39 @@ jobs:
             sleep 1
           done
           exit 1
+
+  reddit-resolver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Telegram/reddit-resolver/Dockerfile
+          load: true
+          tags: fxclip-reddit-resolver:check
+      - name: Resolver privacy and transport regressions
+        run: >-
+          docker run --rm --read-only --network none
+          --tmpfs /tmp:size=128m,mode=1777
+          -v "$PWD/Telegram/reddit-resolver/tests:/tests:ro"
+          --entrypoint python fxclip-reddit-resolver:check
+          -m unittest discover -s /tests
+      - name: Private resolver startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'docker rm -f resolver-check >/dev/null 2>&1 || true' EXIT
+          docker run -d --name resolver-check --read-only --cap-drop ALL \
+            --security-opt no-new-privileges:true --log-driver none \
+            --tmpfs /tmp:size=128m,mode=1777 fxclip-reddit-resolver:check
+          for attempt in {1..20}; do
+            if docker exec resolver-check python /service/healthcheck.py; then
+              test "$(docker inspect resolver-check --format '{{.Config.User}}')" = '10003:10003'
+              test -z "$(docker port resolver-check)"
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1

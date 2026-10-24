@@ -58,7 +58,7 @@ import FxTelegram
         }
         let bot = Bot(api: api, store: store, engine: Engine(rules: rules), allowedChats: chats, allowedOwners: owners,
                       botID: me.id, username: me.username ?? "", youTubeMetadata: YouTubeMetadataFetcher(),
-                      facebookReels: FacebookReelFetcher())
+                      facebookReels: FacebookReelFetcher(), redditVideos: RedditVideoFetcher())
         print("fxclip Telegram ready; \(store.state.knownGroups.count) group(s) discovered; default mode: \(store.state.defaultMode.rawValue).")
         print("Group cleaning follows admin activation settings. Secretary separately handles opted-in connected private chats.")
         var failures = 0
