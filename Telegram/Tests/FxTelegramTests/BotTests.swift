@@ -9,6 +9,7 @@ final class FakeAPI: BotAPI {
     var failDelete = false
     var failEdit = false
     var photoError: Error?
+    var videoError: Error?
     var admin = true
     var canDelete = true
     var memberResult: [String: Any]?
@@ -22,6 +23,9 @@ final class FakeAPI: BotAPI {
     func call(_ method: String, _ parameters: [String: Any]) async throws -> Any {
         calls.append((method, parameters))
         switch method {
+        case "sendVideo":
+            if let videoError { throw videoError }
+            return sendResult
         case "sendPhoto":
             if let photoError { throw photoError }
             return sendResult

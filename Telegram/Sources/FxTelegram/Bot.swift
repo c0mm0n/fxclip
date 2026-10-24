@@ -10,13 +10,16 @@ public final class Bot {
     private let botID: Int64
     private let username: String
     private let youTubeMetadata: YouTubeMetadataProviding?
+    private let facebookReels: FacebookReelProviding?
     public init(api: BotAPI, store: StateStore, engine: Engine,
                 allowedChats: Set<Int64>, allowedOwners: Set<Int64> = [], botID: Int64, username: String,
-                youTubeMetadata: YouTubeMetadataProviding? = nil) {
+                youTubeMetadata: YouTubeMetadataProviding? = nil,
+                facebookReels: FacebookReelProviding? = nil) {
         self.api = api; self.store = store; self.rewriter = Rewriter(engine: engine)
         self.allowedChats = allowedChats; self.botID = botID; self.username = username
         self.allowedOwners = allowedOwners
         self.youTubeMetadata = youTubeMetadata
+        self.facebookReels = facebookReels
     }
 
     public func handle(_ update: Update, now: Int = Int(Date().timeIntervalSince1970)) async throws {
@@ -147,8 +150,8 @@ public final class Bot {
             let previews = settings.previews ? language.text("on", "activés") : language.text("off", "désactivés")
             let summary = "\(source): \(SettingsUI.title(settings.mode, language: language)).\n\n\(SettingsUI.outcome(settings.mode, language: language))\n\n"
             try await reply(summary + language.text(
-                "Improved previews: \(previews).\nWhen on, plain YouTube links can receive a title and thumbnail fetched directly from YouTube, even if already clean. A duplicate is possible when Telegram's own preview works.\nA personal choice overrides this mode, including /fxclip off, while cleaning is enabled for this group. Choose yours in private.\n\nAdmins: /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off",
-                "Aperçus améliorés : \(previews).\nLorsqu’ils sont activés, les liens YouTube seuls peuvent recevoir un titre et une miniature récupérés directement sur YouTube, même s’ils sont déjà propres. Un doublon est possible si l’aperçu Telegram fonctionne.\nUn choix personnel passe avant ce mode, y compris /fxclip off, tant que le nettoyage est activé pour ce groupe. Choisissez le vôtre en privé.\n\nAdmins : /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off"),
+                "Improved previews: \(previews).\nWhen on, plain YouTube links can receive a title and thumbnail fetched directly from YouTube, even if already clean. Separately enabled Facebook reels use Facebed metadata and download public Facebook video to the bot server for upload to Telegram (20 MiB maximum). A duplicate is possible when Telegram's own preview works.\nA personal choice overrides this mode, including /fxclip off, while cleaning is enabled for this group. Choose yours in private.\n\nAdmins: /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off",
+                "Aperçus améliorés : \(previews).\nLorsqu’ils sont activés, les liens YouTube seuls peuvent recevoir un titre et une miniature récupérés directement sur YouTube, même s’ils sont déjà propres. Les reels Facebook activés séparément passent par Facebed pour les métadonnées ; le bot télécharge la vidéo publique sur son serveur puis en envoie une copie à Telegram (20 Mio maximum). Un doublon est possible si l’aperçu Telegram fonctionne.\nUn choix personnel passe avant ce mode, y compris /fxclip off, tant que le nettoyage est activé pour ce groupe. Choisissez le vôtre en privé.\n\nAdmins : /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off"),
                 to: message, markup: privateSettingsLink(language: language))
             return
         }
@@ -169,7 +172,14 @@ public final class Bot {
            (message.entities ?? []).allSatisfy({ $0.type == "url" }), isBareURL(text) {
             videoID = YouTubePreview.videoID(in: text.trimmingCharacters(in: .whitespacesAndNewlines))
         } else { videoID = nil }
-        guard replyContent != nil || videoID != nil else { return }
+        let reelID: String?
+        if settings.previews, facebookEnabled(chatID: message.chat.id, userID: senderID),
+           message.link_preview_options?.is_disabled != true, facebookReels != nil,
+           message.forward_origin == nil, message.sender_chat == nil,
+           let text = message.text, (message.entities ?? []).allSatisfy({ $0.type == "url" }), isBareURL(text) {
+            reelID = FacebookReelPreview.reelID(in: text.trimmingCharacters(in: .whitespacesAndNewlines))
+        } else { reelID = nil }
+        guard replyContent != nil || videoID != nil || reelID != nil else { return }
         // Media, forwards and anonymous/channel-authored posts retain their originals.
         var replace = false
         if replyContent != nil && settings.mode == .replace && message.text != nil && message.sender_chat == nil && message.forward_origin == nil {
@@ -184,6 +194,53 @@ public final class Bot {
             rendered = replyContent
         }
         let removalPoster = !replace && message.sender_chat == nil && message.from?.is_bot == false ? message.from?.id : nil
+        if let reelID, let facebookReels, let reel = try? await facebookReels.fetch(reelID: reelID) {
+            let cleanURL = configured.engine.clean(message.text ?? "").text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleanText = rendered?.text ?? cleanURL
+            let heading = "Facebook\n"
+            // Keep the caption compact and reserve space for the complete cleaned source.
+            let author = String(reel.author.prefix(80))
+            let description = String(reel.caption.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ").prefix(200))
+            let prefix = heading + author + (description.isEmpty ? "\n\n" : "\n" + description + "\n\n")
+            let caption = prefix + cleanText
+            if !reel.video.isEmpty, reel.video.count <= 20 * 1024 * 1024, caption.utf16.count <= 1024 {
+                var video = base(message)
+                video["video"] = VideoUpload(data: reel.video)
+                video["caption"] = caption
+                video["supports_streaming"] = true
+                video["disable_notification"] = true
+                var entities = [Entity(type: "text_link", offset: 0, length: 8, url: cleanURL)]
+                if !author.isEmpty { entities.append(Entity(type: "bold", offset: heading.utf16.count, length: author.utf16.count)) }
+                if let rendered {
+                    var originalEntities = rendered.entities
+                    for index in originalEntities.indices { originalEntities[index].offset += prefix.utf16.count }
+                    entities += originalEntities
+                } else { entities.append(Entity(type: "url", offset: prefix.utf16.count, length: cleanText.utf16.count)) }
+                video["caption_entities"] = try jsonObject(entities)
+                video["reply_markup"] = ["inline_keyboard": [[[
+                    "text": language.text("▶ Open Facebook", "▶ Ouvrir Facebook"), "url": cleanURL,
+                ]]]]
+                if removalPoster != nil { addRemovalButton(to: &video, language: language) }
+                if replace {
+                    if let parent = message.reply_to_message {
+                        video["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
+                    }
+                } else { video["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true] }
+                do {
+                    let sent = try await api.call("sendVideo", video)
+                    guard let sent = sent as? [String: Any], let sentID = confirmedMessageID(sent["message_id"]) else {
+                        throw BotError.invalidResponse
+                    }
+                    if let removalPoster {
+                        try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster, now: TimeInterval(now))
+                    }
+                    if replace { await deleteReplacedOriginal(message) }
+                    return
+                } catch BotError.telegram(let code) where code == 400 || code == 403 {
+                    // Only an explicit rejection permits a cleaned-text fallback.
+                }
+            }
+        }
         if let videoID, let youTubeMetadata {
             // Fetching metadata is safe to fall back from; a timed-out send is not.
             let metadata = try? await youTubeMetadata.fetch(videoID: videoID)
@@ -372,6 +429,12 @@ public final class Bot {
         let personal = userID.flatMap { store.state.personalYouTubeCards[String($0)] }
         let group = chatID.flatMap { store.state.chats[String($0)]?.youTubeCards }
         return personal ?? group ?? store.state.defaultYouTubeCards
+    }
+
+    private func facebookEnabled(chatID: Int64?, userID: Int64?) -> Bool {
+        let personal = userID.flatMap { store.state.personalFacebookReels[String($0)] }
+        let group = chatID.flatMap { store.state.chats[String($0)]?.facebookReels }
+        return personal ?? group ?? store.state.defaultFacebookReels
     }
 
     private func chatSettings(_ chatID: Int64) -> ChatSettings {
@@ -665,15 +728,28 @@ public final class Bot {
         }
     }
 
-    private func saveRules(_ scope: RuleScope, settings: UserSettings?, cards: Bool?) throws {
+    private func ruleFacebookOverride(_ scope: RuleScope) -> Bool? {
         switch scope {
-        case .personal(let id): try store.setPersonalLinks(settings, youTubeCards: cards, userID: id)
+        case .personal(let id): return store.state.personalFacebookReels[String(id)]
+        case .chat(let id): return store.state.chats[String(id)]?.facebookReels
+        case .defaults: return store.state.defaultFacebookReels
+        }
+    }
+
+    private func saveRules(_ scope: RuleScope, settings: UserSettings?, cards: Bool?, facebook: Bool?) throws {
+        switch scope {
+        case .personal(let id):
+            try store.setPersonalLinks(settings, youTubeCards: cards, userID: id)
+            if ruleFacebookOverride(scope) != facebook { try store.setPersonalFacebookReels(facebook, userID: id) }
         case .chat(let id):
             var chat = chatSettings(id)
             chat.engineSettings = settings
             chat.youTubeCards = cards
+            chat.facebookReels = facebook
             try store.set(chat, chatID: id)
-        case .defaults: try store.setDefaultLinks(settings ?? UserSettings(), youTubeCards: cards ?? true)
+        case .defaults:
+            try store.setDefaultLinks(settings ?? UserSettings(), youTubeCards: cards ?? true)
+            if store.state.defaultFacebookReels != (facebook ?? false) { try store.setDefaultFacebookReels(facebook ?? false) }
         }
     }
 
@@ -686,6 +762,7 @@ public final class Bot {
                                 scope: scope.key, section: section, inherited: settings == nil,
                                 previewsEnabled: previews,
                                 youTubeCards: ruleCardsOverride(scope) ?? store.state.defaultYouTubeCards,
+                                facebookReels: ruleFacebookOverride(scope) ?? store.state.defaultFacebookReels,
                                 language: language)
     }
 
@@ -731,12 +808,13 @@ public final class Bot {
         var settings = ruleOverride(scope) ?? store.state.defaultLinkSettings
         var storedSettings = ruleOverride(scope)
         var cards = ruleCardsOverride(scope)
+        var facebook = ruleFacebookOverride(scope)
         var changed = false
         let builtins = rewriter.engine.rules
         switch actions {
         case ["show"], ["clean"], ["previews"], ["excluded"]: break
         case ["reset"]:
-            storedSettings = nil; cards = nil; changed = true; section = "show"
+            storedSettings = nil; cards = nil; facebook = nil; changed = true; section = "show"
         default:
             if actions.count == 2, actions[0] == "provider", builtins.previews.contains(where: { $0.id == actions[1] }) {
                 section = "provider:\(actions[1])"
@@ -746,12 +824,14 @@ public final class Bot {
                 value.targetHost = nil
                 settings.previews[rule.id] = value
                 storedSettings = settings; changed = true; section = "provider:\(rule.id)"
-            } else if actions.count == 2, ["trackers", "youtube"].contains(actions[0]), ["on", "off"].contains(actions[1]) {
+            } else if actions.count == 2, ["trackers", "youtube", "facebook"].contains(actions[0]), ["on", "off"].contains(actions[1]) {
                 if actions[0] == "trackers" {
                     settings.trackersEverywhere = actions[1] == "on"; storedSettings = settings
                     section = "clean"
-                } else {
+                } else if actions[0] == "youtube" {
                     cards = actions[1] == "on"; section = "previews"
+                } else {
+                    facebook = actions[1] == "on"; section = "previews"
                 }
                 changed = true
             } else if actions.count == 3, ["on", "off"].contains(actions[2]),
@@ -771,7 +851,7 @@ public final class Bot {
                 return
             }
         }
-        if changed { try saveRules(scope, settings: storedSettings, cards: cards) }
+        if changed { try saveRules(scope, settings: storedSettings, cards: cards, facebook: facebook) }
         await answer(callback, changed ? panelLanguage.text("Setting saved ✓", "Réglage enregistré ✓") : nil)
         try await sendPanel(rulesPanel(scope, section: section, language: panelLanguage), to: message.chat.id,
                             messageID: message.message_id, previousText: message.text, previousMarkup: message.reply_markup)
@@ -816,7 +896,7 @@ public final class Bot {
             var value = settings.previews[rule.id] ?? .init(enabled: settings.previewDefaultsEnabled, apps: rule.apps)
             value.targetHost = arguments[2] == "default" ? nil : Rules.canonicalPreviewHost(arguments[2])
             settings.previews[rule.id] = value
-            try saveRules(scope, settings: settings, cards: ruleCardsOverride(scope))
+            try saveRules(scope, settings: settings, cards: ruleCardsOverride(scope), facebook: ruleFacebookOverride(scope))
             section = "provider:\(rule.id)"
         } else if arguments.first == "exclude" {
             guard (arguments.count == 3 || arguments.count == 4), ["add", "remove"].contains(arguments[1]),
@@ -827,7 +907,7 @@ public final class Bot {
             }
             settings.neverClean.removeAll { $0.host == host }
             if arguments[1] == "add" { settings.neverClean.append(SkipHost(host: host, subdomains: arguments.count == 3)) }
-            try saveRules(scope, settings: settings, cards: ruleCardsOverride(scope))
+            try saveRules(scope, settings: settings, cards: ruleCardsOverride(scope), facebook: ruleFacebookOverride(scope))
             section = "excluded"
         }
         try await sendPanel(rulesPanel(scope, section: section, language: language), to: message.chat.id)

@@ -120,14 +120,16 @@ public struct ChatSettings: Codable {
     public var previews: Bool = true
     public var engineSettings: UserSettings?
     public var youTubeCards: Bool?
+    public var facebookReels: Bool?
     public init() {}
-    enum CodingKeys: String, CodingKey { case mode, previews, engineSettings, youTubeCards }
+    enum CodingKeys: String, CodingKey { case mode, previews, engineSettings, youTubeCards, facebookReels }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         mode = try values.decodeIfPresent(Mode.self, forKey: .mode) ?? .reply
         previews = try values.decodeIfPresent(Bool.self, forKey: .previews) ?? true
         engineSettings = try values.decodeIfPresent(UserSettings.self, forKey: .engineSettings)
         youTubeCards = try values.decodeIfPresent(Bool.self, forKey: .youTubeCards)
+        facebookReels = try values.decodeIfPresent(Bool.self, forKey: .facebookReels)
     }
 }
 

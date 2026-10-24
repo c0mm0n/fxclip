@@ -24,6 +24,8 @@ public struct BotState: Codable {
     public var personalLinkSettings: [String: UserSettings] = [:]
     public var defaultYouTubeCards = true
     public var personalYouTubeCards: [String: Bool] = [:]
+    public var defaultFacebookReels = false
+    public var personalFacebookReels: [String: Bool] = [:]
     public var replyControls: [String: ReplyControl] = [:]
     public init() {}
 
@@ -31,6 +33,7 @@ public struct BotState: Codable {
         case offset, chats, users, defaultMode, lastUpdateAt, knownGroups, groupEnabled
         case userLanguages, detectedLanguages, groupLanguages
         case defaultLinkSettings, personalLinkSettings, defaultYouTubeCards, personalYouTubeCards
+        case defaultFacebookReels, personalFacebookReels
         case replyControls
     }
     public init(from decoder: Decoder) throws {
@@ -49,6 +52,8 @@ public struct BotState: Codable {
         personalLinkSettings = try values.decodeIfPresent([String: UserSettings].self, forKey: .personalLinkSettings) ?? [:]
         defaultYouTubeCards = try values.decodeIfPresent(Bool.self, forKey: .defaultYouTubeCards) ?? true
         personalYouTubeCards = try values.decodeIfPresent([String: Bool].self, forKey: .personalYouTubeCards) ?? [:]
+        defaultFacebookReels = try values.decodeIfPresent(Bool.self, forKey: .defaultFacebookReels) ?? false
+        personalFacebookReels = try values.decodeIfPresent([String: Bool].self, forKey: .personalFacebookReels) ?? [:]
         replyControls = try values.decodeIfPresent([String: ReplyControl].self, forKey: .replyControls) ?? [:]
     }
 }
@@ -105,6 +110,17 @@ public final class StateStore {
         var next = state
         next.personalLinkSettings[String(userID)] = settings
         next.personalYouTubeCards[String(userID)] = youTubeCards
+        try save(next)
+    }
+    public func setDefaultFacebookReels(_ enabled: Bool) throws {
+        var next = state
+        next.defaultFacebookReels = enabled
+        try save(next)
+    }
+    /// Nil restores inheritance; unrelated link-settings writes preserve this override.
+    public func setPersonalFacebookReels(_ enabled: Bool?, userID: Int64) throws {
+        var next = state
+        next.personalFacebookReels[String(userID)] = enabled
         try save(next)
     }
     public func recordReplyControl(chatID: Int64, messageID: Int64, posterID: Int64, now: TimeInterval) throws {

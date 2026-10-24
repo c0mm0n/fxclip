@@ -59,8 +59,8 @@ struct SettingsUI {
             "<b>Secretary: private chats only</b>\nThis mode requires connecting this bot in Telegram's automation settings, with reply and edit permissions. It never edits incoming messages.",
             "<b>Secrétaire : privé uniquement</b>\nCe mode nécessite une connexion à ce bot dans les réglages d’automatisation de Telegram, avec les droits de réponse et de modification. Il ne modifie jamais les messages reçus.")
         text += "\n\n" + language.text(
-            "Links pass through Telegram and, for some previews, through mirror sites. With enhanced previews on, a plain YouTube link can receive a thumbnail and title fetched from YouTube, even when the link is already clean. Telegram does not report whether its own preview worked.\n\nChoose below 👇",
-            "Les liens passent par Telegram et, pour certains aperçus, par des sites miroirs. Avec les aperçus améliorés, un lien YouTube seul peut recevoir une miniature et un titre récupérés sur YouTube, même s’il est déjà propre. Telegram n’indique pas si son propre aperçu a fonctionné.\n\nChoisissez ci-dessous 👇")
+            "Links pass through Telegram and, for some previews, through mirror sites. With enhanced previews on, a plain YouTube link can receive a thumbnail and title fetched from YouTube, even when the link is already clean. Telegram does not report whether its own preview worked. Facebook reels are off by default: if enabled separately in Link settings, metadata is fetched via Facebed and the public Facebook video is downloaded to the bot server, then uploaded to Telegram. No private Facebook access.\n\nChoose below 👇",
+            "Les liens passent par Telegram et, pour certains aperçus, par des sites miroirs. Avec les aperçus améliorés, un lien YouTube seul peut recevoir une miniature et un titre récupérés sur YouTube, même s’il est déjà propre. Telegram n’indique pas si son propre aperçu a fonctionné. Les reels Facebook sont désactivés par défaut : si l’option est activée séparément dans les réglages des liens, les métadonnées passent par Facebed et la vidéo publique Facebook est téléchargée sur le serveur du bot, puis envoyée à Telegram. Aucun accès Facebook privé.\n\nChoisissez ci-dessous 👇")
         var rows = modeRows(selected: mode, scope: "personal", language: language)
         rows.append([button("\(mode == nil ? "✓ " : "")\(language.text("Follow the group's setting", "Suivre le réglage du groupe"))", "personal:default")])
         rows.append([button(language.text("🔗 Link settings", "🔗 Réglages des liens"), "rules:p:show")])
@@ -96,6 +96,7 @@ struct SettingsUI {
         text += "\n\n" + language.text(
             "This setting applies when neither the person nor the group has chosen a mode. Personal choices take priority.\n\nSecretary requires connecting this bot with reply and edit permissions. It only acts on outgoing messages in connected private chats, never in groups.\n\nChoose the default setting 👇",
             "Ce réglage s’applique quand ni la personne ni le groupe n’a choisi de mode. Les choix personnels restent prioritaires.\n\nSecrétaire nécessite une connexion à ce bot avec les droits de réponse et de modification. Il agit uniquement sur les messages sortants des conversations privées connectées, jamais dans les groupes.\n\nChoisissez le réglage par défaut 👇")
+        text += "\n\n" + facebookDisclosure(language: language)
         var rows = modeRows(selected: mode, scope: "default", language: language)
         rows.append([button(language.text("🔗 Link settings", "🔗 Réglages des liens"), "rules:d:show")])
         rows.append([button(language.text("👥 My groups", "👥 Mes groupes"), "groups:show")])
@@ -149,6 +150,7 @@ struct SettingsUI {
         text += "\n\n" + language.text(
             "YouTube: enhanced previews fetch the title and thumbnail directly from YouTube, including for already-clean single links. A duplicate is possible if Telegram's own preview works.",
             "YouTube : les aperçus améliorés récupèrent le titre et la miniature directement sur YouTube, même pour un lien seul déjà propre. Un doublon est possible si l’aperçu Telegram fonctionne.")
+        text += "\n\n" + facebookDisclosure(language: language)
         var rows = [[button(enabled ? language.text("⏸ Turn off cleaning", "⏸ Désactiver le nettoyage") : language.text("✅ Turn on cleaning", "✅ Activer le nettoyage"), key + (enabled ? "disable" : "enable"))]]
         rows += [Mode.reply, .replace, .off].map { mode in
             [button("\(settings.mode == mode ? "✓ " : "")\(title(mode, language: language))", key + mode.rawValue)]
@@ -166,7 +168,8 @@ struct SettingsUI {
 
     static func rules(_ settings: UserSettings, builtins: Rules, scope: String,
                       section: String = "show", inherited: Bool, previewsEnabled: Bool = true,
-                      youTubeCards: Bool = true, language: BotLanguage = .en) -> SettingsUI {
+                      youTubeCards: Bool = true, facebookReels: Bool = false,
+                      language: BotLanguage = .en) -> SettingsUI {
         let groupID = scope.hasPrefix("c:") ? String(scope.dropFirst(2)) : nil
         let key = "rules:\(scope):"
         let command = groupID != nil ? "/fxclip " : scope == "d" ? "/default " : "/"
@@ -209,8 +212,8 @@ struct SettingsUI {
         }
         if groupID != nil && !previewsEnabled {
             text += "\n\n" + language.text(
-                "⏸ Enhanced previews are paused for this group, including YouTube cards. Enable them in the group settings to apply the choices below.",
-                "⏸ Les aperçus améliorés sont en pause pour ce groupe, y compris les fiches YouTube. Activez-les dans les réglages du groupe pour appliquer les choix ci-dessous.")
+                "⏸ Enhanced previews are paused for this group, including YouTube cards and Facebook reel videos. Enable them in the group settings to apply the choices below.",
+                "⏸ Les aperçus améliorés sont en pause pour ce groupe, y compris les fiches YouTube et les vidéos de reels Facebook. Activez-les dans les réglages du groupe pour appliquer les choix ci-dessous.")
         }
 
         switch section {
@@ -237,6 +240,10 @@ struct SettingsUI {
                 "<b>YouTube cards</b> · \(state(youTubeCards))\nBot-only option: fetches the title and thumbnail directly from YouTube, even for an already-clean single link. A duplicate is possible if Telegram also displays its own preview.",
                 "<b>Fiches YouTube</b> · \(state(youTubeCards))\nOption propre au bot : récupère le titre et la miniature directement sur YouTube, même pour un lien seul déjà propre. Un doublon est possible si Telegram affiche aussi son aperçu.")
             toggle(language.text("YouTube cards", "Fiches YouTube"), enabled: youTubeCards, action: "youtube")
+            text += "\n\n" + language.text(
+                "<b>Facebook reels</b> · \(state(facebookReels))\nBot-only option, off by default: when enabled, fetches metadata via Facebed, downloads the public Facebook video to the bot server, then uploads a copy to Telegram. Only a single plain public /reel/id link is supported, even if already clean. A duplicate is possible if Telegram also shows its preview. Limit: 20 MiB. No access to private Facebook content.",
+                "<b>Reels Facebook</b> · \(state(facebookReels))\nOption propre au bot, désactivée par défaut : une fois activée, récupère les métadonnées via Facebed, télécharge la vidéo publique Facebook sur le serveur du bot, puis en envoie une copie à Telegram. Uniquement pour un lien public /reel/id seul et sans mise en forme, même déjà propre. Un doublon est possible si Telegram affiche aussi son aperçu. Limite : 20 Mio. Aucun accès au contenu Facebook privé.")
+            toggle(language.text("Facebook reels", "Reels Facebook"), enabled: facebookReels, action: "facebook")
         case "excluded":
             text += "\n\n" + language.text(
                 "<b>Cleaning exclusions</b>\nTracker cleaning is skipped for these domains. Preview switches apply separately and can still change their links.",
@@ -335,6 +342,7 @@ struct SettingsUI {
         text += "\n\n" + language.text(
             "A group administrator must grant permissions in Telegram; the bot cannot grant them to itself.",
             "Un administrateur du groupe doit accorder les droits dans Telegram ; le bot ne peut pas se les donner.")
+        text += "\n\n" + facebookDisclosure(language: language)
         let key = "group:\(chat.id):"
         return SettingsUI(text: text, markup: ["inline_keyboard": [
             [button(enabled ? language.text("⏸ Turn off cleaning", "⏸ Désactiver le nettoyage") : language.text("✅ Turn on cleaning", "✅ Activer le nettoyage"), key + (enabled ? "off" : "on"))],
@@ -347,6 +355,12 @@ struct SettingsUI {
     private static func permission(_ value: Bool?, language: BotLanguage = .en) -> String {
         value.map { $0 ? language.text("allowed", "autorisé") : language.text("not allowed", "non autorisé") }
             ?? language.text("not confirmed", "non confirmé")
+    }
+
+    private static func facebookDisclosure(language: BotLanguage) -> String {
+        language.text(
+            "Facebook reels are off by default. If enabled separately in Link settings, metadata is fetched via Facebed and the public Facebook video is downloaded to the bot server, then uploaded to Telegram. No private Facebook access. Pausing enhanced previews also pauses reel videos.",
+            "Les reels Facebook sont désactivés par défaut. Si l’option est activée séparément dans les réglages des liens, les métadonnées passent par Facebed et la vidéo publique Facebook est téléchargée sur le serveur du bot, puis envoyée à Telegram. Aucun accès Facebook privé. Mettre les aperçus améliorés en pause suspend aussi les vidéos de reels.")
     }
 
     private static func escaped(_ value: String) -> String {

@@ -14,23 +14,54 @@ public enum BotError: Error {
     case configuration(String)
 }
 
+/// An in-memory MP4 uploaded by the bot, rather than fetched again by Telegram.
+public struct VideoUpload {
+    public let data: Data
+    public init(data: Data) { self.data = data }
+}
+
 public final class TelegramAPI: BotAPI {
     private let token: String
     private let session: URLSession
-    public init(token: String) {
+    public init(token: String, session: URLSession? = nil) {
         self.token = token
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 45
         config.timeoutIntervalForResource = 50
-        session = URLSession(configuration: config)
+        self.session = session ?? URLSession(configuration: config)
     }
 
     public func call(_ method: String, _ parameters: [String: Any] = [:]) async throws -> Any {
         // Do not print URLSession errors: Telegram puts the credential in the request URL.
         var request = URLRequest(url: URL(string: "https://api.telegram.org/bot\(token)/\(method)")!)
         request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
+        if let video = parameters["video"] as? VideoUpload {
+            guard method == "sendVideo", !video.data.isEmpty, video.data.count <= 20 * 1024 * 1024 else {
+                throw BotError.invalidResponse
+            }
+            let boundary = "fxclip-\(UUID().uuidString)"
+            var body = Data()
+            for key in parameters.keys.sorted() where key != "video" {
+                guard !key.isEmpty, key.utf8.allSatisfy({ (97...122).contains($0) || $0 == 95 }) else {
+                    throw BotError.invalidResponse
+                }
+                let value = parameters[key]!
+                let bytes: Data
+                if let string = value as? String { bytes = Data(string.utf8) }
+                else { bytes = try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed, .sortedKeys]) }
+                body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(key)\"\r\n\r\n".utf8))
+                body.append(bytes)
+                body.append(Data("\r\n".utf8))
+            }
+            body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"video\"; filename=\"reel.mp4\"\r\nContent-Type: video/mp4\r\n\r\n".utf8))
+            body.append(video.data)
+            body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
+        } else {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
+        }
         for attempt in 0..<2 {
             let (data, _) = try await session.data(for: request)
             guard let body = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
