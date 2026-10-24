@@ -12,16 +12,19 @@ public final class Bot {
     private let username: String
     private let youTubeMetadata: YouTubeMetadataProviding?
     private let facebookReels: FacebookReelProviding?
+    private let pendingPreviewDelayNanoseconds: UInt64
     private var cleanupRetryAfter: [String: TimeInterval] = [:]
     public init(api: BotAPI, store: StateStore, engine: Engine,
                 allowedChats: Set<Int64>, allowedOwners: Set<Int64> = [], botID: Int64, username: String,
                 youTubeMetadata: YouTubeMetadataProviding? = nil,
-                facebookReels: FacebookReelProviding? = nil) {
+                facebookReels: FacebookReelProviding? = nil,
+                pendingPreviewDelayNanoseconds: UInt64 = 700_000_000) {
         self.api = api; self.store = store; self.rewriter = Rewriter(engine: engine)
         self.allowedChats = allowedChats; self.botID = botID; self.username = username
         self.allowedOwners = allowedOwners
         self.youTubeMetadata = youTubeMetadata
         self.facebookReels = facebookReels
+        self.pendingPreviewDelayNanoseconds = pendingPreviewDelayNanoseconds
     }
 
     public func handle(_ update: Update, now fixedNow: Int? = nil) async throws {
@@ -199,13 +202,41 @@ public final class Bot {
         }
         let removalPoster = !replace && message.sender_chat == nil && message.from?.is_bot == false
             && store.state.replyControls.count < 4096 ? message.from?.id : nil
+        var pendingID: Int64?
+        var pending = base(message)
+        pending["text"] = language.text("Preparing preview…", "Préparation de l’aperçu…")
+        pending["disable_notification"] = true
+        pending["link_preview_options"] = ["is_disabled": true]
+        if replace {
+            if let parent = message.reply_to_message {
+                pending["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
+            }
+        } else {
+            pending["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true]
+        }
         let facebookVideo: FacebookReel?
         if let facebookSource, let facebookReels {
-            do { facebookVideo = try await facebookReels.fetch(sourceURL: facebookSource) }
+            let fetched: (Result<FacebookReel, Error>, Int64?)
+            if replace {
+                // An oversized video keeps the original and must reply to it.
+                // Telegram cannot retarget a placeholder after it has been sent.
+                do { fetched = (.success(try await facebookReels.fetch(sourceURL: facebookSource)), nil) }
+                catch { fetched = (.failure(error), nil) }
+            } else {
+                fetched = try await fetchWithPendingPreview(api: api, parameters: pending,
+                    originalMessageID: message.message_id, delayNanoseconds: pendingPreviewDelayNanoseconds) {
+                    try await facebookReels.fetch(sourceURL: facebookSource)
+                }
+            }
+            pendingID = fetched.1
+            do { facebookVideo = try fetched.0.get() }
             catch FacebookReelError.videoTooLarge(let author, let caption) {
                 try await sendFacebookSizeNotice(to: message, author: author, caption: caption,
-                                                 cleanURL: facebookSource, language: language, now: fixedNow)
+                    cleanURL: facebookSource, language: language, now: fixedNow, pendingID: pendingID)
                 return
+            } catch is CancellationError {
+                await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
+                throw CancellationError()
             } catch { facebookVideo = nil }
         } else { facebookVideo = nil }
         if let reel = facebookVideo {
@@ -233,10 +264,7 @@ public final class Bot {
                     }
                 } else { video["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true] }
                 do {
-                    let sent = try await api.call("sendVideo", video)
-                    guard let sent = sent as? [String: Any], let sentID = confirmedMessageID(sent["message_id"]) else {
-                        throw BotError.invalidResponse
-                    }
+                    let sentID = try await deliverPreview("sendVideo", parameters: video, pendingID: pendingID)
                     if let removalPoster {
                         try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
                                                      now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
@@ -250,7 +278,16 @@ public final class Bot {
         }
         if let videoID, let youTubeMetadata {
             // Fetching metadata is safe to fall back from; a timed-out send is not.
-            let metadata = try? await youTubeMetadata.fetch(videoID: videoID)
+            let fetched = try await fetchWithPendingPreview(api: api, parameters: pending,
+                originalMessageID: message.message_id, delayNanoseconds: pendingPreviewDelayNanoseconds) {
+                try await youTubeMetadata.fetch(videoID: videoID)
+            }
+            pendingID = fetched.1
+            if case .failure(let error) = fetched.0, error is CancellationError {
+                await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
+                throw error
+            }
+            let metadata = try? fetched.0.get()
             if let metadata {
                 let cleanURL = configured.engine.clean(message.text ?? "").text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -285,10 +322,7 @@ public final class Bot {
                         photo["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true]
                     }
                     do {
-                        let sent = try await api.call("sendPhoto", photo)
-                        guard let sent = sent as? [String: Any], let sentID = confirmedMessageID(sent["message_id"]) else {
-                            throw BotError.invalidResponse
-                        }
+                        let sentID = try await deliverPreview("sendPhoto", parameters: photo, pendingID: pendingID)
                         if let removalPoster {
                             try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
                                                          now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970,
@@ -303,7 +337,10 @@ public final class Bot {
                 }
             }
         }
-        guard let rendered else { return }
+        guard let rendered else {
+            await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
+            return
+        }
         var parameters = base(message)
         parameters["text"] = rendered.text
         parameters["entities"] = try jsonObject(rendered.entities)
@@ -318,15 +355,55 @@ public final class Bot {
             parameters["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true]
         }
         // No delete until Telegram confirms an actual new message ID. Never retry an ambiguous send.
-        let sent = try await api.call("sendMessage", parameters)
-        guard let sent = sent as? [String: Any], let sentID = confirmedMessageID(sent["message_id"]) else {
-            throw BotError.invalidResponse
+        let sentID: Int64
+        do { sentID = try await deliverPreview("sendMessage", parameters: parameters, pendingID: pendingID) }
+        catch BotError.telegram(let code) where code == 400 || code == 403 {
+            await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
+            throw BotError.telegram(code)
         }
         if let removalPoster {
             try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
                                          now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
         }
         if replace { await deleteReplacedOriginal(message) }
+    }
+
+    /// A confirmed placeholder is edited in place. An ambiguous edit must never
+    /// trigger another send or permit deletion of the original.
+    private func deliverPreview(_ method: String, parameters: [String: Any], pendingID: Int64?) async throws -> Int64 {
+        let result: Any
+        if let pendingID {
+            var edit: [String: Any] = ["chat_id": parameters["chat_id"]!, "message_id": pendingID,
+                                      "reply_markup": parameters["reply_markup"] ?? ["inline_keyboard": []]]
+            if method == "sendMessage" {
+                for key in ["text", "entities", "link_preview_options"] { edit[key] = parameters[key] }
+                result = try await api.call("editMessageText", edit)
+            } else {
+                var media: [String: Any] = ["type": method == "sendVideo" ? "video" : "photo",
+                                           "media": parameters[method == "sendVideo" ? "video" : "photo"]!]
+                for key in ["caption", "caption_entities", "supports_streaming"] { media[key] = parameters[key] }
+                edit["media"] = media
+                result = try await api.call("editMessageMedia", edit)
+            }
+        } else {
+            result = try await api.call(method, parameters)
+        }
+        guard let object = result as? [String: Any], let id = confirmedMessageID(object["message_id"]),
+              pendingID == nil || id == pendingID else { throw BotError.invalidResponse }
+        return id
+    }
+
+    private func discardPendingPreview(_ pendingID: Int64?, chatID: Int64, language: BotLanguage) async {
+        guard let pendingID else { return }
+        do {
+            let result = try await api.call("deleteMessage", ["chat_id": chatID, "message_id": pendingID])
+            guard result as? Bool == true else { throw BotError.invalidResponse }
+        } catch {
+            // Never leave a known failed fetch labelled as still preparing.
+            _ = try? await api.call("editMessageText", ["chat_id": chatID, "message_id": pendingID,
+                "text": language.text("Preview unavailable.", "Aperçu indisponible."),
+                "link_preview_options": ["is_disabled": true], "reply_markup": ["inline_keyboard": []]])
+        }
     }
 
     private func addRemovalButton(to parameters: inout [String: Any], language: BotLanguage) {
@@ -345,7 +422,7 @@ public final class Bot {
     }
 
     private func sendFacebookSizeNotice(to message: Message, author: String, caption: String,
-                                        cleanURL: String, language: BotLanguage, now: Int?) async throws {
+                                        cleanURL: String, language: BotLanguage, now: Int?, pendingID: Int64? = nil) async throws {
         let heading = "Facebook\n"
         let creator = facebookCaptionText(author, limit: 160)
         let description = facebookCaptionText(caption.split(whereSeparator: { $0.isWhitespace }).joined(separator: " "), limit: 400)
@@ -368,9 +445,11 @@ public final class Bot {
         let poster = message.sender_chat == nil && message.from?.is_bot == false
             && store.state.replyControls.count < 4096 ? message.from?.id : nil
         if poster != nil { addRemovalButton(to: &parameters, language: language) }
-        let sent = try await api.call("sendMessage", parameters)
-        guard let sent = sent as? [String: Any], let sentID = confirmedMessageID(sent["message_id"]) else {
-            throw BotError.invalidResponse
+        let sentID: Int64
+        do { sentID = try await deliverPreview("sendMessage", parameters: parameters, pendingID: pendingID) }
+        catch BotError.telegram(let code) where code == 400 || code == 403 {
+            await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
+            throw BotError.telegram(code)
         }
         if let poster {
             try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: poster,

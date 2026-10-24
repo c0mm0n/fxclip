@@ -35,17 +35,41 @@ public final class TelegramAPI: BotAPI {
         // Do not print URLSession errors: Telegram puts the credential in the request URL.
         var request = URLRequest(url: URL(string: "https://api.telegram.org/bot\(token)/\(method)")!)
         request.httpMethod = "POST"
+        var fields = parameters
+        let upload: VideoUpload?
         if let video = parameters["video"] as? VideoUpload {
             guard method == "sendVideo", !video.data.isEmpty, video.data.count <= 20 * 1024 * 1024 else {
                 throw BotError.invalidResponse
             }
+            upload = video
+            fields.removeValue(forKey: "video")
+        } else if var media = parameters["media"] as? [String: Any],
+                  let video = media["media"] as? VideoUpload {
+            guard method == "editMessageMedia", media["type"] as? String == "video",
+                  video.data.count >= 12, video.data.count <= 20 * 1024 * 1024,
+                  video.data.dropFirst(4).prefix(4) == Data("ftyp".utf8) else {
+                throw BotError.invalidResponse
+            }
+            let boxLength = video.data.prefix(4).reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+            guard boxLength >= 12, boxLength <= UInt64(video.data.count) else {
+                throw BotError.invalidResponse
+            }
+            upload = video
+            media["media"] = "attach://video"
+            fields["media"] = media
+        } else {
+            upload = nil
+        }
+        // Reject uploads anywhere except the two supported locations before URLSession sees them.
+        guard JSONSerialization.isValidJSONObject(fields) else { throw BotError.invalidResponse }
+        if let video = upload {
             let boundary = "fxclip-\(UUID().uuidString)"
             var body = Data()
-            for key in parameters.keys.sorted() where key != "video" {
+            for key in fields.keys.sorted() {
                 guard !key.isEmpty, key.utf8.allSatisfy({ (97...122).contains($0) || $0 == 95 }) else {
                     throw BotError.invalidResponse
                 }
-                let value = parameters[key]!
+                let value = fields[key]!
                 let bytes: Data
                 if let string = value as? String { bytes = Data(string.utf8) }
                 else { bytes = try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed, .sortedKeys]) }
@@ -60,7 +84,7 @@ public final class TelegramAPI: BotAPI {
             request.httpBody = body
         } else {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: parameters)
+            request.httpBody = try JSONSerialization.data(withJSONObject: fields)
         }
         for attempt in 0..<2 {
             let (data, _) = try await session.data(for: request)
