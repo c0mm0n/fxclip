@@ -6,6 +6,7 @@ public struct TelegramUser: Codable, Equatable {
     public var first_name: String
     public var last_name: String?
     public var username: String?
+    public var language_code: String?
     var name: String { [first_name, last_name].compactMap { $0 }.joined(separator: " ") }
 }
 

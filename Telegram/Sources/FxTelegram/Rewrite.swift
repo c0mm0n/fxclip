@@ -6,7 +6,8 @@ public struct Rewriter {
     public let engine: Engine
     public init(engine: Engine) { self.engine = engine }
 
-    public func rewrite(_ message: Message, previews: Bool, attribution: Bool = true) -> RenderedMessage? {
+    public func rewrite(_ message: Message, previews: Bool, attribution: Bool = true,
+                        language: BotLanguage = .en) -> RenderedMessage? {
         guard let text = message.text ?? message.caption else { return nil }
         let entities = message.text == nil ? (message.caption_entities ?? []) : (message.entities ?? [])
         let source = text as NSString
@@ -60,14 +61,14 @@ public struct Rewriter {
         let output = NSMutableString(string: text)
         for edit in edits.reversed() { output.replaceCharacters(in: edit.range, with: edit.value) }
         let author: String
-        let authorLabel = "Publié par "
+        let authorLabel = language.text("Posted by ", "Publié par ")
         var mention: Entity?
         if let chat = message.sender_chat {
-            author = chat.title ?? "Anonymous sender"
+            author = chat.title ?? language.text("Anonymous sender", "Auteur anonyme")
         } else if let user = message.from {
             author = user.name
             mention = Entity(type: "text_mention", offset: authorLabel.utf16.count, length: author.utf16.count, user: user)
-        } else { author = "Unknown sender" }
+        } else { author = language.text("Unknown sender", "Auteur inconnu") }
         let prefix = attribution ? "\(authorLabel)\(author)\n\n" : ""
         for index in outputEntities.indices { outputEntities[index].offset += prefix.utf16.count }
         if attribution, let mention { outputEntities.insert(mention, at: 0) }

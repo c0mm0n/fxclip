@@ -50,6 +50,12 @@ import FxTelegram
         guard (webhook?["url"] as? String) == "" else {
             throw BotError.configuration("Remove existing webhook before polling")
         }
+        do {
+            try await BotProfile.configure(api: api, ownerIDs: owners, userLanguages: store.state.userLanguages)
+        } catch {
+            // A temporary profile failure must not stop link cleaning or expose the token.
+            print("Telegram profile localization could not be refreshed; continuing with saved settings.")
+        }
         let bot = Bot(api: api, store: store, engine: Engine(rules: rules), allowedChats: chats, allowedOwners: owners,
                       botID: me.id, username: me.username ?? "")
         print("fxclip Telegram ready; \(store.state.knownGroups.count) group(s) discovered; default mode: \(store.state.defaultMode.rawValue).")

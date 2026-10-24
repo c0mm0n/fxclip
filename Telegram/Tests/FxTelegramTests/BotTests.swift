@@ -11,6 +11,8 @@ final class FakeAPI: BotAPI {
     var canDelete = true
     var memberResult: [String: Any]?
     var failMember = false
+    var failCommandsLocale: String?
+    var commandMenus: [String: [[String: String]]] = [:]
     var businessEnabled = true
     var businessCanReply = true
     var businessOwnerID: Int64 = 7
@@ -18,6 +20,17 @@ final class FakeAPI: BotAPI {
     func call(_ method: String, _ parameters: [String: Any]) async throws -> Any {
         calls.append((method, parameters))
         switch method {
+        case "setMyCommands":
+            let code = parameters["language_code"] as? String ?? ""
+            if code == failCommandsLocale {
+                failCommandsLocale = nil
+                throw BotError.telegram(500)
+            }
+            if let scope = parameters["scope"] as? [String: Any], let userID = scope["chat_id"] as? Int64,
+               let commands = parameters["commands"] as? [[String: String]] {
+                commandMenus["\(userID):\(code)"] = commands
+            }
+            return true
         case "sendMessage":
             if failSend { throw URLError(.timedOut) }
             return sendResult
@@ -73,20 +86,26 @@ final class BotTests: XCTestCase {
         try await bot.handle(update(message(extra), business: business), now: 1100)
     }
     func replaceMode() throws { var s = ChatSettings(); s.mode = .replace; try store.set(s, chatID: -100) }
-    func privateCommand(_ text: String, userID: Int64 = 8) async throws {
+    func privateCommand(_ text: String, userID: Int64 = 8, languageCode: String? = nil) async throws {
         try await handle(["text": text, "chat": ["id": userID, "type": "private"],
-                          "from": ["id": userID, "first_name": "Member", "is_bot": false]])
+                          "from": fixtureUser(userID, languageCode: languageCode)])
     }
     func callback(_ data: String, userID: Int64 = 8, chatID: Int64 = 8, chatType: String = "private",
-                  messageText: String? = nil, messageMarkup: [String: Any]? = nil) async throws {
+                  messageText: String? = nil, messageMarkup: [String: Any]? = nil,
+                  languageCode: String? = nil) async throws {
         let update = try decode(Update.self, from: ["update_id": 2, "callback_query": [
-            "id": "button-click", "from": ["id": userID, "first_name": "Member", "is_bot": false],
+            "id": "button-click", "from": fixtureUser(userID, languageCode: languageCode),
             "data": data, "message": ["message_id": 42, "date": 1000,
                 "chat": ["id": chatID, "type": chatType],
                 "from": ["id": 99, "first_name": "fxclip", "is_bot": true], "text": (messageText as Any?) ?? NSNull(),
                 "reply_markup": (messageMarkup as Any?) ?? NSNull()],
         ]])
         try await bot.handle(update, now: 1100)
+    }
+    func fixtureUser(_ userID: Int64, languageCode: String?) -> [String: Any] {
+        var user: [String: Any] = ["id": userID, "first_name": "Member", "is_bot": false]
+        if let languageCode { user["language_code"] = languageCode }
+        return user
     }
     var sent: [String: Any] { api.calls.first { $0.0 == "sendMessage" }!.1 }
 
@@ -131,7 +150,7 @@ final class BotTests: XCTestCase {
         try replaceMode(); try await handle()
         XCTAssertEqual(api.methods, ["getChatMember", "sendMessage", "deleteMessage"])
         XCTAssertNil(sent["reply_parameters"])
-        XCTAssertEqual(sent["text"] as? String, "Publié par Alice\n\nLook https://fxtwitter.com/a/status/1")
+        XCTAssertEqual(sent["text"] as? String, "Posted by Alice\n\nLook https://fxtwitter.com/a/status/1")
         let entities = try decode([Entity].self, from: XCTUnwrap(sent["entities"]))
         let mention = try XCTUnwrap(entities.first { $0.type == "text_mention" })
         XCTAssertEqual(mention.user?.id, 7)
@@ -251,11 +270,12 @@ final class BotTests: XCTestCase {
     func testPrivateSettingsOffersNativeInlineChoicesWithoutChangingState() async throws {
         api.admin = false
         try await privateCommand("/settings")
+        XCTAssertTrue((sent["text"] as? String)?.contains("Your fxclip settings") == true)
         let markup = try XCTUnwrap(sent["reply_markup"] as? [String: Any])
         XCTAssertNil(markup["keyboard"])
         let rows = try XCTUnwrap(markup["inline_keyboard"] as? [[[String: String]]])
         let actions = Set(rows.flatMap { $0 }.compactMap { $0["callback_data"] })
-        XCTAssertEqual(actions, Set(["reply", "replace", "secretary", "off", "default"].map { "fxclip:personal:\($0)" }))
+        XCTAssertEqual(actions, Set(["reply", "replace", "secretary", "off", "default"].map { "fxclip:personal:\($0)" } + ["fxclip:language:show"]))
         XCTAssertTrue(store.state.users.isEmpty)
         XCTAssertTrue(store.state.chats.isEmpty)
     }
@@ -351,7 +371,7 @@ final class BotTests: XCTestCase {
         let result = try XCTUnwrap(Rewriter(engine: engine).rewrite(message([
             "text": text, "entities": [["type": "bold", "offset": 3, "length": 19],
                 ["type": "text_link", "offset": 23, "length": 4, "url": "https://youtu.be/abc?si=tracking"]],
-        ]), previews: true))
+        ]), previews: true, language: .fr))
         XCTAssertEqual(result.text, "Publié par Alice\n\n😀 https://fxtwitter.com/a more")
         let bold = try XCTUnwrap(result.entities.first { $0.type == "bold" })
         XCTAssertEqual((result.text as NSString).substring(with: NSRange(location: bold.offset, length: bold.length)), "https://fxtwitter.com/a")
@@ -517,9 +537,9 @@ final class BotTests: XCTestCase {
         let text = try XCTUnwrap(sent["text"] as? String)
         XCTAssertLessThan(text.count, 200)
         XCTAssertEqual(text.filter { $0 == "." }.count, 2)
-        XCTAssertTrue(text.contains("nettoie les liens"))
+        XCTAssertTrue(text.contains("clean links"))
         let rows = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(sent["reply_markup"]))
-        XCTAssertEqual(rows.inline_keyboard.flatMap { $0 }.map(\.text), ["⚙️ Mes réglages", "⚙️ Réglage du groupe"])
+        XCTAssertEqual(rows.inline_keyboard.flatMap { $0 }.map(\.text), ["⚙️ My settings", "⚙️ Group settings"])
         XCTAssertEqual(rows.inline_keyboard[0][0].url, "https://t.me/fxclipbot?start=settings")
         XCTAssertNil(rows.inline_keyboard[0][0].callback_data)
         XCTAssertEqual(rows.inline_keyboard[1][0].callback_data, "fxclip:chat:-200:show")
@@ -563,13 +583,15 @@ final class BotTests: XCTestCase {
             api.calls = []
             try await handle(["text": command])
             XCTAssertEqual(api.methods, ["sendMessage"])
-            XCTAssertTrue((sent["text"] as? String)?.contains("Nettoyage : désactivé") == true)
+            XCTAssertTrue((sent["text"] as? String)?.contains("Cleaning: off") == true)
             let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(sent["reply_markup"]))
             let buttons = markup.inline_keyboard.flatMap { $0 }
             XCTAssertTrue(buttons.contains { $0.callback_data == "fxclip:chat:-100:enable" })
             XCTAssertFalse(buttons.contains { $0.callback_data?.contains("secretary") == true })
-            XCTAssertEqual(buttons.last?.url, "https://t.me/fxclipbot?start=settings")
-            XCTAssertNil(buttons.last?.callback_data)
+            let personal = try XCTUnwrap(buttons.first { $0.url == "https://t.me/fxclipbot?start=settings" })
+            XCTAssertNil(personal.callback_data)
+            XCTAssertTrue(buttons.contains { $0.callback_data == "fxclip:chat:-100:lang_en" })
+            XCTAssertTrue(buttons.contains { $0.callback_data == "fxclip:chat:-100:lang_fr" })
         }
         XCTAssertTrue(store.state.chats.isEmpty)
         XCTAssertTrue(store.state.users.isEmpty)
@@ -607,7 +629,7 @@ final class BotTests: XCTestCase {
             api.calls = []
             try await callback("fxclip:chat:-200:\(action)", userID: 8, chatID: -200, chatType: "group")
             XCTAssertEqual(api.methods, ["getChatMember", "answerCallbackQuery"], action)
-            XCTAssertTrue((api.calls.last?.1["text"] as? String)?.hasPrefix("Réservé aux administrateurs") == true)
+            XCTAssertTrue((api.calls.last?.1["text"] as? String)?.hasPrefix("Only group admins") == true)
             XCTAssertEqual(api.calls.last?.1["show_alert"] as? Bool, true)
         }
         XCTAssertTrue(store.state.chats.isEmpty)
@@ -648,7 +670,7 @@ final class BotTests: XCTestCase {
         try await callback("fxclip:chat:-200:replace", chatID: -200, chatType: "supergroup")
         XCTAssertEqual(api.methods, ["getChatMember", "getChatMember", "answerCallbackQuery"])
         XCTAssertNil(store.state.chats["-200"])
-        XCTAssertTrue((api.calls.last?.1["text"] as? String)?.contains("Réglage inchangé") == true)
+        XCTAssertTrue((api.calls.last?.1["text"] as? String)?.contains("Setting unchanged") == true)
         var settings = ChatSettings(); settings.mode = .replace
         try store.set(settings, chatID: -200)
         try store.setGroupEnabled(false, chatID: -200)
@@ -703,6 +725,9 @@ final class BotTests: XCTestCase {
         XCTAssertEqual(restored.state.users["7"], .off)
         XCTAssertTrue(restored.state.knownGroups.isEmpty)
         XCTAssertTrue(restored.state.groupEnabled.isEmpty)
+        XCTAssertTrue(restored.state.userLanguages.isEmpty)
+        XCTAssertTrue(restored.state.detectedLanguages.isEmpty)
+        XCTAssertTrue(restored.state.groupLanguages.isEmpty)
     }
 
     func testUnallowedGroupIsDiscoveredWithoutSendingOrPersistingContent() async throws {
@@ -777,7 +802,7 @@ final class BotTests: XCTestCase {
         try await privateCommand("/groups", userID: 7)
         let rows = try XCTUnwrap((sent["reply_markup"] as? [String: Any])?["inline_keyboard"] as? [[[String: String]]])
         XCTAssertTrue(rows.flatMap { $0 }.contains { $0["callback_data"] == "fxclip:group:-200:show" })
-        XCTAssertTrue((sent["text"] as? String)?.contains("Telegram ne permet pas") == true)
+        XCTAssertTrue((sent["text"] as? String)?.contains("Telegram does not let") == true)
         for command in ["/settings", "/default"] {
             api.calls = []; try await privateCommand(command, userID: 7)
             let markup = try XCTUnwrap((sent["reply_markup"] as? [String: Any])?["inline_keyboard"] as? [[[String: String]]])
@@ -800,9 +825,9 @@ final class BotTests: XCTestCase {
         XCTAssertEqual(rightsRequest.1["user_id"] as? Int64, 99)
         XCTAssertEqual(rightsRequest.1["chat_id"] as? Int64, -200)
         let text = try XCTUnwrap(api.calls.last?.1["text"] as? String)
-        XCTAssertTrue(text.contains("Suppression des messages : non autorisée"))
-        XCTAssertTrue(text.contains("mode confidentialité"))
-        XCTAssertTrue(text.contains("sans supprimer l’original"))
+        XCTAssertTrue(text.contains("Delete messages: not allowed"))
+        XCTAssertTrue(text.contains("privacy mode"))
+        XCTAssertTrue(text.contains("without deleting the original"))
         api.calls = []; try await handle(["chat": ["id": -200, "type": "supergroup"]])
         XCTAssertEqual(api.methods, ["sendMessage"])
         try await callback("fxclip:group:-200:off", userID: 7, chatID: 7)
@@ -842,10 +867,10 @@ final class BotTests: XCTestCase {
         XCTAssertEqual(store.state.knownGroups["-200"]?.member?.status, "restricted")
         let text = try XCTUnwrap(api.calls.last?.1["text"] as? String)
         XCTAssertTrue(text.contains("&lt;b&gt;Group &amp; name&lt;/b&gt;"))
-        XCTAssertTrue(text.contains("Administrateur : non"))
-        XCTAssertTrue(text.contains("Envoi de messages : non autorisé"))
-        XCTAssertTrue(text.contains("Stickers et autres messages : non autorisé"))
-        XCTAssertTrue(text.contains("Lecture : peut être limitée"))
+        XCTAssertTrue(text.contains("Administrator: no"))
+        XCTAssertTrue(text.contains("Send messages: not allowed"))
+        XCTAssertTrue(text.contains("Stickers and other messages: not allowed"))
+        XCTAssertTrue(text.contains("Read: may be limited"))
         XCTAssertFalse(api.methods.contains("promoteChatMember"))
         XCTAssertFalse(api.methods.contains("restrictChatMember"))
     }
@@ -865,7 +890,7 @@ final class BotTests: XCTestCase {
         api.failMember = true
         try await callback("fxclip:group:-200:on", userID: 7, chatID: 7)
         XCTAssertNil(store.state.groupEnabled["-200"])
-        XCTAssertTrue((api.calls.last?.1["text"] as? String)?.contains("Droits non vérifiés") == true)
+        XCTAssertTrue((api.calls.last?.1["text"] as? String)?.contains("Permissions not checked") == true)
         try store.setGroupEnabled(true, chatID: -200)
         try await callback("fxclip:group:-200:off", userID: 7, chatID: 7)
         XCTAssertEqual(store.state.groupEnabled["-200"], false)

@@ -10,10 +10,14 @@ public struct BotState: Codable {
     public var lastUpdateAt: TimeInterval = Date().timeIntervalSince1970
     public var knownGroups: [String: KnownGroup] = [:]
     public var groupEnabled: [String: Bool] = [:]
+    public var userLanguages: [String: BotLanguage] = [:]
+    public var detectedLanguages: [String: BotLanguage] = [:]
+    public var groupLanguages: [String: BotLanguage] = [:]
     public init() {}
 
     enum CodingKeys: String, CodingKey {
         case offset, chats, users, defaultMode, lastUpdateAt, knownGroups, groupEnabled
+        case userLanguages, detectedLanguages, groupLanguages
     }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -24,6 +28,9 @@ public struct BotState: Codable {
         lastUpdateAt = try values.decode(TimeInterval.self, forKey: .lastUpdateAt)
         knownGroups = try values.decodeIfPresent([String: KnownGroup].self, forKey: .knownGroups) ?? [:]
         groupEnabled = try values.decodeIfPresent([String: Bool].self, forKey: .groupEnabled) ?? [:]
+        userLanguages = try values.decodeIfPresent([String: BotLanguage].self, forKey: .userLanguages) ?? [:]
+        detectedLanguages = try values.decodeIfPresent([String: BotLanguage].self, forKey: .detectedLanguages) ?? [:]
+        groupLanguages = try values.decodeIfPresent([String: BotLanguage].self, forKey: .groupLanguages) ?? [:]
     }
 }
 
@@ -91,6 +98,31 @@ public final class StateStore {
         guard state.groupEnabled[key] != enabled else { return }
         var next = state
         next.groupEnabled[key] = enabled
+        try save(next)
+    }
+    public func observeLanguage(_ user: TelegramUser?) throws {
+        guard let user, user.is_bot != true, let language = BotLanguage.telegram(user.language_code),
+              state.detectedLanguages[String(user.id)] != language else { return }
+        var next = state
+        next.detectedLanguages[String(user.id)] = language
+        try save(next)
+    }
+    public func userLanguage(_ userID: Int64) -> BotLanguage {
+        state.userLanguages[String(userID)] ?? state.detectedLanguages[String(userID)] ?? .en
+    }
+    public func groupLanguage(_ chatID: Int64) -> BotLanguage {
+        state.groupLanguages[String(chatID)] ?? .en
+    }
+    public func setUserLanguage(_ language: BotLanguage?, userID: Int64) throws {
+        guard state.userLanguages[String(userID)] != language else { return }
+        var next = state
+        next.userLanguages[String(userID)] = language
+        try save(next)
+    }
+    public func setGroupLanguage(_ language: BotLanguage, chatID: Int64) throws {
+        guard state.groupLanguages[String(chatID)] != language else { return }
+        var next = state
+        next.groupLanguages[String(chatID)] = language
         try save(next)
     }
     public func checkWritable() throws {
