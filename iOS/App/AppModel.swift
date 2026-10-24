@@ -44,11 +44,21 @@ final class AppModel: ObservableObject {
         if enabled { user.disabledSites.remove(site.id) } else { user.disabledSites.insert(site.id) }
     }
 
-    func previewEnabled(_ p: Rules.Preview) -> Bool { user.previews[p.id]?.enabled ?? true }
+    func previewEnabled(_ p: Rules.Preview) -> Bool { user.previews[p.id]?.enabled ?? user.previewDefaultsEnabled }
 
     func setPreview(_ p: Rules.Preview, enabled: Bool) {
-        var s = user.previews[p.id] ?? .init(enabled: true, apps: p.apps)
+        var s = user.previews[p.id] ?? .init(enabled: user.previewDefaultsEnabled, apps: p.apps)
         s.enabled = enabled
+        user.previews[p.id] = s
+    }
+
+    func previewTargetHost(_ p: Rules.Preview) -> String {
+        user.previews[p.id]?.targetHost.flatMap(Rules.canonicalPreviewHost) ?? p.to
+    }
+
+    func setPreview(_ p: Rules.Preview, targetHost: String?) {
+        var s = user.previews[p.id] ?? .init(enabled: user.previewDefaultsEnabled, apps: p.apps)
+        s.targetHost = targetHost
         user.previews[p.id] = s
     }
 

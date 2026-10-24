@@ -92,4 +92,17 @@ public struct Rules: Codable, Sendable {
     public static func load(_ data: Data) throws -> Rules {
         try JSONDecoder().decode(Rules.self, from: data)
     }
+
+    /// A provider is a plain ASCII DNS host, never a URL. Only outer ASCII whitespace is trimmed.
+    public static func canonicalPreviewHost(_ raw: String) -> String? {
+        var host = raw.trimmingCharacters(in: CharacterSet(charactersIn: " \t\r\n\u{000B}\u{000C}"))
+        if host.hasSuffix(".") { host.removeLast() }
+        guard host.utf8.count <= 253 else { return nil }
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard labels.count >= 2, labels.allSatisfy({ label in
+            !label.isEmpty && label.utf8.count <= 63 && label.first != "-" && label.last != "-"
+                && label.utf8.allSatisfy { (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 }
+        }) else { return nil }
+        return host.lowercased()
+    }
 }

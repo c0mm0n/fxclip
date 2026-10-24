@@ -72,7 +72,7 @@ final class SettingsStore: ObservableObject {
     // MARK: preview links
 
     func setting(for p: Rules.Preview) -> UserSettings.PreviewSetting {
-        user.previews[p.id] ?? .init(enabled: true, apps: p.apps)
+        user.previews[p.id] ?? .init(enabled: user.previewDefaultsEnabled, apps: p.apps)
     }
 
     func setPreview(_ p: Rules.Preview, enabled: Bool) {
@@ -84,6 +84,16 @@ final class SettingsStore: ObservableObject {
     func setPreview(_ p: Rules.Preview, apps: [String]) {
         var s = setting(for: p)
         s.apps = apps
+        user.previews[p.id] = s
+    }
+
+    func previewTargetHost(for p: Rules.Preview) -> String {
+        setting(for: p).targetHost.flatMap(Rules.canonicalPreviewHost) ?? p.to
+    }
+
+    func setPreview(_ p: Rules.Preview, targetHost: String?) {
+        var s = setting(for: p)
+        s.targetHost = targetHost
         user.previews[p.id] = s
     }
 

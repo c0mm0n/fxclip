@@ -73,17 +73,25 @@ struct OverviewPage: View {
 struct PreviewsPage: View {
     @EnvironmentObject var store: SettingsStore
     @State private var choosing: Choosing?
+    @State private var editing: Choosing?
 
     struct Choosing: Identifiable { let id: String }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            PageHeader(title: "App previews", info: "An optional extra to link cleaning: adapt X and Instagram links for better previews in the destination apps you choose. Other apps get the clean original. Mirrors are run by third parties: they see a link only when someone opens it.")
+            PageHeader(title: "App previews", info: "An optional extra to link cleaning: adapt supported links for better previews in the destination apps you choose. Other apps get the clean original. Mirrors are run by third parties: they can receive links when previews are generated or when someone opens them.")
             ForEach(store.builtins.previews, id: \.id) { card($0) }
         }
         .sheet(item: $choosing) { c in
             if let p = store.builtins.previews.first(where: { $0.id == c.id }) {
                 ChooseAppsSheet(preview: p).environmentObject(store)
+            }
+        }
+        .sheet(item: $editing) { c in
+            if let p = store.builtins.previews.first(where: { $0.id == c.id }) {
+                PreviewProviderSheet(preview: p, target: store.previewTargetHost(for: p)) {
+                    store.setPreview(p, targetHost: $0)
+                }
             }
         }
     }
@@ -99,9 +107,11 @@ struct PreviewsPage: View {
                 .frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(p.name).font(.system(size: 16, weight: .semibold))
-                    Text(sources(p) + " → " + p.to).foregroundStyle(.secondary)
+                    Text(sources(p) + " → " + store.previewTargetHost(for: p)).foregroundStyle(.secondary)
                 }
                 Spacer()
+                Button("Edit domain…") { editing = Choosing(id: p.id) }
+                    .font(.system(size: 12))
                 Toggle("", isOn: Binding(get: { s.enabled }, set: { store.setPreview(p, enabled: $0) }))
                     .labelsHidden().toggleStyle(.switch)
             }
@@ -133,6 +143,44 @@ struct PreviewsPage: View {
     /// "x.com, twitter.com": the bare domains, without www./mobile. aliases.
     private func sources(_ p: Rules.Preview) -> String {
         p.from.filter { !$0.hasPrefix("www.") && !$0.hasPrefix("mobile.") }.joined(separator: ", ")
+    }
+}
+
+private struct PreviewProviderSheet: View {
+    let preview: Rules.Preview
+    let save: (String?) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var domain: String
+    @State private var error = false
+
+    init(preview: Rules.Preview, target: String, save: @escaping (String?) -> Void) {
+        self.preview = preview
+        self.save = save
+        _domain = State(initialValue: target)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("\(preview.name) preview domain").font(.headline)
+            TextField("Domain", text: $domain, prompt: Text(preview.to))
+                .textFieldStyle(.roundedBorder).onSubmit(apply)
+            Text("Default: \(preview.to)").font(.caption).foregroundStyle(.secondary)
+            if error { Text("Enter a domain only, such as preview.example.").foregroundStyle(.red) }
+            HStack {
+                Button("Use Default") { save(nil); dismiss() }
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Save", action: apply).keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20).frame(width: 420)
+    }
+
+    private func apply() {
+        let raw = domain.trimmingCharacters(in: CharacterSet(charactersIn: " \t\r\n\u{000B}\u{000C}"))
+        guard raw.isEmpty || Rules.canonicalPreviewHost(raw) != nil else { error = true; return }
+        save(raw.isEmpty ? nil : Rules.canonicalPreviewHost(raw))
+        dismiss()
     }
 }
 

@@ -56,7 +56,8 @@ internal sealed class SettingsStore
         Preferences.TrackersRemoved += removed;
         AtomicWrite("preferences.json", JsonSerializer.Serialize(Preferences, UserSettings.Json));
     }
-    public PreviewSetting Setting(PreviewRule rule) => User.Previews.GetValueOrDefault(rule.Id) ?? new(true, rule.Apps);
+    public PreviewSetting Setting(PreviewRule rule) => User.Previews.GetValueOrDefault(rule.Id) ?? new(User.PreviewDefaultsEnabled, rule.Apps);
+    public string PreviewTargetHost(PreviewRule rule) => Rules.CanonicalPreviewHost(Setting(rule).TargetHost ?? "") ?? rule.To;
     public void AddApp(AppRule app) { if (!KnownApps.Any(a => a.Id == app.Id)) User.AddedApps.Add(app); }
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     public static bool OpenAtLogin

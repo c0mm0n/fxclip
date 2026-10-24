@@ -184,7 +184,7 @@
     {
       "input": "https://www.reddit.com/r/a/comments/b/?share_id=x&context=3",
       "clean": "https://www.reddit.com/r/a/comments/b/",
-      "telegram": "https://www.reddit.com/r/a/comments/b/"
+      "telegram": "https://vxreddit.com/r/a/comments/b/"
     },
     {
       "input": "https://www.linkedin.com/posts/x?trk=public&lipi=abc",
@@ -225,6 +225,15 @@
       "input": "https://example.com/a)))",
       "clean": "https://example.com/a)))",
       "telegram": "https://example.com/a)))"
-    }
+    },
+    {"input": "http://reddit.com/r/example/comments/postid/title?share_id=x&utm_source=test&keep=a%2Bb#section", "clean": "http://reddit.com/r/example/comments/postid/title?keep=a%2Bb#section", "telegram": "https://vxreddit.com/r/example/comments/postid/title?keep=a%2Bb#section"},
+    {"input": "http://old.reddit.com/r/example/comments/postid/title?share_id=x&utm_source=test&keep=a%2Bb#section", "clean": "http://old.reddit.com/r/example/comments/postid/title?keep=a%2Bb#section", "telegram": "https://vxreddit.com/r/example/comments/postid/title?keep=a%2Bb#section"},
+    {"input": "http://new.reddit.com/r/example/comments/postid/title?share_id=x&utm_source=test&keep=a%2Bb#section", "clean": "http://new.reddit.com/r/example/comments/postid/title?keep=a%2Bb#section", "telegram": "https://vxreddit.com/r/example/comments/postid/title?keep=a%2Bb#section"},
+    {"input": "http://m.reddit.com/r/example/comments/postid/title?share_id=x&utm_source=test&keep=a%2Bb#section", "clean": "http://m.reddit.com/r/example/comments/postid/title?keep=a%2Bb#section", "telegram": "https://vxreddit.com/r/example/comments/postid/title?keep=a%2Bb#section"},
+    {"input": "https://redd.it/r/example/comments/postid/title", "clean": "https://redd.it/r/example/comments/postid/title", "telegram": "https://redd.it/r/example/comments/postid/title"},
+    {"input": "https://reddit.com.example/r/example/comments/postid/title", "clean": "https://reddit.com.example/r/example/comments/postid/title", "telegram": "https://reddit.com.example/r/example/comments/postid/title"},
+    {"input": "https://notreddit.com/r/example/comments/postid/title", "clean": "https://notreddit.com/r/example/comments/postid/title", "telegram": "https://notreddit.com/r/example/comments/postid/title"},
+    {"input": "https://preview.reddit.com/r/example/comments/postid/title", "clean": "https://preview.reddit.com/r/example/comments/postid/title", "telegram": "https://preview.reddit.com/r/example/comments/postid/title"},
+    {"input": "https://vxreddit.com/r/example/comments/postid/title", "clean": "https://vxreddit.com/r/example/comments/postid/title", "telegram": "https://vxreddit.com/r/example/comments/postid/title"}
   ]
 }

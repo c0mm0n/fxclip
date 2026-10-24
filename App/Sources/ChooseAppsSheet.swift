@@ -15,7 +15,7 @@ struct ChooseAppsSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("\(preview.name) → \(preview.to)").font(.headline)
+            Text("\(preview.name) → \(store.previewTargetHost(for: preview))").font(.headline)
             Text("Apply in these apps:").foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(candidates, id: \.id) { app in

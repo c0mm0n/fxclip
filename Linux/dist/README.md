@@ -1,11 +1,13 @@
 # fxclip for Linux (Wayland)
 
 Clean links, ready to share. fxclip removes tracking from copied links while keeping useful
-details. Optionally, it adapts X and Instagram links for better previews in chosen
+details. Optionally, it adapts X, Instagram and Reddit links for better previews in chosen
 destination apps (Telegram by default); switching away restores the clean original.
 Link cleaning stays local, with no account, analytics, clipboard history or clipboard
 logging. Only the current text is held in memory. Authorized updates contact GitHub
 from the desktop interface; the cleaning service never makes network requests.
+
+Open **App previews** to control each supported site and change its mirror domain. **Use Default** restores the built-in provider; turning a site off preserves its domain and app choices. Provider settings use the same format across platforms.
 
 ## Install
 

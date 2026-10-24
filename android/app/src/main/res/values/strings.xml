@@ -17,7 +17,7 @@
 
     <string name="tagline">Clean links, ready to share.</string>
     <string name="how_title">How to use</string>
-    <string name="how_share">Share a link to “Clean link”: the share sheet opens again with the clean link. Telegram gets fxtwitter / zzinstagram.</string>
+    <string name="how_share">Share a link to “Clean link”: the share sheet opens again with the clean link. Telegram gets your chosen preview version for supported links.</string>
     <string name="how_select">Select a link, then “Clean link” in the text menu: it is replaced in place (with the preview link in Telegram).</string>
     <string name="how_tile">Copied a link? Tap the “Clean link” tile or the app shortcut: the clipboard link is cleaned.</string>
     <string name="add_tile">Add the tile</string>
@@ -25,6 +25,14 @@
     <string name="everywhere">All websites (utm_*, fbclid…)</string>
     <string name="previews_title">Optional Telegram previews</string>
     <string name="preview_row">%1$s → %2$s</string>
+    <string name="preview_edit">Edit domain…</string>
+    <string name="preview_domain_title">%s preview domain</string>
+    <string name="preview_domain">Domain</string>
+    <string name="preview_invalid">Enter a domain only, such as preview.example.</string>
+    <string name="preview_default">Default: %s</string>
+    <string name="preview_save">Save</string>
+    <string name="preview_use_default">Use Default</string>
+    <string name="preview_privacy">Third-party mirrors can receive links when previews are generated or when someone opens them.</string>
     <string name="never_title">Never clean</string>
     <string name="never_hint">example.com</string>
     <string name="never_add">Add</string>

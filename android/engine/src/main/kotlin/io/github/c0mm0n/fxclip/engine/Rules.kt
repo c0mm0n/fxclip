@@ -34,6 +34,18 @@ data class AppRule(
 
 data class Trackers(val everywhere: ParamSet, val sites: List<Site>)
 
+/** A provider is a plain ASCII DNS host, never a URL. Only outer ASCII whitespace is trimmed. */
+fun canonicalPreviewHost(raw: String): String? {
+    val host = raw.trim(' ', '\t', '\r', '\n', '\u000B', '\u000C').removeSuffix(".")
+    if (host.length > 253) return null
+    val labels = host.split('.')
+    if (labels.size < 2 || labels.any { label ->
+        label.length !in 1..63 || label.first() == '-' || label.last() == '-' ||
+            label.any { it !in 'a'..'z' && it !in 'A'..'Z' && it !in '0'..'9' && it != '-' }
+    }) return null
+    return host.lowercase()
+}
+
 data class SkipHost(val host: String, val subdomains: Boolean) {
     fun covers(h: String): Boolean {
         val a = canonical(h)
@@ -74,8 +86,8 @@ data class Rules(
         neverClean = user.neverClean,
         apps = apps + user.addedApps.filter { added -> apps.none { it.id == added.id } },
         previews = previews.mapNotNull { p ->
-            val s = user.previews[p.id] ?: return@mapNotNull p
-            if (s.enabled) p.copy(apps = s.apps) else null
+            val s = user.previews[p.id] ?: return@mapNotNull p.takeIf { user.previewDefaultsEnabled }
+            if (s.enabled) p.copy(apps = s.apps, to = s.targetHost?.let(::canonicalPreviewHost) ?: p.to) else null
         } + user.addedPreviews.filter { added -> previews.none { it.id == added.id } },
     )
 

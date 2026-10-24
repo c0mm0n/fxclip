@@ -57,6 +57,7 @@ public class VectorTests
         Assert.Equal(expected, app.Length == 0 ? clean : engine.Preview(clean, app));
         var roundTrip = new Cleaner(Rules.BuiltIn().Applying(UserSettings.Parse(settings.ToJson())));
         Assert.Equal(clean, roundTrip.Clean(input).Text);
+        Assert.Equal(expected, app.Length == 0 ? clean : roundTrip.Preview(clean, app));
     }
 
     [Theory]
@@ -78,6 +79,7 @@ public class VectorTests
     public void BareUrl(string text, bool expected) => Assert.Equal(expected, Cleaner.IsBareUrl(text));
 
     [Theory]
+    [InlineData("{\"previews\":{\"x\":{\"enabled\":true,\"apps\":[],\"targetHost\":42}}}")]
     [InlineData("{\"disabledSites\":[null]}")]
     [InlineData("{\"addedApps\":[{\"id\":\"a\",\"name\":\"A\",\"bundleIDs\":[null]}]}")]
     [InlineData("{\"previews\":{\"x\":{\"enabled\":true,\"apps\":[null]}}}")]
@@ -92,4 +94,40 @@ public class VectorTests
         Assert.False(s.Previews["x"].Enabled);
         Assert.Throws<JsonException>(() => UserSettings.Parse("{\"previews\":{\"x\":{}}}"));
     }
+
+    [Fact]
+    public void CanonicalPreviewHostBoundaries()
+    {
+        Assert.Equal("preview.example", Rules.CanonicalPreviewHost(" \tPREVIEW.Example.\r\n"));
+        Assert.Equal("a-b.example", Rules.CanonicalPreviewHost("a-b.example"));
+        Assert.Equal("xn--bcher-kva.example", Rules.CanonicalPreviewHost("xn--bcher-kva.example"));
+        var maxHost = string.Join(".", Enumerable.Repeat(new string('a', 63), 3)) + "." + new string('b', 61);
+        Assert.Equal(253, maxHost.Length);
+        Assert.Equal(maxHost, Rules.CanonicalPreviewHost(maxHost + "."));
+        Assert.Null(Rules.CanonicalPreviewHost(maxHost + "b"));
+        Assert.Null(Rules.CanonicalPreviewHost(new string('a', 64) + ".example"));
+        foreach (var host in new[] { "", "localhost", "https://preview.example", "preview.example/path", "preview.example:443",
+            "user@preview.example", "preview.example?x", "preview.example#x", "pre view.example",
+            "preview_1.example", "préview.example", "\u00A0preview.example", "preview.\u0001example",
+            "-preview.example", "preview-.example", "preview..example", "preview.example.." })
+            Assert.Null(Rules.CanonicalPreviewHost(host));
+    }
+
+
+    [Fact]
+    public void LegacyPreviewRefusalSurvivesIndividualChangesAndRoundTrip()
+    {
+        var settings = UserSettings.Parse("""{"previews":{"x":{"enabled":false,"apps":["telegram"]},"instagram":{"enabled":false,"apps":["telegram"]}}}""");
+        Assert.False(settings.PreviewDefaultsEnabled);
+        settings.Previews["x"] = settings.Previews["x"] with { Enabled = true };
+        settings = UserSettings.Parse(settings.ToJson());
+        Assert.False(settings.PreviewDefaultsEnabled);
+        var engine = new Cleaner(Rules.BuiltIn().Applying(settings));
+        Assert.Equal("https://fxtwitter.com/a", engine.Preview("https://x.com/a", "Telegram.exe"));
+        const string reddit = "https://reddit.com/r/example/comments/postid/title";
+        Assert.Equal(reddit, engine.Preview(reddit, "Telegram.exe"));
+        Assert.True(new UserSettings().PreviewDefaultsEnabled);
+        Assert.Throws<JsonException>(() => UserSettings.Parse("""{"previewDefaultsEnabled":"false"}"""));
+    }
+
 }

@@ -7,12 +7,28 @@ struct LinkCleaner {
     static let telegram = "ph.telegra.Telegraph"
 
     let engine: Engine
-    /// Mirror host → original host ("fxtwitter.com" → "x.com"), from every built-in preview.
+    /// Mirror host → primary original host, including valid custom providers for built-in previews.
     private let mirrors: [(to: String, from: String)]
 
     init(rules: Rules, user: UserSettings) {
         engine = Engine(rules: rules.applying(user))
-        mirrors = rules.previews.compactMap { p in p.from.first.map { (p.to.lowercased(), $0) } }
+        let builtins = rules.previews.compactMap { p in p.from.first.map { (to: p.to.lowercased(), from: $0) } }
+        let originalHosts = Set(rules.previews.flatMap(\.from).map { $0.lowercased() })
+        var customSources: [String: Set<String>] = [:]
+        for preview in rules.previews {
+            guard let source = preview.from.first,
+                  let raw = user.previews[preview.id]?.targetHost,
+                  let host = Rules.canonicalPreviewHost(raw) else { continue }
+            customSources[host, default: []].insert(source)
+        }
+        // Built-in providers keep their known identity. A shared custom provider has no reliable
+        // inverse, so leave its host alone rather than arbitrarily choosing one source website.
+        mirrors = builtins + customSources.keys.sorted().compactMap { host in
+            guard !originalHosts.contains(host), !builtins.contains(where: { $0.to == host }),
+                  let sources = customSources[host], sources.count == 1,
+                  let source = sources.first else { return nil }
+            return (to: host, from: source)
+        }
     }
 
     /// The built-in rules shipped in the app or extension bundle.

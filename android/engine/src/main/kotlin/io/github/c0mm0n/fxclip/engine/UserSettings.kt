@@ -9,7 +9,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-data class PreviewSetting(val enabled: Boolean, val apps: List<String>)
+data class PreviewSetting(val enabled: Boolean, val apps: List<String>, val targetHost: String? = null)
 
 /**
  * What the user changed on top of the built-in rules, stored as settings.json (same format as
@@ -29,17 +29,24 @@ data class UserSettings(
      */
     val addedTrackers: ParamSet = ParamSet(emptyList(), emptyList()),
     val addedPreviews: List<PreviewRule> = emptyList(),
+    /** Default for preview rules without an explicit choice, including newly added built-ins. */
+    val previewDefaultsEnabled: Boolean = true,
 ) {
     fun toJson(): String = pretty.encodeToString(JsonElement.serializer(), buildJsonObject {
         put("version", version)
         put("trackersEverywhere", trackersEverywhere)
+        put("previewDefaultsEnabled", previewDefaultsEnabled)
         put("disabledSites", strings(disabledSites.sorted()))
         put("neverClean", buildJsonArray {
             neverClean.forEach { h -> add(buildJsonObject { put("host", h.host); put("subdomains", h.subdomains) }) }
         })
         put("previews", buildJsonObject {
             previews.toSortedMap().forEach { (id, p) ->
-                put(id, buildJsonObject { put("enabled", p.enabled); put("apps", strings(p.apps)) })
+                put(id, buildJsonObject {
+                    put("enabled", p.enabled)
+                    put("apps", strings(p.apps))
+                    p.targetHost?.let { put("targetHost", it) }
+                })
             }
         })
         put("addedApps", buildJsonArray {
@@ -84,15 +91,19 @@ data class UserSettings(
                 fail(e.message ?: "Invalid JSON")
             }.obj()
             val d = UserSettings()
+            val previews = root.opt("previews")?.obj()?.mapValues { (_, v) ->
+                val p = v.obj()
+                PreviewSetting(p.req("enabled").bool(), p.req("apps").strings(), p.opt("targetHost")?.str())
+            } ?: d.previews
             return UserSettings(
                 version = root.opt("version")?.int() ?: d.version,
                 trackersEverywhere = root.opt("trackersEverywhere")?.bool() ?: d.trackersEverywhere,
                 disabledSites = root.opt("disabledSites")?.strings()?.toSet() ?: d.disabledSites,
                 neverClean = root.opt("neverClean")?.arr()?.map { parseSkipHost(it) } ?: d.neverClean,
-                previews = root.opt("previews")?.obj()?.mapValues { (_, v) ->
-                    val p = v.obj()
-                    PreviewSetting(p.req("enabled").bool(), p.req("apps").strings())
-                } ?: d.previews,
+                previews = previews,
+                previewDefaultsEnabled = if (root.containsKey("previewDefaultsEnabled"))
+                    root.opt("previewDefaultsEnabled")?.bool() ?: d.previewDefaultsEnabled
+                else !(previews["x"]?.enabled == false && previews["instagram"]?.enabled == false),
                 addedApps = root.opt("addedApps")?.arr()?.map { parseApp(it) } ?: d.addedApps,
                 addedTrackers = root.opt("addedTrackers")?.obj()?.let {
                     ParamSet(it.req("params").strings(), it.req("prefixes").strings())

@@ -16,13 +16,21 @@
 
     <string name="tagline">Des liens propres, prêts à partager.</string>
     <string name="how_title">Utilisation</string>
-    <string name="how_share">Partage un lien vers « Nettoyer le lien » : le menu de partage revient avec le lien propre. Telegram reçoit fxtwitter / zzinstagram.</string>
+    <string name="how_share">Partage un lien vers « Nettoyer le lien » : le menu de partage revient avec le lien propre. Telegram reçoit ta version avec aperçu pour les liens compatibles.</string>
     <string name="how_select">Sélectionne un lien, puis « Nettoyer le lien » dans le menu du texte : il est remplacé sur place (par le lien avec aperçu dans Telegram).</string>
     <string name="how_tile">Un lien copié ? Touche la tuile « Nettoyer le lien » ou le raccourci de l\'app : le lien du presse-papiers est nettoyé.</string>
     <string name="add_tile">Ajouter la tuile</string>
     <string name="trackers_title">Traqueurs</string>
     <string name="everywhere">Tous les sites (utm_*, fbclid…)</string>
     <string name="previews_title">Aperçus Telegram en option</string>
+    <string name="preview_edit">Modifier le domaine…</string>
+    <string name="preview_domain_title">Domaine des aperçus %s</string>
+    <string name="preview_domain">Domaine</string>
+    <string name="preview_invalid">Entre seulement un domaine, comme preview.example.</string>
+    <string name="preview_default">Par défaut : %s</string>
+    <string name="preview_save">Enregistrer</string>
+    <string name="preview_use_default">Par défaut</string>
+    <string name="preview_privacy">Les miroirs tiers peuvent recevoir les liens lors de la création des aperçus ou de leur ouverture.</string>
     <string name="never_title">Ne jamais nettoyer</string>
     <string name="never_add">Ajouter</string>
     <string name="never_remove">Retirer</string>

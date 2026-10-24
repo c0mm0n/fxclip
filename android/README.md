@@ -1,6 +1,8 @@
 # fxclip for Android
 
-Clean links, ready to share. fxclip removes tracking from links on Android 8.0+, with optional X and Instagram preview links for Telegram. Cleaning stays local; optional updates contact GitHub.
+Clean links, ready to share. fxclip removes tracking from links on Android 8.0+, with optional X, Instagram and Reddit preview links for Telegram. Cleaning stays local; optional updates contact GitHub.
+
+Open **App previews** to control each supported site and change its mirror domain. **Use Default** restores the built-in provider; turning a site off preserves its domain and app choices. Provider settings use the same format across platforms.
 
 ## Install
 

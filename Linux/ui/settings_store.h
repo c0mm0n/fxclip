@@ -21,6 +21,7 @@ public:
     QJsonArray trackerSites() const;
     QJsonArray apps() const;
     bool trackersEverywhere() const;
+    bool previewDefaultsEnabled() const;
     bool siteEnabled(const QString &id) const;
     bool previewEnabled(const QString &id) const;
     QStringList previewApps(const QString &id) const;
@@ -29,6 +30,8 @@ public:
     bool setTrackersEverywhere(bool enabled);
     bool setSiteEnabled(const QString &id, bool enabled);
     bool setPreview(const QString &id, bool enabled, const QStringList &apps);
+    bool setPreviewTargetHost(const QString &id, const QString &host);
+    static QString canonicalPreviewHost(const QString &host);
     bool addNeverClean(const QString &host, bool subdomains);
     bool removeNeverClean(int index);
     bool addLinuxApp(const QString &name, const QString &identifier);

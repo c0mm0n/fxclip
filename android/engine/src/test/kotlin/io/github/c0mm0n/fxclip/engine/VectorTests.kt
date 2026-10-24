@@ -12,6 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.assertNull
 
 class VectorTests {
     private fun shared(name: String): JsonElement {
@@ -55,6 +56,7 @@ class VectorTests {
                 val clean = engine.clean(input).text
                 assertEquals(expected, if (app == null) clean else engine.preview(clean, app), "$name: $input in $app")
                 assertEquals(clean, roundTrip.clean(input).text, "$name round trip: $input")
+                assertEquals(expected, if (app == null) clean else roundTrip.preview(clean, app), "$name preview round trip: $input")
                 count++
             }
         }
@@ -84,6 +86,7 @@ class VectorTests {
     @Test
     fun malformedNestedSettingsAreRejected() {
         listOf(
+            """{"previews":{"x":{"enabled":true,"apps":[],"targetHost":42}}}""",
             """{"disabledSites":[null]}""",
             """{"addedApps":[{"id":"a","name":"A","bundleIDs":[null]}]}""",
             """{"previews":{"x":{"enabled":true,"apps":[null]}}}""",
@@ -147,4 +150,39 @@ class VectorTests {
         val telegram = Rules.builtIn().apps.first { it.id == "telegram" }
         assertTrue("org.telegram.messenger" in telegram.android.orEmpty())
     }
+
+    @Test
+    fun canonicalPreviewHostBoundaries() {
+        assertEquals("preview.example", canonicalPreviewHost(" \tPREVIEW.Example.\r\n"))
+        assertEquals("a-b.example", canonicalPreviewHost("a-b.example"))
+        assertEquals("xn--bcher-kva.example", canonicalPreviewHost("xn--bcher-kva.example"))
+        val maxHost = List(3) { "a".repeat(63) }.joinToString(".") + "." + "b".repeat(61)
+        assertEquals(253, maxHost.length)
+        assertEquals(maxHost, canonicalPreviewHost("$maxHost."))
+        assertNull(canonicalPreviewHost(maxHost + "b"))
+        assertNull(canonicalPreviewHost("a".repeat(64) + ".example"))
+        for (host in listOf("", "localhost", "https://preview.example", "preview.example/path", "preview.example:443",
+            "user@preview.example", "preview.example?x", "preview.example#x", "pre view.example",
+            "preview_1.example", "préview.example", "\u00A0preview.example", "preview.\u0001example",
+            "-preview.example", "preview-.example", "preview..example", "preview.example..")) {
+            assertNull(canonicalPreviewHost(host), host)
+        }
+    }
+
+
+    @Test
+    fun legacyPreviewRefusalSurvivesIndividualChangesAndRoundTrip() {
+        var settings = UserSettings.parse("""{"previews":{"x":{"enabled":false,"apps":["telegram"]},"instagram":{"enabled":false,"apps":["telegram"]}}}""")
+        assertFalse(settings.previewDefaultsEnabled)
+        settings = settings.copy(previews = settings.previews + ("x" to settings.previews.getValue("x").copy(enabled = true)))
+        settings = UserSettings.parse(settings.toJson())
+        assertFalse(settings.previewDefaultsEnabled)
+        val engine = Engine(Rules.builtIn().applying(settings))
+        assertEquals("https://fxtwitter.com/a", engine.preview("https://x.com/a", "Telegram.exe"))
+        val reddit = "https://reddit.com/r/example/comments/postid/title"
+        assertEquals(reddit, engine.preview(reddit, "Telegram.exe"))
+        assertTrue(UserSettings().previewDefaultsEnabled)
+        assertFailsWith<SettingsFormatException> { UserSettings.parse("""{"previewDefaultsEnabled":"false"}""") }
+    }
+
 }

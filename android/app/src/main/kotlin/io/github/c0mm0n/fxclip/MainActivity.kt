@@ -89,6 +89,7 @@ import kotlinx.coroutines.withContext
 import androidx.lifecycle.ViewModelProvider
 import io.github.c0mm0n.fxclip.engine.PreviewRule
 import io.github.c0mm0n.fxclip.engine.PreviewSetting
+import io.github.c0mm0n.fxclip.engine.canonicalPreviewHost
 import io.github.c0mm0n.fxclip.engine.SkipHost
 import io.github.c0mm0n.fxclip.engine.UserSettings
 
@@ -234,14 +235,11 @@ private fun SettingsScreen(store: SettingsStore, loaded: SettingsStore.Loaded, r
             item {
                 SettingsCard(stringResource(R.string.previews_title), R.drawable.ic_preview) {
                     for (p in rules.previews) {
-                        val current = settings.previews[p.id]
-                        SwitchItem(
-                            stringResource(R.string.preview_row, p.from.first(), p.to),
-                            current?.enabled ?: true,
-                        ) { on ->
-                            update(settings.copy(previews = settings.previews + (p.id to PreviewSetting(on, current?.apps ?: p.apps))))
+                        PreviewItem(p, settings.previews[p.id] ?: PreviewSetting(settings.previewDefaultsEnabled, p.apps)) { setting ->
+                            update(settings.copy(previews = settings.previews + (p.id to setting)))
                         }
                     }
+                    Note(stringResource(R.string.preview_privacy))
                 }
             }
             item { MyRules(settings, ::update) }
@@ -453,6 +451,57 @@ private fun SwitchItem(label: String, checked: Boolean, modifier: Modifier = Mod
         headlineContent = { Text(label) },
         trailingContent = { Switch(checked = checked, onCheckedChange = onChange, modifier = modifier) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+}
+
+@Composable
+private fun PreviewItem(rule: PreviewRule, setting: PreviewSetting, onChange: (PreviewSetting) -> Unit) {
+    val target = setting.targetHost?.let(::canonicalPreviewHost) ?: rule.to
+    var editing by remember(rule.id) { mutableStateOf(false) }
+    var domain by remember(rule.id) { mutableStateOf("") }
+    var invalid by remember(rule.id) { mutableStateOf(false) }
+    ListItem(
+        headlineContent = { Text(rule.name) },
+        supportingContent = {
+            Column {
+                Text(stringResource(R.string.preview_row, rule.from.first(), target))
+                TextButton(onClick = { domain = target; invalid = false; editing = true }) {
+                    Text(stringResource(R.string.preview_edit))
+                }
+            }
+        },
+        trailingContent = { Switch(checked = setting.enabled, onCheckedChange = { onChange(setting.copy(enabled = it)) }) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+    if (editing) AlertDialog(
+        onDismissRequest = { editing = false },
+        title = { Text(stringResource(R.string.preview_domain_title, rule.name)) },
+        text = {
+            OutlinedTextField(
+                value = domain, onValueChange = { domain = it; invalid = false },
+                label = { Text(stringResource(R.string.preview_domain)) },
+                singleLine = true, isError = invalid,
+                supportingText = {
+                    Text(if (invalid) stringResource(R.string.preview_invalid) else stringResource(R.string.preview_default, rule.to))
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val raw = domain.trim(' ', '\t', '\r', '\n', '\u000B', '\u000C')
+                val host = canonicalPreviewHost(raw)
+                if (raw.isNotEmpty() && host == null) invalid = true
+                else { onChange(setting.copy(targetHost = host)); editing = false }
+            }) { Text(stringResource(R.string.preview_save)) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { onChange(setting.copy(targetHost = null)); editing = false }) {
+                    Text(stringResource(R.string.preview_use_default))
+                }
+                TextButton(onClick = { editing = false }) { Text(stringResource(R.string.update_cancel)) }
+            }
+        },
     )
 }
 

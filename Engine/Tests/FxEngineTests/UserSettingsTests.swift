@@ -77,9 +77,13 @@ final class UserSettingsTests: XCTestCase {
         XCTAssertGreaterThan(file.groups.count, 5)
         for g in file.groups {
             let e = Engine(rules: builtins.applying(g.settings))
+            let back = try JSONDecoder().decode(UserSettings.self, from: JSONEncoder().encode(g.settings))
+            XCTAssertEqual(back, g.settings, "\(g.name): settings round trip")
+            let roundTrip = Engine(rules: builtins.applying(back))
             for c in g.cases {
                 let clean = e.clean(c.input).text
                 XCTAssertEqual(c.app.map { e.preview(clean, forBundleID: $0) } ?? clean, c.output, "\(g.name): \(c.input) in \(c.app ?? "-")")
+                XCTAssertEqual(c.app.map { roundTrip.preview(clean, forBundleID: $0) } ?? clean, c.output, "\(g.name): preview round trip")
             }
         }
     }
@@ -88,8 +92,47 @@ final class UserSettingsTests: XCTestCase {
         var s = UserSettings()
         s.disabledSites = ["reddit"]
         s.neverClean = [SkipHost(host: "a.com", subdomains: true)]
-        s.previews["instagram"] = .init(enabled: false, apps: [])
+        s.previews["instagram"] = .init(enabled: false, apps: [], targetHost: "preview.example")
         let back = try JSONDecoder().decode(UserSettings.self, from: JSONEncoder().encode(s))
         XCTAssertEqual(back, s)
     }
+
+    func testCanonicalPreviewHostBoundaries() {
+        XCTAssertEqual(Rules.canonicalPreviewHost(" \tPREVIEW.Example.\r\n"), "preview.example")
+        XCTAssertEqual(Rules.canonicalPreviewHost("a-b.example"), "a-b.example")
+        XCTAssertEqual(Rules.canonicalPreviewHost("xn--bcher-kva.example"), "xn--bcher-kva.example")
+        let maxHost = Array(repeating: String(repeating: "a", count: 63), count: 3).joined(separator: ".") + "." + String(repeating: "b", count: 61)
+        XCTAssertEqual(maxHost.utf8.count, 253)
+        XCTAssertEqual(Rules.canonicalPreviewHost(maxHost + "."), maxHost)
+        XCTAssertNil(Rules.canonicalPreviewHost(maxHost + "b"))
+        XCTAssertNil(Rules.canonicalPreviewHost(String(repeating: "a", count: 64) + ".example"))
+        for host in ["", "localhost", "https://preview.example", "preview.example/path", "preview.example:443",
+                     "user@preview.example", "preview.example?x", "preview.example#x", "pre view.example",
+                     "preview_1.example", "préview.example", "\u{00A0}preview.example", "preview.\u{0001}example",
+                     "-preview.example", "preview-.example", "preview..example", "preview.example.."] {
+            XCTAssertNil(Rules.canonicalPreviewHost(host), host)
+        }
+    }
+
+    func testMalformedPreviewHostTypeFailsDecode() {
+        let json = #"{"previews":{"x":{"enabled":true,"apps":[],"targetHost":42}}}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(UserSettings.self, from: Data(json.utf8)))
+    }
+
+
+    func testLegacyPreviewRefusalSurvivesIndividualChangesAndRoundTrip() throws {
+        let json = #"{"previews":{"x":{"enabled":false,"apps":["telegram"]},"instagram":{"enabled":false,"apps":["telegram"]}}}"#
+        var s = try JSONDecoder().decode(UserSettings.self, from: Data(json.utf8))
+        XCTAssertFalse(s.previewDefaultsEnabled)
+        s.previews["x"]?.enabled = true
+        s = try JSONDecoder().decode(UserSettings.self, from: JSONEncoder().encode(s))
+        XCTAssertFalse(s.previewDefaultsEnabled)
+        let e = Engine(rules: builtins.applying(s))
+        XCTAssertEqual(e.preview("https://x.com/a", forBundleID: telegram), "https://fxtwitter.com/a")
+        XCTAssertEqual(e.preview("https://reddit.com/r/example/comments/postid/title", forBundleID: telegram),
+                       "https://reddit.com/r/example/comments/postid/title")
+        XCTAssertTrue(UserSettings().previewDefaultsEnabled)
+        XCTAssertThrowsError(try JSONDecoder().decode(UserSettings.self, from: Data(#"{"previewDefaultsEnabled":"false"}"#.utf8)))
+    }
+
 }

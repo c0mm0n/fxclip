@@ -18,6 +18,8 @@ static bool isStringArray(const QJsonValue &value) {
 static bool validSettingsShape(const QJsonObject &settings) {
     if (settings.contains("version") && !settings.value("version").isDouble()) return false;
     if (settings.contains("trackersEverywhere") && !settings.value("trackersEverywhere").isBool()) return false;
+    if (settings.contains("previewDefaultsEnabled") && !settings.value("previewDefaultsEnabled").isNull() &&
+        !settings.value("previewDefaultsEnabled").isBool()) return false;
     if (settings.contains("disabledSites") && !isStringArray(settings.value("disabledSites"))) return false;
     if (settings.contains("neverClean")) {
         if (!settings.value("neverClean").isArray()) return false;
@@ -33,6 +35,8 @@ static bool validSettingsShape(const QJsonObject &settings) {
             if (!it.value().isObject()) return false;
             const auto setting = it.value().toObject();
             if (!setting.value("enabled").isBool() || !isStringArray(setting.value("apps"))) return false;
+            const auto targetHost = setting.value("targetHost");
+            if (!targetHost.isUndefined() && !targetHost.isNull() && !targetHost.isString()) return false;
         }
     }
     if (settings.contains("addedApps")) {
@@ -98,6 +102,10 @@ bool SettingsStore::load(const QString &rulesPath, const QString &settingsPath) 
         loadedDigest_.clear();
     }
 
+    // Keep the inferred legacy choice stable even after an individual preview is enabled.
+    // Persist it with the next explicit save, without changing the file during a read.
+    if (!settings_.contains("previewDefaultsEnabled"))
+        settings_.insert("previewDefaultsEnabled", previewDefaultsEnabled());
     valid_ = editable_ = true;
     return true;
 }
@@ -132,9 +140,17 @@ bool SettingsStore::siteEnabled(const QString &id) const {
     return true;
 }
 
+bool SettingsStore::previewDefaultsEnabled() const {
+    if (settings_.contains("previewDefaultsEnabled")) return settings_.value("previewDefaultsEnabled").toBool(true);
+    const auto previews = settings_.value("previews").toObject();
+    const auto x = previews.value("x").toObject().value("enabled");
+    const auto instagram = previews.value("instagram").toObject().value("enabled");
+    return !(x.isBool() && !x.toBool() && instagram.isBool() && !instagram.toBool());
+}
+
 bool SettingsStore::previewEnabled(const QString &id) const {
     const auto entry = settings_.value("previews").toObject().value(id);
-    return entry.isObject() ? entry.toObject().value("enabled").toBool(true) : true;
+    return entry.isObject() ? entry.toObject().value("enabled").toBool(previewDefaultsEnabled()) : previewDefaultsEnabled();
 }
 
 QStringList SettingsStore::previewApps(const QString &id) const {
@@ -221,6 +237,44 @@ bool SettingsStore::setPreview(const QString &id, bool enabled, const QStringLis
     for (const auto &app : appIds) appsArray.append(app);
     setting.insert("enabled", enabled);
     setting.insert("apps", appsArray);
+    previewsObject.insert(id, setting);
+    candidate.insert("previews", previewsObject);
+    return save(candidate);
+}
+
+QString SettingsStore::canonicalPreviewHost(const QString &raw) {
+    auto isOuterSpace = [](QChar c) { return c == QLatin1Char(' ') || (c.unicode() >= 9 && c.unicode() <= 13); };
+    int start = 0, end = raw.size();
+    while (start < end && isOuterSpace(raw.at(start))) ++start;
+    while (end > start && isOuterSpace(raw.at(end - 1))) --end;
+    auto host = raw.mid(start, end - start);
+    if (host.endsWith(QLatin1Char('.'))) host.chop(1);
+    if (host.size() > 253) return {};
+    const auto labels = host.split(QLatin1Char('.'), Qt::KeepEmptyParts);
+    if (labels.size() < 2) return {};
+    for (const auto &label : labels) {
+        if (label.isEmpty() || label.size() > 63 || label.startsWith(QLatin1Char('-')) || label.endsWith(QLatin1Char('-'))) return {};
+        for (const auto c : label) {
+            const auto n = c.unicode();
+            if (!((n >= 'a' && n <= 'z') || (n >= 'A' && n <= 'Z') || (n >= '0' && n <= '9') || n == '-')) return {};
+        }
+    }
+    return host.toLower();
+}
+
+bool SettingsStore::setPreviewTargetHost(const QString &id, const QString &host) {
+    const auto canonical = canonicalPreviewHost(host);
+    if (!host.isEmpty() && canonical.isEmpty()) {
+        error_ = QStringLiteral("Enter a domain such as preview.example, without a URL or path.");
+        return false;
+    }
+    auto candidate = settings_;
+    auto previewsObject = candidate.value("previews").toObject();
+    auto setting = previewsObject.value(id).toObject();
+    if (!setting.contains("enabled")) setting.insert("enabled", previewEnabled(id));
+    if (!setting.contains("apps")) setting.insert("apps", QJsonArray::fromStringList(previewApps(id)));
+    if (host.isEmpty()) setting.remove("targetHost");
+    else setting.insert("targetHost", canonical);
     previewsObject.insert(id, setting);
     candidate.insert("previews", previewsObject);
     return save(candidate);

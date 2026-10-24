@@ -143,6 +143,29 @@ int main(int argc, char **argv) {
     require(root.value("previews").toObject().value("x").toObject().value("vendorField").toString() == "retain",
             "unknown preview fields survive atomic save");
 
+    require(SettingsStore::canonicalPreviewHost(" \tPREVIEW.Example.\r\n") == "preview.example", "provider host is canonicalized");
+    const auto maxHost = QString(63, 'a') + "." + QString(63, 'a') + "." + QString(63, 'a') + "." + QString(61, 'b');
+    require(SettingsStore::canonicalPreviewHost(maxHost + ".") == maxHost, "253-character provider host is accepted");
+    require(SettingsStore::canonicalPreviewHost(maxHost + "b").isEmpty(), "provider host longer than 253 characters is rejected");
+    for (const auto &host : QStringList{"localhost", "https://preview.example", "preview.example/path", "preview.example:443",
+             "user@preview.example", "preview.example?x", "preview.example#x", "pre view.example", "preview_1.example",
+             QString::fromUtf8("préview.example"), "-preview.example", "preview-.example", "preview..example", "preview.example..",
+             QString(64, 'a') + ".example", QString("preview.") + QChar(1) + "example"})
+        require(SettingsStore::canonicalPreviewHost(host).isEmpty(), "invalid provider host is rejected");
+    require(store.setPreviewTargetHost("x", "PREVIEW.Example."), "save provider choice");
+    auto providerSetting = store.settings().value("previews").toObject().value("x").toObject();
+    require(providerSetting.value("targetHost").toString() == "preview.example", "provider is saved canonically");
+    require(providerSetting.value("vendorField").toString() == "retain" && providerSetting.value("enabled").toBool() &&
+            providerSetting.value("apps").toArray() == QJsonArray{"telegram"}, "provider edit preserves other preview fields");
+    require(!store.setPreviewTargetHost("x", "https://preview.example"), "invalid provider edit is refused");
+    require(store.settings().value("previews").toObject().value("x").toObject() == providerSetting, "invalid provider edit leaves settings intact");
+    require(store.setPreviewTargetHost("x", ""), "clear provider choice");
+    require(!store.settings().value("previews").toObject().value("x").toObject().contains("targetHost"), "clearing removes provider key");
+    require(store.setPreviewTargetHost("reddit", "preview.example"), "provider can be the first preview edit");
+    providerSetting = store.settings().value("previews").toObject().value("reddit").toObject();
+    require(providerSetting.value("enabled").toBool() && providerSetting.value("apps").toArray() == QJsonArray{"telegram"},
+            "first provider edit supplies the built-in enabled and apps defaults");
+
     QFile external(settingsPath);
     require(external.open(QIODevice::ReadOnly), "read current settings before external edit");
     auto externalRoot = QJsonDocument::fromJson(external.readAll()).object();
@@ -191,6 +214,34 @@ int main(int argc, char **argv) {
     require(wrongTypeUnchanged.open(QIODevice::ReadOnly) &&
             wrongTypeUnchanged.readAll() == R"({"trackersEverywhere":"false","futureKey":17})",
             "wrong-type settings remain byte-for-byte unchanged");
+    const auto legacyPath = temp.filePath("legacy.json");
+    QFile legacy(legacyPath);
+    require(legacy.open(QIODevice::WriteOnly), "write legacy preview refusal");
+    const auto legacyBytes = QByteArray(R"({"previews":{"x":{"enabled":false,"apps":["telegram"]},"instagram":{"enabled":false,"apps":["telegram"]}}})");
+    legacy.write(legacyBytes);
+    legacy.close();
+    SettingsStore legacyStore;
+    require(legacyStore.load(QStringLiteral(FXCLIP_RULES_PATH), legacyPath), "load legacy preview refusal");
+    require(!legacyStore.previewDefaultsEnabled() && !legacyStore.previewEnabled("reddit"), "legacy refusal disables new default previews");
+    require(legacy.open(QIODevice::ReadOnly) && legacy.readAll() == legacyBytes, "migration does not write settings during load");
+    legacy.close();
+    require(legacyStore.setPreviewTargetHost("reddit", "preview.example"), "set provider on a legacy default-off rule");
+    require(!legacyStore.previewEnabled("reddit"), "first provider edit preserves inferred disabled default");
+    require(legacyStore.setPreview("x", true, {"telegram"}) && legacyStore.reload(), "save and reload one enabled preview");
+    require(!legacyStore.previewDefaultsEnabled() && legacyStore.previewEnabled("x") && !legacyStore.previewEnabled("reddit"),
+            "individual choice and inferred refusal both survive persistence");
+    require(legacyStore.setPreview("reddit", true, {"telegram"}) && legacyStore.reload(), "explicitly enable Reddit");
+    require(legacyStore.previewEnabled("reddit") && !legacyStore.previewEnabled("instagram") && !legacyStore.previewEnabled("future"),
+            "explicit Reddit choice keeps other and future previews disabled");
+    require(legacy.open(QIODevice::WriteOnly | QIODevice::Truncate), "write explicit preview defaults fixture");
+    legacy.write(R"({"previewDefaultsEnabled":true,"previews":{"x":{"enabled":false,"apps":[]},"instagram":{"enabled":false,"apps":[]}}})");
+    legacy.close();
+    require(legacyStore.reload() && legacyStore.previewEnabled("reddit") && !legacyStore.previewEnabled("x"), "explicit default wins legacy inference");
+    require(legacy.open(QIODevice::WriteOnly | QIODevice::Truncate), "write partial preview refusal fixture");
+    legacy.write(R"({"previews":{"x":{"enabled":false,"apps":[]}}})");
+    legacy.close();
+    require(legacyStore.reload() && legacyStore.previewEnabled("instagram") && legacyStore.previewEnabled("reddit"),
+            "partial X refusal keeps other built-in defaults");
     std::cout << "Settings atomicity and Linux app mapping passed.\n";
     return 0;
 }

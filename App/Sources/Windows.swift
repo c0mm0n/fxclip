@@ -38,7 +38,7 @@ struct WelcomeView: View {
             Toggle(isOn: $previews) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Also adapt links for Telegram previews")
-                    Text("Optional: use preview-friendly versions of X and Instagram links in Telegram. Other apps get the clean original. Choose other destination apps in App previews. Preview mirrors are run by third parties.")
+                    Text("Optional: use preview-friendly versions of supported links in Telegram. Other apps get the clean original. Choose other destination apps in App previews. Third-party mirrors can receive links when previews are generated or when opened.")
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -59,8 +59,11 @@ struct WelcomeView: View {
 
     private func start() {
         var user = store.user
+        user.previewDefaultsEnabled = previews
         for p in store.builtins.previews {
-            user.previews[p.id] = .init(enabled: previews, apps: store.setting(for: p).apps)
+            var setting = store.setting(for: p)
+            setting.enabled = previews
+            user.previews[p.id] = setting
         }
         store.user = user
         store.save()  // also when nothing changed: completes the first run

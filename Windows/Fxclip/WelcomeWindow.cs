@@ -28,7 +28,7 @@ internal sealed class WelcomeWindow : Window
         panel.Children.Add(intro);
         var previews = new CheckBox { Content = "Also adapt links for Telegram previews", IsChecked = true };
         panel.Children.Add(previews);
-        var detail = Ui.Text("Optional: use preview-friendly versions of X and Instagram links in Telegram. Other apps get the clean original. Choose other destination apps in App previews. Preview mirrors are run by third parties.", 12, secondary: true);
+        var detail = Ui.Text("Optional: use preview-friendly versions of supported links in Telegram. Other apps get the clean original. Choose other destination apps in App previews. Third-party mirrors can receive links when previews are generated or when opened.", 12, secondary: true);
         detail.Margin = new Thickness(23, 0, 0, 14);
         panel.Children.Add(detail);
         var login = new CheckBox { Content = "Open fxclip at login", IsChecked = true };
@@ -42,7 +42,8 @@ internal sealed class WelcomeWindow : Window
         }
         var start = Ui.Button("Start", () =>
         {
-            foreach (var p in store.Builtins.Previews) store.User.Previews[p.Id] = new(previews.IsChecked == true, store.Setting(p).Apps);
+            store.User.PreviewDefaultsEnabled = previews.IsChecked == true;
+            foreach (var p in store.Builtins.Previews) store.User.Previews[p.Id] = store.Setting(p) with { Enabled = previews.IsChecked == true };
             SettingsStore.SetLogin(login.IsChecked == true);
             store.Save();
             started = true;

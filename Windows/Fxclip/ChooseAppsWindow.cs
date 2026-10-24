@@ -22,7 +22,7 @@ internal sealed class ChooseAppsWindow : Window
         Ui.Setup(this); WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var panel = new DockPanel { Margin = new Thickness(24), LastChildFill = true };
         var title = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
-        title.Children.Add(Ui.Text(preview.Name + " → " + preview.To, 20, true));
+        title.Children.Add(Ui.Text(preview.Name + " → " + store.PreviewTargetHost(preview), 20, true));
         title.Children.Add(Ui.Text("Apply in these apps:", secondary: true));
         DockPanel.SetDock(title, Dock.Top); panel.Children.Add(title);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };

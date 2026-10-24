@@ -42,6 +42,10 @@
     { "id": "instagram", "name": "Instagram",
       "from": ["instagram.com", "www.instagram.com"],
       "to": "zzinstagram.com",
+      "apps": ["telegram"] },
+    { "id": "reddit", "name": "Reddit",
+      "from": ["reddit.com", "www.reddit.com", "old.reddit.com", "new.reddit.com", "m.reddit.com"],
+      "to": "vxreddit.com",
       "apps": ["telegram"] }
   ],
   "apps": [

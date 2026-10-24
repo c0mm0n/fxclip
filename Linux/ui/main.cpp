@@ -503,7 +503,7 @@ private:
         const QStringList descriptions{
             QStringLiteral("See whether the clipboard service is ready and open actionable diagnostics."),
             QStringLiteral("Choose which tracking parameters fxclip removes from copied links."),
-            QStringLiteral("Choose where X and Instagram links become preview-friendly mirrors."),
+            QStringLiteral("Choose where supported links become preview-friendly mirrors."),
             QStringLiteral("Keep links from selected websites unchanged."),
             QStringLiteral("Manage the user service, startup behavior and local settings file.")};
         row = qBound(0, row, titles.size() - 1);
@@ -513,7 +513,7 @@ private:
         pageInfoButton_->setVisible(row == 1 || row == 2);
         pageInfoButton_->setToolTip(row == 1
             ? QStringLiteral("fxclip removes the selected parameters and tracking prefixes. Amazon links can also have their referral path removed.")
-            : QStringLiteral("Choose which apps receive X and Instagram preview links. Changes apply when you select Apply."));
+            : QStringLiteral("Choose which apps receive preview links and which domains provide them. Third-party mirrors can receive links when previews are generated or when opened. Changes apply when you select Apply."));
         if (!startupError_.isEmpty()) {
             auto *label = new QLabel(startupError_, body_);
             label->setWordWrap(true);
@@ -568,6 +568,12 @@ private:
         bodyLayout_->addWidget(info);
     }
 
+    QString previewTargetHost(const QJsonObject &preview) const {
+        const auto setting = store_.settings().value("previews").toObject().value(preview.value("id").toString()).toObject();
+        const auto host = SettingsStore::canonicalPreviewHost(setting.value("targetHost").toString());
+        return host.isEmpty() ? preview.value("to").toString() : host;
+    }
+
     void buildPreviews() {
         for (const auto &value : store_.previews()) {
             const auto preview = value.toObject();
@@ -594,7 +600,7 @@ private:
                 const auto host = source.toString();
                 if (!host.startsWith("www.") && !host.startsWith("mobile.")) sources.append(host);
             }
-            auto *route = new QLabel(QStringLiteral("%1 → %2").arg(sources.join(QStringLiteral(", ")), preview.value("to").toString()), headingWidget);
+            auto *route = new QLabel(QStringLiteral("%1 → %2").arg(sources.join(QStringLiteral(", ")), previewTargetHost(preview)), headingWidget);
             route->setStyleSheet(QStringLiteral("color: palette(text);"));
             nameAndRoute->addWidget(name);
             nameAndRoute->addWidget(route);
@@ -640,6 +646,10 @@ private:
             change->setEnabled(store_.editable());
             footerLayout->addWidget(change);
             footerLayout->addStretch(1);
+            auto *edit = new QPushButton(QStringLiteral("Edit domain…"), footer);
+            edit->setEnabled(store_.editable());
+            footerLayout->addWidget(edit);
+            connect(edit, &QPushButton::clicked, this, [this, preview] { editPreviewDomain(preview); });
             layout->addWidget(footer);
             connect(change, &QPushButton::clicked, this, [this, id] { choosePreviewApps(id); });
             connect(enabled, &QCheckBox::toggled, this, [this, id](bool checked) {
@@ -1030,6 +1040,45 @@ private:
             dialog.accept();
         });
         updateAdd();
+        if (dialog.exec() == QDialog::Accepted) renderPage(2);
+    }
+
+    void editPreviewDomain(const QJsonObject &preview) {
+        const auto id = preview.value("id").toString();
+        QDialog dialog(this);
+        dialog.setWindowTitle(QStringLiteral("%1 preview domain").arg(preview.value("name").toString()));
+        dialog.setMinimumWidth(420);
+        auto *layout = new QVBoxLayout(&dialog);
+        auto *domain = new QLineEdit(previewTargetHost(preview), &dialog);
+        domain->setAccessibleName(QStringLiteral("Preview domain"));
+        layout->addWidget(new QLabel(QStringLiteral("Domain"), &dialog));
+        layout->addWidget(domain);
+        layout->addWidget(new QLabel(QStringLiteral("Default: %1").arg(preview.value("to").toString()), &dialog));
+        auto *error = new QLabel(&dialog);
+        error->setWordWrap(true);
+        error->setStyleSheet(QStringLiteral("color: #c0392b;"));
+        layout->addWidget(error);
+        auto *buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dialog);
+        auto *reset = buttons->addButton(QStringLiteral("Use Default"), QDialogButtonBox::ResetRole);
+        buttons->addButton(QStringLiteral("Save"), QDialogButtonBox::AcceptRole);
+        layout->addWidget(buttons);
+        const auto save = [this, id, &dialog, error](const QString &host) {
+            if (!store_.setPreviewTargetHost(id, host)) { error->setText(store_.error()); return; }
+            dialog.accept();
+        };
+        connect(reset, &QPushButton::clicked, &dialog, [save] { save(QString()); });
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, [domain, error, save] {
+            auto raw = domain->text();
+            raw.remove(QRegularExpression(QStringLiteral("^[\\x09-\\x0D ]+|[\\x09-\\x0D ]+$")));
+            const auto host = SettingsStore::canonicalPreviewHost(raw);
+            if (!raw.isEmpty() && host.isEmpty()) {
+                error->setText(QStringLiteral("Enter a domain only, such as preview.example."));
+                return;
+            }
+            save(host);
+        });
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        domain->selectAll();
         if (dialog.exec() == QDialog::Accepted) renderPage(2);
     }
 

@@ -12,7 +12,7 @@
 
 fxclip removes tracking from links while keeping useful details like video timestamps, searches and product options. Copy a link on desktop, share one on mobile, or let a self-hosted Telegram bot clean messages for your group.
 
-It strips common trackers such as `utm_*` and `fbclid`, plus site-specific extras from X, YouTube, Instagram, TikTok, Spotify, Amazon, AliExpress, Facebook, LinkedIn and Reddit. Optional preview mirrors make X and Instagram links easier to preview in chat.
+It strips common trackers such as `utm_*` and `fbclid`, plus site-specific extras from X, YouTube, Instagram, TikTok, Spotify, Amazon, AliExpress, Facebook, LinkedIn and Reddit. Optional preview mirrors make X, Instagram and Reddit links easier to preview in chat.
 
 ![fxclip settings on macOS](docs/images/overview.png)
 
@@ -31,7 +31,9 @@ It strips common trackers such as `utm_*` and `fbclid`, plus site-specific extra
 
 On desktop, fxclip cleans the clipboard automatically. Choose which sites to clean and exclude websites. On macOS and Windows, you can also pause cleaning or skip the next copy. Files and images are left alone; rich content is only changed when its text is a single bare link.
 
-App previews are optional. By default, X links can use `fxtwitter.com` and Instagram links can use `zzinstagram.com` in Telegram. On desktop, switching to another app restores the clean original. Mobile sharing sends the appropriate link to the destination you choose.
+App previews are optional. By default, X links can use `fxtwitter.com` and Instagram links can use `zzinstagram.com`, and Reddit links can use `vxreddit.com` in Telegram. On desktop, switching to another app restores the clean original. Mobile sharing sends the appropriate link to the destination you choose.
+
+Each App previews screen lets you switch a site on or off, edit its mirror domain, or restore the built-in provider. These choices use the same settings format across platforms. A previous choice to decline preview mirrors is preserved when new sites are added.
 
 The Telegram bot uses the same cleaning rules. It stays silent when the final link is unchanged, including matching preview links already prepared by a fxclip client, with one optional exception: enhanced previews can add a thumbnail, title and clean link for a plain YouTube URL, even when it is already clean. This fetches metadata directly from YouTube and can duplicate a working Telegram preview. A tracker-free original can also become a mirror link when previews are enabled. Members choose their own behavior; admins control group activation and defaults. Its menus support English and French.
 

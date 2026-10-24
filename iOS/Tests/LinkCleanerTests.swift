@@ -57,6 +57,94 @@ final class LinkCleanerTests: XCTestCase {
         XCTAssertFalse(later.movedAside)
     }
 
+    func testCustomPreviewRoundTripsToPrimarySourceAndShareDestinations() throws {
+        let rules = try rules()
+        var user = UserSettings()
+        for preview in rules.previews {
+            let host = "custom-\(preview.id).example"
+            user.previews[preview.id] = .init(enabled: true, apps: ["telegram"],
+                                             targetHost: " \t\(host.uppercased()).\n")
+            let cleaner = LinkCleaner(rules: rules, user: user)
+            // Source aliases restore to the built-in rule's primary source, not a guessed alias.
+            let original = "https://\(try XCTUnwrap(preview.from.last))/a/1"
+            let native = "https://\(try XCTUnwrap(preview.from.first))/a/1"
+            let mirrored = cleaner.telegramPreview(original)
+            XCTAssertEqual(mirrored, "https://\(host)/a/1")
+            let clean = cleaner.clean(mirrored + "?utm_source=share").text
+            XCTAssertEqual(clean, native)
+
+            let item = DestinationLink(clean: clean, cleaner: cleaner)
+            let sheet = UIActivityViewController(activityItems: [item], applicationActivities: nil)
+            for destination: UIActivity.ActivityType? in [nil, .mail, .copyToPasteboard] {
+                XCTAssertEqual(item.activityViewController(sheet, itemForActivityType: destination) as? URL,
+                               URL(string: native))
+            }
+            XCTAssertEqual(item.activityViewController(sheet, itemForActivityType: .init("ph.telegra.Telegraph.Share")) as? URL,
+                           URL(string: mirrored))
+        }
+    }
+
+    func testCustomPreviewStillRestoresAfterDisablingOrRemovingApps() throws {
+        let rules = try rules()
+        var user = UserSettings()
+        user.previews["x"] = .init(enabled: true, apps: ["telegram"], targetHost: "Custom.Example.")
+        let native = "https://x.com/a/status/1"
+        let mirrored = LinkCleaner(rules: rules, user: user).telegramPreview(native)
+        XCTAssertEqual(mirrored, "https://custom.example/a/status/1")
+
+        for (enabled, apps) in [(false, ["telegram"]), (true, []), (false, [])] {
+            user.previews["x"] = .init(enabled: enabled, apps: apps, targetHost: "Custom.Example.")
+            let cleaner = LinkCleaner(rules: rules, user: user)
+            XCTAssertEqual(cleaner.telegramPreview(native), native)
+            XCTAssertEqual(cleaner.clean(mirrored).text, native)
+            XCTAssertEqual(cleaner.clean("http://CUSTOM.example/a/status/1?s=20").text, native)
+            XCTAssertEqual(cleaner.clean("https://fxtwitter.com/a/status/1").text, native)
+        }
+    }
+
+    func testInvalidAndUnknownCustomProvidersAreIgnored() throws {
+        let rules = try rules()
+        for invalid in ["https://custom.example", "custom.example/path", "custom.example:8443", "custom.example.."] {
+            var user = UserSettings()
+            user.previews["x"] = .init(enabled: true, apps: ["telegram"], targetHost: invalid)
+            user.previews["unknown"] = .init(enabled: true, apps: ["telegram"], targetHost: "unknown.example")
+            let cleaner = LinkCleaner(rules: rules, user: user)
+            XCTAssertEqual(cleaner.clean("https://custom.example/a").text, "https://custom.example/a")
+            XCTAssertEqual(cleaner.clean("https://unknown.example/a").text, "https://unknown.example/a")
+            XCTAssertEqual(cleaner.telegramPreview("https://x.com/a"), "https://fxtwitter.com/a")
+            XCTAssertEqual(cleaner.clean("https://fxtwitter.com/a").text, "https://x.com/a")
+        }
+    }
+
+    func testAmbiguousCustomProviderIsNotRestoredToAnArbitrarySource() throws {
+        var user = UserSettings()
+        user.previews["x"] = .init(enabled: true, apps: ["telegram"], targetHost: "shared.example")
+        // Disabled rules still count: an old preview could have come from either website.
+        user.previews["instagram"] = .init(enabled: false, apps: [], targetHost: " SHARED.Example. ")
+        let rules = try rules()
+        for ordered in [rules, { var reversed = rules; reversed.previews.reverse(); return reversed }()] {
+            let cleaner = LinkCleaner(rules: ordered, user: user)
+            XCTAssertEqual(cleaner.clean("https://shared.example/a?utm_source=share").text, "https://shared.example/a")
+            XCTAssertEqual(cleaner.clean("https://fxtwitter.com/a").text, "https://x.com/a")
+            XCTAssertEqual(cleaner.clean("https://zzinstagram.com/a").text, "https://instagram.com/a")
+        }
+    }
+
+    func testCustomProviderCannotRewriteAnOriginalSiteIntoAnotherSite() throws {
+        var user = UserSettings()
+        user.previews["instagram"] = .init(enabled: true, apps: ["telegram"], targetHost: "x.com")
+        let cleaner = LinkCleaner(rules: try rules(), user: user)
+        XCTAssertEqual(cleaner.clean("https://x.com/a/status/1").text, "https://x.com/a/status/1")
+    }
+
+    func testCustomProviderCannotOverrideBuiltInProviderIdentity() throws {
+        var user = UserSettings()
+        user.previews["x"] = .init(enabled: true, apps: ["telegram"], targetHost: "ZZINSTAGRAM.com.")
+        let cleaner = LinkCleaner(rules: try rules(), user: user)
+        XCTAssertEqual(cleaner.clean("https://zzinstagram.com/p/abc/").text, "https://instagram.com/p/abc/")
+        XCTAssertEqual(cleaner.clean("https://fxtwitter.com/a").text, "https://x.com/a")
+    }
+
     func testTelegramShareGetsThePreviewOtherDestinationsTheCleanLink() throws {
         let cleaner = LinkCleaner(rules: try rules(), user: UserSettings())
         let clean = cleaner.clean("https://x.com/a/status/1?s=20&t=abc").text

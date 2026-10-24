@@ -6,11 +6,13 @@ public struct UserSettings: Codable, Equatable, Sendable {
     public var version = 1
     /// "All websites" trackers (utm_*, fbclid…).
     public var trackersEverywhere = true
+    /// Default for preview rules without an explicit user choice, including new built-in rules.
+    public var previewDefaultsEnabled = true
     /// Tracker sites switched off, by site id.
     public var disabledSites: Set<String> = []
     /// Links from these hosts are left exactly as copied.
     public var neverClean: [SkipHost] = []
-    /// Per preview link (by id): on/off and its apps. Missing = built-in default.
+    /// Per preview link (by id): on/off, apps and optional provider host. Missing = built-in default.
     public var previews: [String: PreviewSetting] = [:]
     /// Apps the user added through "Choose apps…" (id = bundle ID).
     public var addedApps: [Rules.App] = []
@@ -18,9 +20,11 @@ public struct UserSettings: Codable, Equatable, Sendable {
     public struct PreviewSetting: Codable, Equatable, Sendable {
         public var enabled: Bool
         public var apps: [String]
-        public init(enabled: Bool, apps: [String]) {
+        public var targetHost: String?
+        public init(enabled: Bool, apps: [String], targetHost: String? = nil) {
             self.enabled = enabled
             self.apps = apps
+            self.targetHost = targetHost
         }
     }
 
@@ -35,6 +39,9 @@ public struct UserSettings: Codable, Equatable, Sendable {
         disabledSites = try c.decodeIfPresent(Set<String>.self, forKey: .disabledSites) ?? d.disabledSites
         neverClean = try c.decodeIfPresent([SkipHost].self, forKey: .neverClean) ?? d.neverClean
         previews = try c.decodeIfPresent([String: PreviewSetting].self, forKey: .previews) ?? d.previews
+        previewDefaultsEnabled = c.contains(.previewDefaultsEnabled)
+            ? try c.decodeIfPresent(Bool.self, forKey: .previewDefaultsEnabled) ?? d.previewDefaultsEnabled
+            : !(previews["x"]?.enabled == false && previews["instagram"]?.enabled == false)
         addedApps = try c.decodeIfPresent([Rules.App].self, forKey: .addedApps) ?? d.addedApps
     }
 }
@@ -72,10 +79,11 @@ extension Rules {
         r.neverClean = user.neverClean
         r.apps += user.addedApps.filter { added in !apps.contains { $0.id == added.id } }
         r.previews = previews.compactMap { p in
-            guard let s = user.previews[p.id] else { return p }
+            guard let s = user.previews[p.id] else { return user.previewDefaultsEnabled ? p : nil }
             guard s.enabled else { return nil }
             var p = p
             p.apps = s.apps
+            if let raw = s.targetHost, let host = Self.canonicalPreviewHost(raw) { p.to = host }
             return p
         }
         return r

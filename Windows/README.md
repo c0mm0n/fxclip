@@ -1,6 +1,8 @@
 # fxclip for Windows
 
-Clean links, ready to share. fxclip removes tracking from copied links and optionally adapts X and Instagram links for better previews in the apps you choose. Runs in the system tray on Windows 10/11, x64.
+Clean links, ready to share. fxclip removes tracking from copied links and optionally adapts X, Instagram and Reddit links for better previews in the apps you choose. Runs in the system tray on Windows 10/11, x64.
+
+Open **App previews** to control each supported site and change its mirror domain. **Use Default** restores the built-in provider; turning a site off preserves its domain and app choices. Provider settings use the same format across platforms.
 
 ## Install
 

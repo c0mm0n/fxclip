@@ -22,7 +22,7 @@ struct CleanLinkIntent: AppIntent {
 
 struct PreviewLinkIntent: AppIntent {
     static var title: LocalizedStringResource = "Preview link"
-    static var description = IntentDescription("Cleans the links, then rewrites them to the preview mirrors Telegram uses (fxtwitter, zzinstagram).")
+    static var description = IntentDescription("Cleans supported links, then rewrites them to your chosen preview domains for Telegram.")
     static var openAppWhenRun = false
 
     @Parameter(title: "Text")

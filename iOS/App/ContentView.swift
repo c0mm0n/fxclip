@@ -51,7 +51,7 @@ private struct ShareSection: View {
                 }
             }
             .padding(.vertical, 6)
-            Step(1, "In X, Instagram or any app, tap **Share** on a post or a link.")
+            Step(1, "In X, Instagram, Reddit or any app, tap **Share** on a post or a link.")
             Step(2, "Tap **fxclip**. Not in the row? Swipe to the end › More.")
             Step(3, "Pick your **Telegram** chat: it gets the preview link. Every other app, and Copy, get the clean link.")
         }
@@ -135,21 +135,76 @@ struct CleaningPage: View {
 
 struct PreviewsPage: View {
     @EnvironmentObject private var model: AppModel
+    @State private var editing: ProviderChoice?
+
+    private struct ProviderChoice: Identifiable { let id: String }
 
     var body: some View {
         List {
             Section {
                 ForEach(model.builtins.previews, id: \.id) { p in
-                    Toggle(isOn: Binding(get: { model.previewEnabled(p) },
-                                         set: { model.setPreview(p, enabled: $0) })) {
-                        SettingLabel(title: p.name, detail: "→ \(p.to) in \(model.appNames(p))")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: Binding(get: { model.previewEnabled(p) },
+                                             set: { model.setPreview(p, enabled: $0) })) {
+                            SettingLabel(title: p.name, detail: "→ \(model.previewTargetHost(p)) in \(model.appNames(p))")
+                        }
+                        Button("Edit domain…") { editing = ProviderChoice(id: p.id) }
+                            .font(.subheadline).buttonStyle(.borderless)
                     }
                 }
             } footer: {
-                Text("Chats show a real preview of X and Instagram posts when the link goes through these mirrors. Only the apps named get the preview link; every other app gets the clean original. The mirrors are run by third parties and see a link only when someone opens it.")
+                Text("Chats show a real preview of supported posts when the link goes through these mirrors. Only the apps named get the preview link; every other app gets the clean original. Third-party mirrors can receive links when previews are generated or when someone opens them.")
             }
         }
         .navigationTitle("App previews")
+        .sheet(item: $editing) { choice in
+            if let p = model.builtins.previews.first(where: { $0.id == choice.id }) {
+                PreviewProviderSheet(preview: p, target: model.previewTargetHost(p)) {
+                    model.setPreview(p, targetHost: $0)
+                }
+            }
+        }
+    }
+}
+
+private struct PreviewProviderSheet: View {
+    let preview: Rules.Preview
+    let save: (String?) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var domain: String
+    @State private var error = false
+
+    init(preview: Rules.Preview, target: String, save: @escaping (String?) -> Void) {
+        self.preview = preview
+        self.save = save
+        _domain = State(initialValue: target)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Domain", text: $domain, prompt: Text(preview.to))
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .keyboardType(.URL).onSubmit(apply)
+                    if error { Text("Enter a domain only, such as preview.example.").foregroundStyle(.red) }
+                } footer: { Text("Default: \(preview.to)") }
+                Button("Use Default") { save(nil); dismiss() }
+            }
+            .navigationTitle("\(preview.name) domain").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Save", action: apply) }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func apply() {
+        let raw = domain.trimmingCharacters(in: CharacterSet(charactersIn: " \t\r\n\u{000B}\u{000C}"))
+        guard raw.isEmpty || Rules.canonicalPreviewHost(raw) != nil else { error = true; return }
+        save(raw.isEmpty ? nil : Rules.canonicalPreviewHost(raw))
+        dismiss()
     }
 }
 

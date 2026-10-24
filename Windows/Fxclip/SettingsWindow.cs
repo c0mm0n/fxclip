@@ -166,18 +166,21 @@ internal sealed class SettingsWindow : Window
     }
     private void Previews()
     {
-        Header("App previews", "An optional extra to link cleaning: adapt X and Instagram links for better previews in the destination apps you choose. Other apps get the clean original. Mirrors are run by third parties: they see a link only when someone opens it.");
+        Header("App previews", "An optional extra to link cleaning: adapt supported links for better previews in the destination apps you choose. Other apps get the clean original. Third-party mirrors can receive links when previews are generated or when someone opens them.");
         foreach (var p in store.Builtins.Previews)
         {
             var setting = store.Setting(p);
             var panel = new StackPanel();
             var label = new StackPanel(); label.Children.Add(Ui.Text(p.Name, 17, true));
-            label.Children.Add(Ui.Text(string.Join(", ", p.From.Where(h => !h.StartsWith("www.") && !h.StartsWith("mobile."))) + " → " + p.To, 13, secondary: true));
+            label.Children.Add(Ui.Text(string.Join(", ", p.From.Where(h => !h.StartsWith("www.") && !h.StartsWith("mobile."))) + " → " + store.PreviewTargetHost(p), 13, secondary: true));
             panel.Children.Add(Ui.Row(label, Ui.Toggle("Enable " + p.Name + " preview links", setting.Enabled, on => { store.User.Previews[p.Id] = store.Setting(p) with { Enabled = on }; store.Save(); })));
             var apps = Chips(setting.Apps); apps.Margin = new Thickness(0, 10, 0, 0);
             var change = Ui.Button(setting.Apps.Length == 0 ? "Choose apps…" : "＋ Change apps", () => new ChooseAppsWindow(store, p) { Owner = this }.ShowDialog());
             change.Padding = new Thickness(10, 3, 10, 3); change.MinHeight = 28; change.VerticalAlignment = VerticalAlignment.Center;
             apps.Children.Add(change);
+            var edit = Ui.Button("Edit domain…", () => new PreviewProviderWindow(store, p) { Owner = this }.ShowDialog());
+            edit.Padding = new Thickness(10, 3, 10, 3); edit.MinHeight = 28;
+            apps.Children.Add(edit);
             panel.Children.Add(apps);
             page.Children.Add(Ui.Card(panel));
         }

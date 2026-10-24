@@ -1,10 +1,12 @@
 # fxclip for iOS
 
-Clean links, ready to share. fxclip removes tracking from links on iPhone and iPad (iOS 16+), with optional X and Instagram previews for Telegram. It is **source only**: there is no App Store release or signed download. Build and sign it with your own Apple account using the [build guide below](#build-it-yourself).
+Clean links, ready to share. fxclip removes tracking from links on iPhone and iPad (iOS 16+), with optional X, Instagram and Reddit previews for Telegram. It is **source only**: there is no App Store release or signed download. Build and sign it with your own Apple account using the [build guide below](#build-it-yourself).
+
+Open **App previews** to control each supported site and change its mirror domain. **Use Default** restores the built-in provider; turning a site off preserves its domain and app choices. Provider settings use the same format across platforms.
 
 ## How to use it
 
-**Share › fxclip.** In X, Instagram or any app, tap Share on a post, then fxclip. The share sheet
+**Share › fxclip.** In X, Instagram, Reddit or any app, tap Share on a post, then fxclip. The share sheet
 opens again with the cleaned link. With app previews enabled, Telegram gets the preview link
 (`fxtwitter.com`, `zzinstagram.com`); every other app and Copy get the clean original. Choose
 your destination as usual.
