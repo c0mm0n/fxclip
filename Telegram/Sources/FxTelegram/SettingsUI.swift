@@ -69,6 +69,31 @@ struct SettingsUI {
         return SettingsUI(text: text, markup: ["inline_keyboard": rows])
     }
 
+    static func welcome(chatID: Int64, username: String) -> SettingsUI {
+        SettingsUI(text: "Bonjour 👋 Je nettoie les liens et améliore leurs aperçus. Chacun peut choisir son mode dans « Mes réglages », les admins règlent ce groupe ci-dessous.",
+                   markup: ["inline_keyboard": [
+                    [personalLink(username: username)],
+                    [button("⚙️ Réglage du groupe", "chat:\(chatID):show")],
+                   ]])
+    }
+
+    static func chat(_ chat: Chat, settings: ChatSettings, enabled: Bool, inherited: Bool,
+                     username: String) -> SettingsUI {
+        let key = "chat:\(chat.id):"
+        let text = "<b>Réglage de ce groupe</b>\n\n<b>Nettoyage : \(enabled ? "activé" : "désactivé")</b>\n<b>Mode\(inherited ? " général appliqué" : "") : \(title(settings.mode))</b>\n\(outcome(settings.mode))\n\nAperçus améliorés : \(settings.previews ? "activés" : "désactivés").\nLes administrateurs règlent uniquement ce groupe. Un choix personnel reste prioritaire lorsque le nettoyage est activé."
+        var rows = [[button(enabled ? "⏸ Désactiver le nettoyage" : "✅ Activer le nettoyage", key + (enabled ? "disable" : "enable"))]]
+        rows += [Mode.reply, .replace, .off].map { mode in
+            [button("\(settings.mode == mode ? "✓ " : "")\(title(mode))", key + mode.rawValue)]
+        }
+        rows.append([button(settings.previews ? "Désactiver les aperçus améliorés" : "Activer les aperçus améliorés", key + (settings.previews ? "previews_off" : "previews_on"))])
+        rows.append([personalLink(username: username)])
+        return SettingsUI(text: text, markup: ["inline_keyboard": rows])
+    }
+
+    private static func personalLink(username: String) -> [String: String] {
+        ["text": "⚙️ Mes réglages", "url": "https://t.me/\(username)?start=settings"]
+    }
+
     static func group(_ group: KnownGroup, enabled: Bool, rights: ChatMember?) -> SettingsUI {
         let chat = group.chat
         var text = "<b>\(escaped(chat.title ?? "Groupe"))</b>\nIdentifiant : \(chat.id)\n\n<b>Nettoyage : \(enabled ? "activé" : "désactivé")</b>\nDésactivé, aucun message n’est nettoyé, même avec un choix personnel. Le mode /fxclip du groupe reste inchangé."

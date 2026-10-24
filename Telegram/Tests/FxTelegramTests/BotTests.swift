@@ -496,11 +496,196 @@ final class BotTests: XCTestCase {
         XCTAssertEqual(api.methods, ["getBusinessConnection"])
     }
 
-    func membership(_ fields: [String: Any], chatID: Int64 = -200, type: String = "supergroup", title: String = "Test group") async throws {
-        let update = try decode(Update.self, from: ["update_id": 3, "my_chat_member": [
+    func membership(_ fields: [String: Any], chatID: Int64 = -200, type: String = "supergroup", title: String = "Test group",
+                    old: [String: Any]? = nil) async throws {
+        var event: [String: Any] = [
             "chat": ["id": chatID, "type": type, "title": title], "new_chat_member": fields,
-        ]])
+        ]
+        if let old { event["old_chat_member"] = old }
+        let update = try decode(Update.self, from: ["update_id": 3, "my_chat_member": event])
         try await bot.handle(update, now: 1100)
+    }
+
+    func testJoinWelcomeIsShortWithPersonalDeepLinkAndGroupButtonEvenWhenDisabled() async throws {
+        try await membership(["status": "member"], old: ["status": "left"])
+        XCTAssertEqual(api.methods, ["sendMessage"])
+        XCTAssertEqual(sent["chat_id"] as? Int64, -200)
+        let text = try XCTUnwrap(sent["text"] as? String)
+        XCTAssertLessThan(text.count, 200)
+        XCTAssertEqual(text.filter { $0 == "." }.count, 2)
+        XCTAssertTrue(text.contains("nettoie les liens"))
+        let rows = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(sent["reply_markup"]))
+        XCTAssertEqual(rows.inline_keyboard.flatMap { $0 }.map(\.text), ["⚙️ Mes réglages", "⚙️ Réglage du groupe"])
+        XCTAssertEqual(rows.inline_keyboard[0][0].url, "https://t.me/fxclipbot?start=settings")
+        XCTAssertNil(rows.inline_keyboard[0][0].callback_data)
+        XCTAssertEqual(rows.inline_keyboard[1][0].callback_data, "fxclip:chat:-200:show")
+        XCTAssertEqual((sent["link_preview_options"] as? [String: Bool])?["is_disabled"], true)
+        XCTAssertNil(store.state.groupEnabled["-200"])
+    }
+
+    func testJoinFromKickedOrRestrictedNonmemberAlsoGreets() async throws {
+        for old: [String: Any] in [["status": "kicked"], ["status": "restricted", "is_member": false]] {
+            api.calls = []
+            try await membership(["status": "administrator"], old: old)
+            XCTAssertEqual(api.methods, ["sendMessage"])
+        }
+    }
+
+    func testMembershipPromotionRefreshDepartureAndMissingOldNeverGreet() async throws {
+        try await membership(["status": "member"])
+        try await membership(["status": "administrator"], old: ["status": "member"])
+        try await membership(["status": "administrator", "can_delete_messages": true], old: ["status": "administrator"])
+        try await membership(["status": "member"], old: ["status": "restricted", "is_member": true])
+        try await membership(["status": "left"], old: ["status": "member"])
+        try await membership(["status": "kicked"], old: ["status": "left"])
+        try await membership(["status": "member"], chatID: 8, type: "private", old: ["status": "left"])
+        XCTAssertTrue(api.calls.isEmpty)
+    }
+
+    func testReservedJoinCannotGreetAgainAfterRestart() async throws {
+        let update = try decode(Update.self, from: ["update_id": 12, "my_chat_member": [
+            "chat": ["id": -200, "type": "group"], "old_chat_member": ["status": "left"],
+            "new_chat_member": ["status": "member"],
+        ]])
+        if try store.reserve(update.update_id) { try await bot.handle(update) }
+        let restarted = try StateStore(directory: directory)
+        if try restarted.reserve(update.update_id) { try await bot.handle(update); XCTFail("Already reserved") }
+        XCTAssertEqual(api.methods, ["sendMessage"])
+    }
+
+    func testDisabledGroupSetupAndFxclipPanelAreReachableWithoutStateChanges() async throws {
+        try store.setGroupEnabled(false, chatID: -100)
+        for command in ["/setup", "/fxclip", "/setup@fxclipbot"] {
+            api.calls = []
+            try await handle(["text": command])
+            XCTAssertEqual(api.methods, ["sendMessage"])
+            XCTAssertTrue((sent["text"] as? String)?.contains("Nettoyage : désactivé") == true)
+            let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(sent["reply_markup"]))
+            let buttons = markup.inline_keyboard.flatMap { $0 }
+            XCTAssertTrue(buttons.contains { $0.callback_data == "fxclip:chat:-100:enable" })
+            XCTAssertFalse(buttons.contains { $0.callback_data?.contains("secretary") == true })
+            XCTAssertEqual(buttons.last?.url, "https://t.me/fxclipbot?start=settings")
+            XCTAssertNil(buttons.last?.callback_data)
+        }
+        XCTAssertTrue(store.state.chats.isEmpty)
+        XCTAssertTrue(store.state.users.isEmpty)
+        XCTAssertEqual(store.state.groupEnabled["-100"], false)
+        api.calls = []; try await handle()
+        XCTAssertTrue(api.calls.isEmpty)
+    }
+
+    func testAdminGroupPanelChangesOnlyItsChatAndPersists() async throws {
+        var other = ChatSettings(); other.mode = .off
+        try store.set(other, chatID: -300)
+        try store.setMode(.reply, userID: 7)
+        for action in ["show", "enable", "replace", "previews_off", "off", "reply", "disable"] {
+            api.calls = []
+            try await callback("fxclip:chat:-200:\(action)", userID: 8, chatID: -200, chatType: "supergroup")
+            XCTAssertEqual(api.calls.first?.0, "getChatMember", action)
+            XCTAssertEqual(api.calls.first?.1["user_id"] as? Int64, 8, action)
+            XCTAssertTrue(api.calls.filter { $0.0 == "getChatMember" }.allSatisfy { $0.1["chat_id"] as? Int64 == -200 })
+            XCTAssertEqual(api.calls.last?.1["chat_id"] as? Int64, -200, action)
+            XCTAssertEqual(store.state.defaultMode, .reply)
+            XCTAssertEqual(store.state.users, ["7": .reply])
+            XCTAssertEqual(store.state.chats["-300"]?.mode, .off)
+            XCTAssertNil(store.state.groupEnabled["-300"])
+        }
+        XCTAssertEqual(store.state.chats["-200"]?.mode, .reply)
+        XCTAssertEqual(store.state.chats["-200"]?.previews, false)
+        let restored = try StateStore(directory: directory)
+        XCTAssertEqual(restored.state.groupEnabled["-200"], false)
+        XCTAssertEqual(restored.state.chats["-200"]?.mode, .reply)
+    }
+
+    func testEveryLocalGroupActionRejectsNonAdminWithPersonalSettingsHint() async throws {
+        api.admin = false
+        for action in ["show", "enable", "disable", "reply", "replace", "off", "previews_on", "previews_off"] {
+            api.calls = []
+            try await callback("fxclip:chat:-200:\(action)", userID: 8, chatID: -200, chatType: "group")
+            XCTAssertEqual(api.methods, ["getChatMember", "answerCallbackQuery"], action)
+            XCTAssertTrue((api.calls.last?.1["text"] as? String)?.hasPrefix("Réservé aux administrateurs") == true)
+            XCTAssertEqual(api.calls.last?.1["show_alert"] as? Bool, true)
+        }
+        XCTAssertTrue(store.state.chats.isEmpty)
+        XCTAssertTrue(store.state.users.isEmpty)
+        XCTAssertTrue(store.state.groupEnabled.isEmpty)
+    }
+
+    func testLocalGroupCallbackChecksRevokedAdminRightsOnNextClick() async throws {
+        try await callback("fxclip:chat:-200:reply", chatID: -200, chatType: "supergroup")
+        api.admin = false; api.calls = []
+        try await callback("fxclip:chat:-200:off", chatID: -200, chatType: "supergroup")
+        XCTAssertEqual(api.methods, ["getChatMember", "answerCallbackQuery"])
+        XCTAssertEqual(store.state.chats["-200"]?.mode, .reply)
+    }
+
+    func testForgedLocalGroupTargetsAndInvalidActionsAreDeniedBeforeRemoteEffects() async throws {
+        for (data, chatID, type): (String, Int64, String) in [
+            ("fxclip:chat:-300:enable", -200, "supergroup"),
+            ("fxclip:chat:-200:enable", -200, "private"),
+            ("fxclip:chat:-200:enable", 8, "private"),
+            ("fxclip:chat:-200:secretary", -200, "group"),
+            ("fxclip:chat:-200:default", -200, "group"),
+            ("fxclip:chat:no:enable", -200, "group"),
+            ("fxclip:chat:-200:enable:extra", -200, "group"),
+        ] {
+            api.calls = []
+            try await callback(data, chatID: chatID, chatType: type)
+            XCTAssertEqual(api.methods, ["answerCallbackQuery"], data)
+        }
+        XCTAssertTrue(store.state.groupEnabled.isEmpty)
+        XCTAssertTrue(store.state.chats.isEmpty)
+        XCTAssertTrue(store.state.users.isEmpty)
+        XCTAssertEqual(store.state.defaultMode, .reply)
+    }
+
+    func testReplaceSelectionAndActivationKeepCurrentSettingsWithoutDeletePermission() async throws {
+        api.canDelete = false
+        try await callback("fxclip:chat:-200:replace", chatID: -200, chatType: "supergroup")
+        XCTAssertEqual(api.methods, ["getChatMember", "getChatMember", "answerCallbackQuery"])
+        XCTAssertNil(store.state.chats["-200"])
+        XCTAssertTrue((api.calls.last?.1["text"] as? String)?.contains("Réglage inchangé") == true)
+        var settings = ChatSettings(); settings.mode = .replace
+        try store.set(settings, chatID: -200)
+        try store.setGroupEnabled(false, chatID: -200)
+        api.calls = []
+        try await callback("fxclip:chat:-200:enable", chatID: -200, chatType: "supergroup")
+        XCTAssertEqual(store.state.groupEnabled["-200"], false)
+        XCTAssertEqual(store.state.chats["-200"]?.mode, .replace)
+        XCTAssertFalse(api.methods.contains("editMessageText"))
+    }
+
+    func testLocalGroupPermissionsFailureDoesNotMutateSettings() async throws {
+        api.failMember = true
+        try await callback("fxclip:chat:-200:enable", chatID: -200, chatType: "group")
+        XCTAssertEqual(api.methods, ["getChatMember", "answerCallbackQuery"])
+        XCTAssertTrue(store.state.groupEnabled.isEmpty)
+    }
+
+    func testOwnerCanUseLocalPanelEvenWhenMemberLookupFails() async throws {
+        api.admin = false; api.failMember = true
+        try await callback("fxclip:chat:-200:enable", userID: 7, chatID: -200, chatType: "group")
+        XCTAssertEqual(api.methods, ["answerCallbackQuery", "editMessageText"])
+        XCTAssertEqual(store.state.groupEnabled["-200"], true)
+    }
+
+    func testPersonalPreferenceStillWinsAfterGroupAdminEnablesAndChangesMode() async throws {
+        try store.setMode(.off, userID: 7)
+        try await callback("fxclip:chat:-200:enable", chatID: -200, chatType: "supergroup")
+        try await callback("fxclip:chat:-200:replace", chatID: -200, chatType: "supergroup")
+        api.calls = []
+        try await handle(["chat": ["id": -200, "type": "supergroup"]])
+        XCTAssertTrue(api.calls.isEmpty)
+        XCTAssertEqual(store.state.users["7"], .off)
+    }
+
+    func testLegacyGroupCommandsRemainReachableWhenDisabledAndRejectSecretary() async throws {
+        try store.setGroupEnabled(false, chatID: -100)
+        try await handle(["text": "/fxclip reply"])
+        XCTAssertEqual(store.state.chats["-100"]?.mode, .reply)
+        try await handle(["text": "/fxclip secretary"])
+        XCTAssertEqual(store.state.chats["-100"]?.mode, .reply)
+        XCTAssertEqual(store.state.groupEnabled["-100"], false)
     }
 
     func testOldDeployedStateDecodesWithoutNewFields() throws {

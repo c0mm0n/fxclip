@@ -19,6 +19,14 @@ public final class Bot {
     public func handle(_ update: Update, now: Int = Int(Date().timeIntervalSince1970)) async throws {
         if let membership = update.my_chat_member {
             try store.discover(membership.chat, member: membership.new_chat_member)
+            // Only an explicit arrival is a greeting: missing old membership is ambiguous.
+            // The runtime reserves each update before this send, including disabled groups.
+            if membership.chat.isGroup, membership.old_chat_member?.isAbsent == true,
+               ["member", "administrator", "creator"].contains(membership.new_chat_member.status)
+                || (membership.new_chat_member.status == "restricted" && membership.new_chat_member.is_member == true) {
+                try await sendPanel(SettingsUI.welcome(chatID: membership.chat.id, username: username),
+                                    to: membership.chat.id)
+            }
         }
         // Discovery precedes eligibility, age and content checks, and never rewrites edits.
         for message in [update.message, update.edited_message].compactMap({ $0 }) {
@@ -74,13 +82,15 @@ public final class Bot {
             try await sendPanel(personalPanel(userID: user.id), to: message.chat.id)
             return
         }
-        guard isEnabled(chatID: message.chat.id) else { return }
         if command == "/start" || command == "/help" {
             try await reply("fxclip nettoie les liens et améliore leurs aperçus.\n\nOuvrez mes réglages en privé pour choisir le comportement de vos messages.\n\nAdmins : /fxclip affiche le réglage du groupe. Pour le changer : /fxclip reply, /fxclip replace, /fxclip off ou /fxclip previews on|off.\n\nLe bot lit les messages de ce groupe. Les liens nettoyés passent par Telegram et, pour certains aperçus, par un site miroir.", to: message, markup: privateSettingsLink)
             return
         }
-        var settings = store.state.chats[String(message.chat.id)] ?? ChatSettings()
-        if store.state.chats[String(message.chat.id)] == nil { settings.mode = store.state.defaultMode }
+        if message.chat.isGroup, command == "/setup" || (command == "/fxclip" && words.count == 1) {
+            try await sendPanel(chatPanel(message.chat), to: message.chat.id)
+            return
+        }
+        var settings = chatSettings(message.chat.id)
         if command == "/fxclip" {
             if words.count > 1 {
                 // Anonymous admin identities cannot be authenticated as a particular member.
@@ -89,7 +99,7 @@ public final class Bot {
                     try await reply("Seul un administrateur identifié du groupe peut changer ce réglage. Si vous publiez anonymement, utilisez votre profil personnel.", to: message)
                     return
                 }
-                if words.count == 2, let mode = Mode(rawValue: words[1]) {
+                if words.count == 2, let mode = Mode(rawValue: words[1]), mode != .secretary {
                     if mode == .replace, !(try await canDelete(in: message.chat)) {
                         try await reply("Pour activer le remplacement, donnez d’abord à fxclip le droit de supprimer les messages dans les réglages administrateurs du groupe.", to: message)
                         return
@@ -107,6 +117,7 @@ public final class Bot {
             try await reply("\(source) : \(SettingsUI.title(settings.mode).lowercased()).\n\n\(SettingsUI.outcome(settings.mode))\n\nAperçus améliorés : \(settings.previews ? "activés" : "désactivés").\nUn choix personnel passe avant ce mode, y compris /fxclip off, tant que le nettoyage est activé pour ce groupe. Choisissez le vôtre en privé.\n\nAdmins : /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off", to: message, markup: privateSettingsLink)
             return
         }
+        guard isEnabled(chatID: message.chat.id) else { return }
         if message.sender_chat == nil, let user = message.from,
            let personal = store.state.users[String(user.id)] { settings.mode = personal }
         guard ["group", "supergroup", "private"].contains(message.chat.type),
@@ -181,6 +192,18 @@ public final class Bot {
                             owner: allowedOwners.contains(userID))
     }
 
+    private func chatSettings(_ chatID: Int64) -> ChatSettings {
+        if let settings = store.state.chats[String(chatID)] { return settings }
+        var settings = ChatSettings()
+        settings.mode = store.state.defaultMode
+        return settings
+    }
+
+    private func chatPanel(_ chat: Chat) -> SettingsUI {
+        SettingsUI.chat(chat, settings: chatSettings(chat.id), enabled: isEnabled(chatID: chat.id),
+                        inherited: store.state.chats[String(chat.id)] == nil, username: username)
+    }
+
     private func isEnabled(chatID: Int64) -> Bool {
         store.state.groupEnabled[String(chatID)] ?? allowedChats.contains(chatID)
     }
@@ -197,7 +220,8 @@ public final class Bot {
         if messageID != nil, previousText == panel.plainText, let previousMarkup,
            previousMarkup == (try? decode(InlineKeyboardMarkup.self, from: panel.markup)) { return }
         var parameters: [String: Any] = ["chat_id": chatID, "text": panel.text,
-            "parse_mode": "HTML", "reply_markup": panel.markup]
+            "parse_mode": "HTML", "reply_markup": panel.markup,
+            "link_preview_options": ["is_disabled": true]]
         if let messageID {
             parameters["message_id"] = messageID
             do {
@@ -212,12 +236,16 @@ public final class Bot {
     }
 
     private func settingsCallback(_ callback: CallbackQuery) async throws {
+        let parts = (callback.data ?? "").split(separator: ":").map(String.init)
+        if parts.count >= 2, parts[0] == "fxclip", parts[1] == "chat" {
+            try await chatCallback(callback, parts: parts)
+            return
+        }
         guard let message = callback.message, message.chat.type == "private",
               message.chat.id == callback.from.id, callback.from.is_bot != true else {
             await answer(callback, "Ouvrez /settings dans votre conversation privée avec le bot.", alert: true)
             return
         }
-        let parts = (callback.data ?? "").split(separator: ":").map(String.init)
         if parts.first == "fxclip", parts.count >= 2, ["groups", "group"].contains(parts[1]) {
             // Every navigation, refresh and activation is owner-only, including old panels.
             guard allowedOwners.contains(callback.from.id) else {
@@ -260,6 +288,51 @@ public final class Bot {
         // Telegram rejects an unchanged edit as "message is not modified".
         guard message.text != panel.plainText else { return }
         try await sendPanel(panel, to: message.chat.id, messageID: message.message_id)
+    }
+
+    private func chatCallback(_ callback: CallbackQuery, parts: [String]) async throws {
+        guard parts.count == 4, let chatID = Int64(parts[2]),
+              let message = callback.message, message.chat.isGroup, message.chat.id == chatID,
+              callback.from.is_bot != true,
+              ["show", "enable", "disable", "reply", "replace", "off", "previews_on", "previews_off"].contains(parts[3]) else {
+            await answer(callback, "Ce bouton ne correspond pas à ce groupe. Ouvrez /setup.", alert: true)
+            return
+        }
+        // Owners keep their existing authority if Telegram's member lookup is unavailable.
+        // Everyone else must prove current group admin rights on every click, even old panels.
+        if !allowedOwners.contains(callback.from.id) {
+            let admin: Bool
+            do { admin = try await isAdmin(chatID: chatID, userID: callback.from.id) }
+            catch {
+                await answer(callback, "Impossible de vérifier vos droits. Réessayez.", alert: true)
+                return
+            }
+            guard admin else {
+                await answer(callback, "Réservé aux administrateurs du groupe. Utilisez « Mes réglages » pour votre choix personnel.", alert: true)
+                return
+            }
+        }
+        let action = parts[3]
+        var settings = chatSettings(chatID)
+        if action == "replace" || (action == "enable" && settings.mode == .replace) {
+            let mayDelete = (try? await canDelete(in: message.chat)) == true
+            guard mayDelete else {
+                await answer(callback, "Accordez à fxclip le droit de supprimer les messages avant d’activer le remplacement. Réglage inchangé.", alert: true)
+                return
+            }
+        }
+        if action == "enable" || action == "disable" {
+            try store.setGroupEnabled(action == "enable", chatID: chatID)
+        } else if let mode = Mode(rawValue: action) {
+            settings.mode = mode
+            try store.set(settings, chatID: chatID)
+        } else if action == "previews_on" || action == "previews_off" {
+            settings.previews = action == "previews_on"
+            try store.set(settings, chatID: chatID)
+        }
+        await answer(callback, action == "show" ? nil : "Réglage enregistré ✓")
+        try await sendPanel(chatPanel(message.chat), to: chatID, messageID: message.message_id,
+                            previousText: message.text, previousMarkup: message.reply_markup)
     }
 
     private func groupCallback(_ callback: CallbackQuery, message: Message, parts: [String]) async throws {

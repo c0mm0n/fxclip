@@ -34,6 +34,7 @@ public struct ChatMember: Codable, Equatable {
 
 public struct ChatMemberUpdated: Decodable {
     public let chat: Chat
+    public let old_chat_member: ChatMember?
     public let new_chat_member: ChatMember
 }
 

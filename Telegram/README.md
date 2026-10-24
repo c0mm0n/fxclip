@@ -26,6 +26,13 @@ Les administrateurs d’un groupe autorisé utilisent `/fxclip reply|replace|off
 et `/fxclip previews on|off`. Le choix d’une personne reste prioritaire,
 y compris si le réglage par défaut du groupe est désactivé.
 
+À l’ajout du bot, un court message de bienvenue propose **Mes réglages**
+à chaque membre. Le bouton **Réglage du groupe**, `/setup` ou `/fxclip`
+ouvre le menu du groupe : ses administrateurs peuvent activer le nettoyage
+et choisir le mode de leur propre conversation. Chaque action vérifie les
+droits actuels de la personne. Ils ne peuvent pas modifier le réglage général
+du bot, les autres groupes ou les préférences d’un membre.
+
 Les commandes `/mode reply|replace|secretary|off|default` restent disponibles.
 
 ## Secrétaire
