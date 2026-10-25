@@ -45,7 +45,9 @@ public final class Bot {
                ["member", "administrator", "creator"].contains(membership.new_chat_member.status)
                 || (membership.new_chat_member.status == "restricted" && membership.new_chat_member.is_member == true) {
                 try await sendPanel(SettingsUI.welcome(chatID: membership.chat.id, username: username,
-                                                      language: store.groupLanguage(membership.chat.id)),
+                                                      language: store.groupLanguage(membership.chat.id),
+                                                      enabled: isEnabled(chatID: membership.chat.id),
+                                                      groupTitle: membership.chat.title),
                                     to: membership.chat.id)
             }
         }
@@ -1126,7 +1128,7 @@ public final class Bot {
         guard parts.count == 4, let chatID = Int64(parts[2]),
               let message = callback.message, message.chat.isGroup, message.chat.id == chatID,
               callback.from.is_bot != true,
-              ["show", "mode", "language", "about", "enable", "disable", "reply", "replace", "off", "mode_default", "previews_on", "previews_off", "lang_en", "lang_fr", "close"].contains(parts[3]) else {
+              ["show", "activation", "mode", "language", "about", "enable", "disable", "reply", "replace", "off", "mode_default", "previews_on", "previews_off", "lang_en", "lang_fr", "close"].contains(parts[3]) else {
             await answer(callback, language.text("This button does not belong to this group. Open /setup.", "Ce bouton ne correspond pas à ce groupe. Ouvrez /setup."), alert: true)
             return
         }
@@ -1174,7 +1176,7 @@ public final class Bot {
             settings.previews = action == "previews_on"
             try store.set(settings, chatID: chatID)
         }
-        let navigation = ["show", "mode", "language", "about"].contains(action)
+        let navigation = ["show", "activation", "mode", "language", "about"].contains(action)
         let panelLanguage = store.groupLanguage(chatID)
         await answer(callback, navigation ? nil : panelLanguage.text("Saved for this group ✓", "Enregistré pour ce groupe ✓"))
         let section = navigation ? action : ["reply", "replace", "off", "mode_default"].contains(action) ? "mode"

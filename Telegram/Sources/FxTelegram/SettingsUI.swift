@@ -161,14 +161,24 @@ struct SettingsUI {
         return panel(text, rows)
     }
 
-    static func welcome(chatID: Int64, username: String, language: BotLanguage = .en) -> SettingsUI {
-        panel(scopeHeader("c:\(chatID)", language: language) + "\n\n" + language.text(
-            "Hello 👋 I clean links and improve previews. Admins manage this group. My preferences apply only to your messages, in enabled groups.",
-            "Bonjour 👋 Je nettoie les liens et améliore les aperçus. Les admins règlent ce groupe. Mes préférences concernent uniquement vos messages, dans les groupes activés."), [
-                [button(language.text("Admin · This group →", "Administration · Ce groupe →"), "chat:\(chatID):show")],
-                [personalLink(username: username, language: language)],
-                [closeButton(language: language, action: "chat:\(chatID):close")],
-            ])
+    static func welcome(chatID: Int64, username: String, language: BotLanguage = .en,
+                        enabled: Bool = false, groupTitle: String? = nil) -> SettingsUI {
+        let key = "chat:\(chatID):"
+        var text = "<b>fxclip · \(escaped(groupTitle ?? language.text("This group", "Ce groupe")))</b>"
+        text += "\n\n" + language.text("Hello 👋 I clean links and improve previews.", "Bonjour 👋 Je nettoie les liens et améliore les aperçus.")
+        text += "\n\n" + (enabled ? language.text(
+            "🟢 Active here. New links follow this group’s settings and your personal preferences.",
+            "🟢 Actif ici. Les nouveaux liens suivent les réglages du groupe et vos préférences personnelles.") : language.text(
+            "⏸ Not active yet. I won’t process links until a group admin activates me below. No command needed.",
+            "⏸ Pas encore actif. Je ne traite aucun lien tant qu’un admin du groupe ne m’active pas ci-dessous. Aucune commande à taper."))
+        var rows: [[[String: String]]] = []
+        if !enabled {
+            rows.append([button(language.text("🟢 Activate the bot…", "🟢 Activer le bot…"), key + "activation")])
+        }
+        rows.append([button(language.text("⚙️ Group settings", "⚙️ Réglages du groupe"), key + "show")])
+        rows.append([personalLink(username: username, language: language)])
+        rows.append([closeButton(language: language, action: key + "close")])
+        return panel(text, rows)
     }
 
     static func chat(_ chat: Chat, settings: ChatSettings, enabled: Bool, inherited: Bool,
@@ -180,6 +190,22 @@ struct SettingsUI {
         var text = scopeHeader(scope, groupTitle: chat.title ?? String(chat.id), language: language)
         var rows: [[[String: String]]] = []
         switch section {
+        case "activation":
+            text = String(text.prefix { $0 != "\n" }) + "\n" + language.text(
+                "Activation for everyone here", "Activation pour tout le monde ici")
+            if enabled {
+                text += "\n\n" + language.text("🟢 Already active here. New links follow the saved settings.",
+                                              "🟢 Déjà actif ici. Les nouveaux liens suivent les réglages enregistrés.")
+            } else {
+                text += "\n\n<b>" + language.text("Activate fxclip here?", "Activer fxclip ici ?") + "</b>"
+                text += "\n" + language.text("For new links in this group. Existing messages stay unchanged.",
+                                            "Pour les nouveaux liens de ce groupe. Les messages existants restent inchangés.")
+                text += "\n\n" + language.text("Default behavior: ", "Comportement par défaut : ") + title(settings.mode, language: language)
+                text += "\n" + outcome(settings.mode, language: language)
+                text += "\n\n" + resumeDisclosure(language: language)
+                rows.append([button(language.text("🟢 Activate in this group", "🟢 Activer dans ce groupe"), key + "enable")])
+            }
+            rows.append([button(language.text("← Settings", "← Réglages"), key + "show"), close])
         case "mode":
             text += "\n\n<b>\(language.text("Default behavior", "Comportement par défaut"))</b>\n"
             text += (inherited ? follow(scope: scope, language: language) + " · " : "") + title(settings.mode, language: language)

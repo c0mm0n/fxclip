@@ -71,6 +71,11 @@ Group admins open `/setup` or `/fxclip` for their own group's settings. The bot
 owner uses `/default` for bot defaults and `/groups` for discovered groups.
 Permissions are checked on every action; group admins cannot change other
 members' preferences or bot defaults. A join greeting links to personal settings.
+In a new group, the welcome message says the bot is not active and puts
+**🟢 Activate the bot… / Activer le bot…** first. An admin reviews the network and
+retention disclosure, then confirms **Activate in this group / Activer dans ce groupe**.
+No command is required; `/setup` remains an alternative. Joining never activates
+cleaning automatically, and an already active group's welcome shows its actual state.
 After the group panel is sent, `/setup` or bare `/fxclip` is removed if permitted;
 closing the panel never removes other messages.
 

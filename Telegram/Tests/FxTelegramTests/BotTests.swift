@@ -783,8 +783,9 @@ final class BotTests: XCTestCase {
         XCTAssertEqual(api.methods, ["sendMessage"])
         XCTAssertEqual(sent["chat_id"] as? Int64, -200)
         let text = try XCTUnwrap(sent["text"] as? String)
-        XCTAssertLessThan(text.count, 200)
+        XCTAssertLessThan(text.count, 350)
         XCTAssertTrue(text.contains("clean links"))
+        XCTAssertTrue(text.contains("Not active yet"))
         let rows = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(sent["reply_markup"]))
         let buttons = rows.inline_keyboard.flatMap { $0 }
         XCTAssertLessThanOrEqual(rows.inline_keyboard.count, 4)
@@ -792,6 +793,7 @@ final class BotTests: XCTestCase {
         XCTAssertTrue(personal.text.contains("My preferences"))
         XCTAssertNil(personal.callback_data)
         XCTAssertTrue(buttons.contains { $0.callback_data == "fxclip:chat:-200:show" })
+        XCTAssertEqual(buttons.first?.callback_data, "fxclip:chat:-200:activation")
         XCTAssertEqual((sent["link_preview_options"] as? [String: Bool])?["is_disabled"], true)
         XCTAssertNil(store.state.groupEnabled["-200"])
     }
