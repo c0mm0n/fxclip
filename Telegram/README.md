@@ -565,8 +565,9 @@ configuration: install new images explicitly.
 Operational failures log only a fixed method label, numeric error code and a
 closed reason category. Raw Telegram descriptions, request URLs and URLSession
 error descriptions are never printed. For a focused delivery investigation,
-`FXCLIP_DIAGNOSTICS=1` also logs request scope (private/business/other) and accepted
-send/edit method labels; it never logs text, URLs, tokens or user/chat/message IDs.
+`FXCLIP_DIAGNOSTICS=1` also logs request scope (private/business/other), Boolean
+private-input eligibility checks, and accepted send/edit method labels; it never
+logs text, URLs, tokens or user/chat/message IDs.
 Keep this temporary diagnostic switch off during normal operation.
 
 Cleaning runs locally on the server, but the bot communicates with Telegram.

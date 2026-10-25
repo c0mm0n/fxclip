@@ -90,6 +90,23 @@ import FxTelegram
                     let scope = update.message?.chat.type == "private" ? "private"
                         : update.business_message != nil ? "business" : "other"
                     print("Update handling started: \(scope).")
+                    if let message = update.message, message.chat.type == "private" {
+                        let checks: [(String, Bool)] = [
+                            ("fresh", Int(Date().timeIntervalSince1970) - message.date <= 300),
+                            ("human", message.from?.is_bot == false),
+                            ("self_chat", message.from?.id == message.chat.id),
+                            ("text", message.text != nil),
+                            ("protected", message.has_protected_content == true),
+                            ("paid", message.is_paid_post == true),
+                            ("automatic_forward", message.is_automatic_forward == true),
+                            ("sender_chat", message.sender_chat != nil),
+                            ("business_connection", message.business_connection_id != nil),
+                            ("business_sender", message.sender_business_bot != nil),
+                            ("code_formatting", (message.entities ?? []).contains { ["code", "pre"].contains($0.type) }),
+                            ("youtube", message.text.flatMap { YouTubePreview.videoID(in: $0.trimmingCharacters(in: .whitespacesAndNewlines)) } != nil)
+                        ]
+                        print("Private input checks: " + checks.map { "\($0.0)=\($0.1 ? 1 : 0)" }.joined(separator: ","))
+                    }
                 }
                 do { try await bot.handle(update) }
                 catch {
