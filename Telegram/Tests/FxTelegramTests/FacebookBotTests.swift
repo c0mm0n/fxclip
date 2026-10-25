@@ -251,9 +251,10 @@ extension BotTests {
         XCTAssertEqual(api.methods, ["sendMessage"])
         settings.previews = true
         try store.set(settings, chatID: -100)
-        for mode in [Mode.off, .secretary] {
+        for secretary in [false, true] {
             api.calls = []
-            try store.setMode(mode, userID: 7)
+            try store.setSecretary(secretary, userID: 7)
+            try store.setMode(.off, userID: 7)
             try await facebookHandle(facebookDirtyURL)
             XCTAssertTrue(api.calls.isEmpty)
         }

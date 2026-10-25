@@ -227,8 +227,9 @@ final class FacebookSourceBotTests: XCTestCase {
         try await handle()
         settings.previews = true
         try store.set(settings, chatID: -100)
-        for mode in [Mode.off, .secretary] {
-            try store.setMode(mode, userID: 7)
+        for secretary in [false, true] {
+            try store.setSecretary(secretary, userID: 7)
+            try store.setMode(.off, userID: 7)
             try await handle()
         }
         try store.setMode(nil, userID: 7)

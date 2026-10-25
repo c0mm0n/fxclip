@@ -112,7 +112,7 @@ public final class Bot {
                 else if let mode = Mode(rawValue: words[1]) { try store.setMode(mode, userID: user.id) }
             }
             if command == "/secretary", words.count == 2, ["on", "off"].contains(words[1]) {
-                try store.setMode(words[1] == "on" ? .secretary : .off, userID: user.id)
+                try store.setSecretary(words[1] == "on", userID: user.id)
             }
             try await sendPanel(personalPanel(userID: user.id), to: message.chat.id)
             return
@@ -167,7 +167,7 @@ public final class Bot {
         }
         guard isEnabled(chatID: message.chat.id) else { return }
         if message.sender_chat == nil, let user = message.from,
-           let personal = store.state.users[String(user.id)] { settings.mode = personal }
+           let personal = store.state.users[String(user.id)], personal != .secretary { settings.mode = personal }
         guard ["group", "supergroup", "private"].contains(message.chat.type),
               settings.mode != .off, settings.mode != .secretary else { return }
         let senderID = message.sender_chat == nil ? message.from?.id : nil
@@ -585,7 +585,7 @@ public final class Bot {
     private func secretary(_ message: Message, now: Int) async throws {
         guard message.chat.type == "private", now - message.date <= 300,
               let sender = message.from,
-              (store.state.users[String(sender.id)] ?? store.state.defaultMode) == .secretary,
+              store.secretaryEnabled(userID: sender.id),
               message.sender_business_bot == nil, message.has_protected_content != true,
               message.is_paid_post != true, let connectionID = message.business_connection_id else { return }
         // Fetch current rights, including after a restart or permission revocation.
@@ -638,7 +638,8 @@ public final class Bot {
     private func personalPanel(userID: Int64, section: String = "show") -> SettingsUI {
         SettingsUI.personal(mode: store.state.users[String(userID)], defaultMode: store.state.defaultMode,
                             owner: allowedOwners.contains(userID), preference: store.state.userLanguages[String(userID)],
-                            language: store.userLanguage(userID), section: section)
+                            language: store.userLanguage(userID), section: section,
+                            secretaryEnabled: store.secretaryEnabled(userID: userID))
     }
 
     private func configuredRewriter(chatID: Int64?, userID: Int64?) -> Rewriter {
@@ -798,6 +799,8 @@ public final class Bot {
                 // Navigation never changes preferences.
             } else if !ownerPanel && action == "default" {
                 try store.setMode(nil, userID: callback.from.id)
+            } else if !ownerPanel && action == "secretary_off" {
+                try store.setSecretary(false, userID: callback.from.id)
             } else if let mode = Mode(rawValue: action) {
                 if ownerPanel { try store.setDefault(mode) }
                 else { try store.setMode(mode, userID: callback.from.id) }
@@ -813,7 +816,7 @@ public final class Bot {
         let saved = ownerPanel ? language.text("Bot defaults saved ✓", "Réglages par défaut du bot enregistrés ✓")
             : language.text("Saved for your messages ✓", "Enregistré pour vos messages ✓")
         await answer(callback, navigation ? nil : saved)
-        let section = navigation ? action : !ownerPanel && action == "secretary" ? "secretary_setup" : "mode"
+        let section = navigation ? action : !ownerPanel && ["secretary", "secretary_off"].contains(action) ? "secretary_setup" : "mode"
         let panel = ownerPanel
             ? SettingsUI.defaults(mode: store.state.defaultMode, language: language, section: section)
             : personalPanel(userID: callback.from.id, section: section)

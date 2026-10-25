@@ -47,6 +47,49 @@ final class SettingsScopeUXTests: XCTestCase {
         }
     }
 
+    func testSecretaryStatusAndControlsAreIndependentOfEveryGroupChoice() throws {
+        for language in BotLanguage.allCases {
+            for mode: Mode? in [.reply, .replace, .off, nil] {
+                for enabled in [false, true] {
+                    for section in ["show", "mode", "secretary_setup"] {
+                        let panel = SettingsUI.personal(mode: mode, defaultMode: .reply, owner: false,
+                            language: language, section: section, secretaryEnabled: enabled)
+                        let status = language.text("Secretary · private chats: ", "Secrétaire · en privé : ")
+                            + (enabled ? language.text("On", "Activé") : language.text("Off", "Désactivé"))
+                        XCTAssertTrue(panel.plainText.contains(status), "\(mode?.rawValue ?? "default") \(section)")
+                        let actions = try uxActions(panel)
+                        if section == "secretary_setup" {
+                            XCTAssertTrue(actions.contains("fxclip:personal:\(enabled ? "secretary_off" : "secretary")"))
+                            XCTAssertFalse(actions.contains("fxclip:personal:\(enabled ? "secretary" : "secretary_off")"))
+                            XCTAssertTrue(panel.plainText.contains(language.text("never incoming", "jamais les messages reçus")))
+                            XCTAssertTrue(panel.plainText.contains(language.text("independent", "indépendant")))
+                        } else if section == "mode" {
+                            let selected = try uxRows(panel).flatMap { $0 }.filter { $0["text"]?.hasPrefix("✓ ") == true }
+                            XCTAssertEqual(selected.count, 1)
+                            XCTAssertEqual(selected.first?["callback_data"], "fxclip:personal:\(mode?.rawValue ?? "default")")
+                        }
+                        for stale in ["no fxclip replies", "no replies to my group messages", "replaces your personal group behavior",
+                                      "aucune réponse à mes messages de groupe", "remplace votre comportement personnel en groupe"] {
+                            XCTAssertFalse(panel.plainText.contains(stale), stale)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    func testLegacySecretaryIsShownAsFollowingGroupWithResolvedPrivateConsent() throws {
+        for enabled in [false, true] {
+            let panel = SettingsUI.personal(mode: .secretary, defaultMode: .reply, owner: false,
+                section: "mode", secretaryEnabled: enabled)
+            let selected = try uxRows(panel).flatMap { $0 }.filter { $0["text"]?.hasPrefix("✓ ") == true }
+            XCTAssertEqual(selected.first?["callback_data"], "fxclip:personal:default")
+            let setup = SettingsUI.personal(mode: .secretary, defaultMode: .reply, owner: false,
+                section: "secretary_setup", secretaryEnabled: enabled)
+            XCTAssertTrue(try uxActions(setup).contains("fxclip:personal:\(enabled ? "secretary_off" : "secretary")"))
+        }
+    }
+
     func testEveryPersonalDefaultAndGroupSectionExplainsItsScope() throws {
         let chat = Chat(id: -100, type: "supergroup", title: "Example <group> & friends")
         for language in BotLanguage.allCases {
@@ -467,7 +510,8 @@ extension BotTests {
         XCTAssertNil(store.state.personalLinkSettings["8"])
         XCTAssertNil(store.state.personalYouTubeCards["8"])
         XCTAssertNil(store.state.personalFacebookReels["8"])
-        XCTAssertEqual(store.state.users["8"], .secretary)
+        XCTAssertNil(store.state.users["8"])
+        XCTAssertTrue(store.secretaryEnabled(userID: 8))
         XCTAssertNil(store.state.chats["-100"]?.engineSettings)
         XCTAssertNil(store.state.chats["-100"]?.youTubeCards)
         XCTAssertNil(store.state.chats["-100"]?.facebookReels)
@@ -485,7 +529,8 @@ extension BotTests {
         }
         api.calls = []
         try await callback("fxclip:personal:secretary")
-        XCTAssertEqual(store.state.users["8"], .secretary)
+        XCTAssertNil(store.state.users["8"])
+        XCTAssertTrue(store.secretaryEnabled(userID: 8))
         XCTAssertTrue(try uxEditedPanel().plainText.contains("allow replies and edits"))
         XCTAssertFalse(try uxActions(uxEditedPanel()).contains("fxclip:personal:reply"))
         for action in ["reply", "replace", "off", "secretary"] {

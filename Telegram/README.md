@@ -8,7 +8,7 @@ using the [Docker setup](#docker-setup); this project does not configure a publi
 ## Settings / Réglages
 
 Open the bot privately with `/settings`. Start from **My preferences / Mes
-préférences**, then choose **Behavior / Comportement** or **Links & previews /
+préférences**, then choose **Group behavior / Comportement en groupe** or **Links & previews /
 Liens et aperçus**.
 
 | Scope / Portée | What changes / Ce qui change |
@@ -26,16 +26,18 @@ members with personal preferences.
 désactivation. Si le nettoyage du groupe est désactivé, aucun choix personnel ne
 peut le réactiver.
 
-In **Behavior / Comportement**, choose a cleaned reply that keeps the original,
+In **Group behavior / Comportement en groupe**, choose a cleaned reply that keeps the original,
 replacement with an author credit, or off. Replacement deletes the original only
 after the repost succeeds and permissions allow it; media, forwards and anonymous
 senders receive a reply instead. **Secretary / Secrétaire** only edits your own
 outgoing messages in connected private chats; see [Secretary Mode](#secretary-mode).
+Secretary has its own on/off choice and leaves group behavior unchanged.
 Behavior and link choices are separate.
 
-Dans **Comportement**, choisissez une réponse qui garde l’original, un
+Dans **Comportement en groupe**, choisissez une réponse qui garde l’original, un
 remplacement avec le nom de l’auteur, ou la désactivation. **Secrétaire** concerne
 uniquement vos messages sortants dans les conversations privées connectées.
+Son activation est indépendante et ne change pas le comportement en groupe.
 Changer les liens ne change pas ce comportement.
 
 Changes save immediately and apply to future messages. **Close / Fermer** only
@@ -308,7 +310,21 @@ modes, group activation and polling checkpoints survive the language upgrade.
 
 Enable **Secretary Mode** in @BotFather, then connect the bot in your account's
 Telegram automation settings. Choose accessible chats and grant reply/edit
-permission. Select **Secretary · private chats** in the bot's private settings.
+permission. Open **Secretary · private chats** in the bot's private settings and
+choose **Enable Secretary**. The dashboard and this page show its current status;
+use **Disable Secretary** on that page to stop private edits. Enabling or disabling
+Secretary leaves group replies, replacement and off choices unchanged. Changing
+group behavior also preserves Secretary's choice. The legacy `/mode secretary`
+command enables Secretary without replacing group behavior.
+
+Dans les réglages privés, ouvrez **Secrétaire · en privé**, puis **Activer
+Secrétaire**. Le tableau de bord et cette page indiquent son état ; **Désactiver
+Secrétaire** arrête les modifications en privé. Le comportement en groupe reste
+inchangé, et le modifier conserve aussi le choix Secrétaire.
+
+Existing Secretary consent is preserved when loading older state files, without
+rewriting them. A legacy personal Secretary mode now follows the group's behavior
+while keeping private edits enabled until explicitly disabled.
 
 The bot checks the current connection and rights before every edit. Only messages
 sent by that connection's owner are edited; incoming messages and messages sent
@@ -389,7 +405,9 @@ configuration: install new images explicitly.
    bot's deletion permission retains the original. Check media and forwards too.
 5. Select off, then follow the group setting, and confirm each outcome.
 6. Connect Secretary in an eligible private test chat. Your outgoing link is
-   edited in place; an incoming link stays intact. Revocation prevents edits.
+   edited in place; an incoming link stays intact. Enable and disable Secretary
+   and confirm that group behavior stays unchanged. Change group behavior and
+   confirm that Secretary's choice persists. Revocation prevents edits.
 
 ## Privacy and limits
 

@@ -189,6 +189,52 @@ final class RedditBotTests: XCTestCase {
         XCTAssertFalse(store.state.defaultRedditVideos)
     }
 
+    func testSecretaryEnabledWithMirrorDisabledStillRepliesWithNativeRedditVideo() async throws {
+        try enable()
+        try store.setSecretary(true, userID: 7)
+        store = try StateStore(directory: directory)
+        configureBot()
+        try await handle()
+        XCTAssertTrue(store.secretaryEnabled(userID: 7))
+        XCTAssertEqual(store.state.defaultLinkSettings.previews["reddit"]?.enabled, false)
+        XCTAssertEqual(provider.requestedIDs, ["abc123"])
+        XCTAssertEqual(api.methods, ["sendVideo"])
+        let video = try parameters("sendVideo")
+        XCTAssertEqual((video["video"] as? VideoUpload)?.data, provider.video)
+        XCTAssertEqual((video["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5)
+        try assertBare(video)
+        XCTAssertEqual(store.state.replyControls[receiptKey]?.posterID, 7)
+    }
+
+    func testLegacySecretaryConsentStillAllowsNativeRedditUsingGroupReplyChoice() async throws {
+        try enable()
+        var state = store.state
+        state.users["7"] = .secretary
+        try JSONEncoder().encode(state).write(to: directory.appendingPathComponent("state.json"))
+        store = try StateStore(directory: directory)
+        configureBot()
+        try await handle()
+        XCTAssertTrue(store.secretaryEnabled(userID: 7))
+        XCTAssertEqual(store.state.users["7"], .secretary)
+        XCTAssertEqual(store.state.defaultLinkSettings.previews["reddit"]?.enabled, false)
+        XCTAssertEqual(provider.requestedIDs, ["abc123"])
+        XCTAssertEqual(api.methods, ["sendVideo"])
+        try assertBare(parameters("sendVideo"))
+        XCTAssertEqual(store.state.replyControls[receiptKey]?.posterID, 7)
+    }
+
+    func testSecretaryEnabledDoesNotEnableRedditOrMirrorWithoutSeparateOptIn() async throws {
+        try mirror(false)
+        try store.setSecretary(true, userID: 7)
+        try await handle()
+        XCTAssertTrue(store.secretaryEnabled(userID: 7))
+        XCTAssertFalse(store.state.defaultRedditVideos)
+        XCTAssertTrue(store.state.personalRedditVideos.isEmpty)
+        XCTAssertEqual(store.state.defaultLinkSettings.previews["reddit"]?.enabled, false)
+        XCTAssertTrue(provider.requestedIDs.isEmpty)
+        XCTAssertTrue(api.calls.isEmpty)
+    }
+
     func testEnabledWithoutProviderKeepsConfiguredTextPath() async throws {
         try enable()
         configureBot(withProvider: false)
@@ -283,8 +329,9 @@ final class RedditBotTests: XCTestCase {
 
     func testModeGroupAndMasterPreviewGatesNeverFetch() async throws {
         try enable()
-        for mode in [Mode.off, .secretary] {
-            try store.setMode(mode, userID: 7)
+        for secretary in [false, true] {
+            try store.setSecretary(secretary, userID: 7)
+            try store.setMode(.off, userID: 7)
             try await handle(dirty)
         }
         try store.setMode(nil, userID: 7)

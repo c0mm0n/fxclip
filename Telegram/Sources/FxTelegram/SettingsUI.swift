@@ -32,8 +32,8 @@ struct SettingsUI {
                 "Reposts clean text with the author’s name, then deletes the original if allowed. Media and forwarded messages get a reply instead.",
                 "Republie le texte propre avec le nom de l’auteur, puis supprime l’original si autorisé. Les médias et transferts reçoivent une réponse.")
         case .secretary:
-            return language.text("Edits only your outgoing messages in connected private chats. Your group messages get no fxclip replies.",
-                                 "Modifie uniquement vos messages sortants dans les conversations privées connectées. Vos messages de groupe ne reçoivent aucune réponse fxclip.")
+            return language.text("Edits only your outgoing messages in connected private chats. Group behavior stays unchanged.",
+                                 "Modifie uniquement vos messages sortants dans les conversations privées connectées. Le comportement en groupe reste inchangé.")
         case .off:
             return language.text("No replies or edits for these messages.", "Aucune réponse ni modification pour ces messages.")
         }
@@ -41,41 +41,51 @@ struct SettingsUI {
 
     static func personal(mode: Mode?, defaultMode: Mode, owner: Bool,
                          preference: BotLanguage? = nil, language: BotLanguage = .en,
-                         section: String = "show") -> SettingsUI {
-        let current = mode.map { title($0, language: language) } ?? follow(scope: "p", language: language)
+                         section: String = "show", secretaryEnabled: Bool? = nil) -> SettingsUI {
+        let groupMode = mode == .secretary ? nil : mode
+        let secretaryActive = secretaryEnabled ?? (mode == .secretary)
+        let current = groupMode.map { title($0, language: language) } ?? follow(scope: "p", language: language)
+        let secretaryStatus = language.text("Secretary · private chats: ", "Secrétaire · en privé : ")
+            + state(secretaryActive, language: language)
         var text = scopeHeader("p", language: language)
         var rows: [[[String: String]]] = []
         switch section {
         case "mode":
-            text += "\n\n<b>\(language.text("Behavior", "Comportement"))</b>\n\(current)\n\n"
+            text += "\n\n<b>\(language.text("Group behavior", "Comportement en groupe"))</b>\n\(current)\n\n"
             text += language.text("Your choice takes priority for your messages only. It never resumes a paused group.",
                                   "Votre choix est prioritaire pour vos messages uniquement. Il ne réactive jamais un groupe en pause.")
-            rows = modeRows(selected: mode, scope: "personal", language: language)
-            rows.append([button("\(mode == nil ? "✓ " : "")\(follow(scope: "p", language: language))", "personal:default")])
-            text += "\n\n" + (mode.map { outcome($0, language: language) } ?? language.text(
+            rows = modeRows(selected: groupMode, scope: "personal", language: language)
+            rows.append([button("\(groupMode == nil ? "✓ " : "")\(follow(scope: "p", language: language))", "personal:default")])
+            text += "\n\n" + (groupMode.map { outcome($0, language: language) } ?? language.text(
                 "Without a group choice, the bot default applies: \(title(defaultMode, language: language)).",
                 "Sans choix du groupe, le réglage par défaut du bot s’applique : \(title(defaultMode, language: language))."))
             text += "\n\n" + modeDisclosure(language: language)
+            text += "\n\n" + secretaryStatus + "\n" + language.text(
+                "Secretary is independent of group behavior.", "Secrétaire est indépendant du comportement en groupe.")
             rows.append([button(language.text("Secretary · private chats →", "Secrétaire · en privé →"), "personal:secretary_setup")])
             rows.append([back("p", language: language), closeButton(language: language)])
         case "secretary_setup":
             text = language.text("<b>My preferences · Secretary</b>\nConnected private chats · my outgoing messages",
                                  "<b>Mes préférences · Secrétaire</b>\nConversations privées connectées · mes messages sortants")
+            text += "\n\n<b>\(secretaryStatus)</b>"
             text += "\n\n" + language.text(
-                "Connect this bot in Telegram’s automation settings and allow replies and edits. fxclip edits only your outgoing messages, never incoming ones.\n\nSecretary replaces your personal group behavior: your group messages will get no fxclip replies. Choose a group behavior again to leave this mode.",
-                "Connectez ce bot dans les réglages d’automatisation de Telegram et autorisez les réponses et modifications. fxclip modifie uniquement vos messages sortants, jamais les messages reçus.\n\nSecrétaire remplace votre comportement personnel en groupe : vos messages de groupe ne recevront aucune réponse fxclip. Choisissez à nouveau un comportement de groupe pour quitter ce mode.")
+                "Connect this bot in Telegram’s automation settings and allow replies and edits. fxclip edits only your outgoing messages, never incoming ones.\n\nSecretary is independent: enabling or disabling it leaves your group behavior unchanged.",
+                "Connectez ce bot dans les réglages d’automatisation de Telegram et autorisez les réponses et modifications. fxclip modifie uniquement vos messages sortants, jamais les messages reçus.\n\nSecrétaire est indépendant : l’activer ou le désactiver ne change pas votre comportement en groupe.")
             text += "\n\n" + language.text("Links pass through Telegram and any enabled mirror provider.", "Les liens passent par Telegram et les fournisseurs miroirs activés.")
-            rows.append([button("\(mode == .secretary ? "✓ " : "")\(language.text("Use Secretary", "Activer Secrétaire"))", "personal:secretary")])
+            rows.append([button(secretaryActive
+                ? language.text("Disable Secretary", "Désactiver Secrétaire")
+                : language.text("Enable Secretary", "Activer Secrétaire"),
+                secretaryActive ? "personal:secretary_off" : "personal:secretary")])
             rows.append([back("p", language: language), closeButton(language: language)])
         case "about", "info":
             text += "\n\n" + about(language: language)
             rows.append([back("p", language: language), closeButton(language: language)])
         default:
-            text += "\n\n<b>\(language.text("Behavior: ", "Comportement : "))</b>\(current)"
-            text += "\n" + (mode == .secretary
-                ? language.text("Private chats only; no replies to my group messages.", "En privé uniquement ; aucune réponse à mes messages de groupe.")
-                : language.text("Personal choices take priority. A paused group stays paused.", "Les choix personnels sont prioritaires. Un groupe en pause le reste."))
-            rows.append([button(language.text("Behavior →", "Comportement →"), "personal:mode")])
+            text += "\n\n<b>\(language.text("Group behavior: ", "Comportement en groupe : "))</b>\(current)"
+            text += "\n" + language.text("Personal choices take priority. A paused group stays paused.", "Les choix personnels sont prioritaires. Un groupe en pause le reste.")
+            text += "\n\n" + secretaryStatus + "\n" + language.text(
+                "Independent of group behavior.", "Indépendant du comportement en groupe.")
+            rows.append([button(language.text("Group behavior →", "Comportement en groupe →"), "personal:mode")])
             rows.append([button(language.text("Links & previews →", "Liens et aperçus →"), "rules:p:show")])
             rows.append([button(language.text("Secretary · private chats →", "Secrétaire · en privé →"), "personal:secretary_setup")])
             rows.append([button(language.text("Language: ", "Langue : ") + (preference?.name ?? language.text("Automatic", "Automatique")) + " ›", "language:show")])

@@ -206,8 +206,9 @@ final class BotTests: XCTestCase {
         try await handle(["text": "https://youtu.be/dQw4w9WgXcQ?is=share-token"])
         XCTAssertEqual(api.methods, ["sendMessage"])
         settings.previews = true; try store.set(settings, chatID: -100)
-        for mode in [Mode.off, .secretary] {
-            api.calls = []; try store.setMode(mode, userID: 7)
+        for secretary in [false, true] {
+            api.calls = []; try store.setSecretary(secretary, userID: 7)
+            try store.setMode(.off, userID: 7)
             try await handle(["text": "https://youtu.be/dQw4w9WgXcQ"])
             XCTAssertTrue(api.calls.isEmpty)
         }
@@ -506,10 +507,11 @@ final class BotTests: XCTestCase {
         api.calls = []; try await handle()
         XCTAssertEqual(api.methods, ["getChatMember", "sendMessage", "deleteMessage"])
     }
-    func testPersonalSecretarySuppressesGroupRewrite() async throws {
+    func testPersonalSecretaryPreservesGroupReplacement() async throws {
         try replaceMode(); try store.setMode(.secretary, userID: 7)
         try await handle()
-        XCTAssertTrue(api.calls.isEmpty)
+        XCTAssertEqual(api.methods, ["getChatMember", "sendMessage", "deleteMessage"])
+        XCTAssertTrue(store.secretaryEnabled(userID: 7))
     }
     func testPrivateSettingsOffersNativeInlineChoicesWithoutChangingState() async throws {
         api.admin = false
@@ -666,7 +668,9 @@ final class BotTests: XCTestCase {
         let restarted = try StateStore(directory: directory)
         XCTAssertFalse(try restarted.reserve(50)); XCTAssertEqual(restarted.state.offset, 51)
         XCTAssertEqual(restarted.state.chats["-100"]?.mode, .replace)
-        XCTAssertEqual(restarted.state.users["7"], .secretary)
+        XCTAssertNil(restarted.state.users["7"])
+        XCTAssertEqual(restarted.state.personalSecretary["7"], true)
+        XCTAssertTrue(restarted.secretaryEnabled(userID: 7))
     }
     func testSevenIdleDaysResetOffsetAndKeepPreferencesAcrossRestart() throws {
         let start: TimeInterval = 1000

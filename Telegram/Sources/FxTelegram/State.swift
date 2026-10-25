@@ -23,6 +23,7 @@ public struct BotState: Codable {
     public var offset: Int64 = 0
     public var chats: [String: ChatSettings] = [:]
     public var users: [String: Mode] = [:]
+    public var personalSecretary: [String: Bool] = [:]
     public var defaultMode: Mode = .reply
     public var lastUpdateAt: TimeInterval = Date().timeIntervalSince1970
     public var knownGroups: [String: KnownGroup] = [:]
@@ -42,7 +43,7 @@ public struct BotState: Codable {
     public init() {}
 
     enum CodingKeys: String, CodingKey {
-        case offset, chats, users, defaultMode, lastUpdateAt, knownGroups, groupEnabled
+        case offset, chats, users, personalSecretary, defaultMode, lastUpdateAt, knownGroups, groupEnabled
         case userLanguages, detectedLanguages, groupLanguages
         case defaultLinkSettings, personalLinkSettings, defaultYouTubeCards, personalYouTubeCards
         case defaultFacebookReels, personalFacebookReels
@@ -54,6 +55,7 @@ public struct BotState: Codable {
         offset = try values.decode(Int64.self, forKey: .offset)
         chats = try values.decode([String: ChatSettings].self, forKey: .chats)
         users = try values.decode([String: Mode].self, forKey: .users)
+        personalSecretary = try values.decodeIfPresent([String: Bool].self, forKey: .personalSecretary) ?? [:]
         defaultMode = try values.decode(Mode.self, forKey: .defaultMode)
         lastUpdateAt = try values.decode(TimeInterval.self, forKey: .lastUpdateAt)
         knownGroups = try values.decodeIfPresent([String: KnownGroup].self, forKey: .knownGroups) ?? [:]
@@ -106,8 +108,30 @@ public final class StateStore {
         try save(next)
     }
     public func setMode(_ mode: Mode?, userID: Int64) throws {
+        if mode == .secretary {
+            try setSecretary(true, userID: userID)
+            return
+        }
+        let key = String(userID)
         var next = state
-        next.users[String(userID)] = mode
+        // Retain legacy private-chat consent before changing the group choice.
+        if next.personalSecretary[key] == nil {
+            next.personalSecretary[key] = secretaryEnabled(userID: userID)
+        }
+        next.users[key] = mode
+        try save(next)
+    }
+    public func secretaryEnabled(userID: Int64) -> Bool {
+        let key = String(userID)
+        return state.personalSecretary[key] ?? ((state.users[key] ?? state.defaultMode) == .secretary)
+    }
+    public func setSecretary(_ enabled: Bool, userID: Int64) throws {
+        let key = String(userID)
+        var next = state
+        next.personalSecretary[key] = enabled
+        if next.users[key] == .secretary {
+            next.users.removeValue(forKey: key)
+        }
         try save(next)
     }
     public func setDefault(_ mode: Mode) throws {
