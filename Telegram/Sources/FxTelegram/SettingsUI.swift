@@ -255,7 +255,8 @@ struct SettingsUI {
                       language: BotLanguage = .en, groupTitle: String? = nil,
                       youTubeInherited: Bool = false, facebookInherited: Bool = false,
                       cleaningEnabled: Bool = true,
-                      redditVideos: Bool = false, redditInherited: Bool = false) -> SettingsUI {
+                      redditVideos: Bool = false, redditInherited: Bool = false,
+                      youTubeStyle: YouTubePreviewStyle = .koutube, youTubeStyleInherited: Bool = false) -> SettingsUI {
         let groupID = scope.hasPrefix("c:") ? String(scope.dropFirst(2)) : nil
         let key = "rules:\(scope):"
         let command = groupID != nil ? "/fxclip " : scope == "d" ? "/default " : "/"
@@ -357,13 +358,27 @@ struct SettingsUI {
             }
         case "youtube":
             text += "\n\n<b>YouTube</b> · " + (youTubeInherited && scope != "d" ? follow(scope: scope, language: language) : state(youTubeCards, language: language))
+            text += "\n\n<b>Style</b> · " + (youTubeStyleInherited && scope != "d"
+                ? follow(scope: scope, language: language)
+                : youTubeStyle == .koutube ? "Koutube" : language.text("Our photo card", "Notre carte photo"))
             text += "\n\n" + language.text(
-                "When enabled, a single plain link gets a title and thumbnail fetched directly from YouTube, even if already clean. Telegram may also show its own preview: duplicates are possible.",
-                "Une fois activé, un lien seul et sans mise en forme reçoit un titre et une miniature récupérés directement sur YouTube, même déjà propre. Telegram peut aussi afficher son aperçu : un doublon est possible.")
-            text += "\n" + language.text(
-                "Title above the image; wide HD thumbnail when available; red Open YouTube button on compatible clients. The photo is not an in-chat player. HD availability may be checked on YouTube’s CDN.",
-                "Titre au-dessus de l’image, miniature HD panoramique si disponible, bouton rouge Ouvrir YouTube sur les clients compatibles. La photo n’est pas un lecteur intégré. La disponibilité HD peut être vérifiée sur le CDN YouTube.")
-            text += "\n\n" + removalDisclosure(language: language)
+                "🌐 Koutube: native Telegram card. The video ID goes to public Koutube; its processed-link cache is public. Koutube supplies description/statistics; playback is not guaranteed.\n\n🖼 Our card: title above an HD photo when available, red Open YouTube button. Directly from YouTube, never Koutube.",
+                "🌐 Koutube : carte native Telegram. L’identifiant vidéo passe par Koutube public ; son cache des liens traités est public. Description et statistiques viennent de Koutube ; lecture intégrée non garantie.\n\n🖼 Notre carte : titre au-dessus d’une photo HD si disponible, bouton rouge Ouvrir YouTube. Directement depuis YouTube, jamais Koutube.")
+            text += "\n\n" + language.text(
+                "Koutube failure or explicit Telegram rejection → our photo. A missing preview after message acceptance cannot be detected. Works on already-clean links too; duplicates are possible. Off disables both styles.",
+                "Échec Koutube ou refus explicite de Telegram → notre photo. Une absence d’aperçu après acceptation du message n’est pas détectable. Fonctionne aussi sur un lien déjà propre ; doublons possibles. Désactiver coupe les deux styles.")
+            let knownStyle = !(scope == "p" && youTubeStyleInherited)
+            rows.append([
+                button("\(knownStyle && youTubeStyle == .koutube ? "✓ " : "")🌐 Koutube", key + "youtube:style:koutube"),
+                button("\(knownStyle && youTubeStyle == .photo ? "✓ " : "")🖼 \(language.text("Our card", "Notre carte"))", key + "youtube:style:photo")
+            ])
+            if scope != "d", !youTubeStyleInherited {
+                add(language.text("↳ Follow style", "↳ Suivre le style"), "youtube:style:default")
+            }
+            text += "\n\n" + language.text(
+                "Author-only Remove / Replace: 5 minutes. Confirming Replace credits you and deletes your original. /delete: less than 48 h. Ownership IDs/dates and Open links stay locally up to 48 h; original ID/date up to 5 minutes. Group replies are protected from forwarding; direct replies remain shareable.",
+                "Retirer / Remplacer : 5 minutes, pour l’auteur. Confirmer Remplacer vous crédite et supprime votre original. /supprimer : moins de 48 h. Identifiants/dates et liens d’ouverture restent localement au plus 48 h ; identifiant/date de l’original, 5 minutes. Réponses de groupe protégées du transfert ; réponses directes partageables.")
+            add(language.text("ⓘ Info & privacy", "ⓘ Infos et confidentialité"), "info")
             serviceActions("youtube", enabled: youTubeCards, follows: youTubeInherited && scope != "d")
             backAction = "previews"; backLabel = language.text("← Previews", "← Aperçus")
         case "facebook":
@@ -566,22 +581,28 @@ struct SettingsUI {
             "Désactivées par défaut ; à activer explicitement pour les messages de groupe et les liens envoyés directement à ce bot, jamais Secrétaire. Le bot récupère les vidéos Reddit publiques sur son serveur, avec du code vx à version figée et le CDN Reddit, puis envoie une copie à Telegram. Sans service vx public ni connexion Reddit. La meilleure résolution tenant dans 20 Mio est choisie, quitte à réduire la qualité ; le son est assemblé s’il existe et la vidéo préparée pour une lecture rapide (faststart). L’original propre reste. Les choix de liens miroirs sont indépendants et inchangés. Vidéo non prise en charge ou échec : un miroir peut servir seulement s’il est activé séparément ; la disponibilité Reddit n’est pas garantie. Des doublons sont possibles.")
     }
 
+    private static func koutubeDisclosure(language: BotLanguage) -> String {
+        language.text(
+            "Koutube style sends the video ID to public Koutube (koutu.be), whose processed-link cache is public. No account or cookies. YouTube supplies photo fallback metadata; its CDN may be checked for HD.",
+            "Le style Koutube transmet l’identifiant vidéo au service public Koutube (koutu.be), dont le cache des liens traités est public. Sans compte ni cookies. YouTube fournit les métadonnées photo de secours ; son CDN peut être vérifié pour la HD.")
+    }
+
     private static func resumeDisclosure(language: BotLanguage) -> String {
         language.text(
             "Enabled previews contact Telegram, mirrors, YouTube, Facebook or Reddit for native videos. Automatic cards/videos keep clean originals; explicitly confirming Replace can remove one; its message ID/date stay locally for the 5-minute buttons, cleared before the attempt, at expiry or on button cleanup. Publication author/chat/message IDs and dates stay locally on the bot server up to 48 h for sender-only deletion. Opening links may stay for button cleanup, up to 48 h. Original text, names, source titles and media are not saved.",
-            "Les aperçus activés contactent Telegram, des miroirs, YouTube, Facebook ou Reddit pour les vidéos natives. Les fiches et vidéos automatiques gardent les originaux propres ; confirmer explicitement Remplacer peut en supprimer un ; son identifiant et sa date restent localement pour les boutons de 5 minutes, effacés avant la tentative, à expiration ou au retrait des boutons. Identifiants auteur/groupe/message et dates restent localement sur le serveur du bot au plus 48 h pour le retrait par l’auteur. Les liens d’ouverture restent pour le retrait des boutons, au plus 48 h. Texte original, noms, titres des sources et médias ne sont pas enregistrés.") + "\n\n" + protectionDisclosure(language: language)
+            "Les aperçus activés contactent Telegram, des miroirs, YouTube, Facebook ou Reddit pour les vidéos natives. Les fiches et vidéos automatiques gardent les originaux propres ; confirmer explicitement Remplacer peut en supprimer un ; son identifiant et sa date restent localement pour les boutons de 5 minutes, effacés avant la tentative, à expiration ou au retrait des boutons. Identifiants auteur/groupe/message et dates restent localement sur le serveur du bot au plus 48 h pour le retrait par l’auteur. Les liens d’ouverture restent pour le retrait des boutons, au plus 48 h. Texte original, noms, titres des sources et médias ne sont pas enregistrés.") + "\n\n" + protectionDisclosure(language: language) + "\n\n" + koutubeDisclosure(language: language)
     }
 
     private static func activationDisclosure(language: BotLanguage) -> String {
         language.text(
             "Links pass through Telegram and enabled mirror providers. YouTube may fetch titles/thumbnails; Facebook videos are off by default and separately opt-in. Reddit native videos are also off by default and separately opt-in, independent of link mirrors. Enabled videos are fetched on the bot server and copied to Telegram, in groups and direct requests to this bot. Duplicate previews are possible.",
-            "Les liens passent par Telegram et les fournisseurs miroirs activés. YouTube peut fournir titres et miniatures ; les vidéos Facebook sont désactivées par défaut et à activer séparément. Les vidéos natives Reddit sont aussi désactivées par défaut et à activer séparément, indépendamment des liens miroirs. Une fois activées, les vidéos sont récupérées sur le serveur du bot et copiées dans Telegram, en groupe et dans vos demandes directes à ce bot. Des doublons d’aperçu sont possibles.") + "\n\n" + removalDisclosure(language: language)
+            "Les liens passent par Telegram et les fournisseurs miroirs activés. YouTube peut fournir titres et miniatures ; les vidéos Facebook sont désactivées par défaut et à activer séparément. Les vidéos natives Reddit sont aussi désactivées par défaut et à activer séparément, indépendamment des liens miroirs. Une fois activées, les vidéos sont récupérées sur le serveur du bot et copiées dans Telegram, en groupe et dans vos demandes directes à ce bot. Des doublons d’aperçu sont possibles.") + "\n\n" + removalDisclosure(language: language) + "\n\n" + koutubeDisclosure(language: language)
     }
 
     private static func modeDisclosure(language: BotLanguage) -> String {
         language.text(
             "Enabled previews use Telegram, mirror providers or YouTube. Facebook and Reddit native videos are off by default and separately opt-in. Duplicates are possible. Eligible replies offer Remove / Replace for 5 minutes; confirming Replace keeps your name and any forwarded source, then deletes the original without changing preferences. Only its message ID/date stay locally during those 5 minutes, cleared before the attempt, at expiry or on button cleanup. Author/chat/message IDs and dates stay locally up to 48 h so you can remove your bot publications. Open-button URLs stay locally for cleanup, up to 48 h; videos without a button retain no opening URL. Original text, names, source titles and media are not saved.",
-            "Les aperçus activés passent par Telegram, des miroirs ou YouTube. Les vidéos natives Facebook et Reddit sont désactivées par défaut et à activer séparément. Des doublons sont possibles. Les réponses éligibles proposent Retirer / Remplacer pendant 5 minutes ; confirmer Remplacer garde votre nom et la source d’un transfert, puis supprime l’original sans changer les préférences. Seuls son identifiant et sa date restent localement durant ces 5 minutes, effacés avant la tentative, à expiration ou au retrait des boutons. Identifiants auteur/groupe/message et dates restent localement au plus 48 h pour retirer vos publications du bot. Les URL des boutons d’ouverture restent localement pour le retrait des boutons, 48 h maximum ; une vidéo sans bouton ne garde aucune URL d’ouverture. Texte original, noms, titres des sources et médias ne sont pas enregistrés.") + "\n\n" + protectionDisclosure(language: language)
+            "Les aperçus activés passent par Telegram, des miroirs ou YouTube. Les vidéos natives Facebook et Reddit sont désactivées par défaut et à activer séparément. Des doublons sont possibles. Les réponses éligibles proposent Retirer / Remplacer pendant 5 minutes ; confirmer Remplacer garde votre nom et la source d’un transfert, puis supprime l’original sans changer les préférences. Seuls son identifiant et sa date restent localement durant ces 5 minutes, effacés avant la tentative, à expiration ou au retrait des boutons. Identifiants auteur/groupe/message et dates restent localement au plus 48 h pour retirer vos publications du bot. Les URL des boutons d’ouverture restent localement pour le retrait des boutons, 48 h maximum ; une vidéo sans bouton ne garde aucune URL d’ouverture. Texte original, noms, titres des sources et médias ne sont pas enregistrés.") + "\n\n" + protectionDisclosure(language: language) + "\n\n" + koutubeDisclosure(language: language)
     }
 
     private static func about(language: BotLanguage) -> String {

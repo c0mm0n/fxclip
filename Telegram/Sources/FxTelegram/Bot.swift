@@ -180,8 +180,8 @@ public final class Bot {
             let previews = settings.previews ? language.text("on", "activés") : language.text("off", "désactivés")
             let summary = "\(source): \(SettingsUI.title(settings.mode, language: language)).\n\n\(SettingsUI.outcome(settings.mode, language: language))\n\n"
             try await reply(summary + language.text(
-                "Improved previews: \(previews).\nWhen on, plain YouTube links can receive a title and thumbnail fetched directly from YouTube, even if already clean. Separately enabled Facebook videos use Facebed metadata and download public Facebook video to the bot server for upload to Telegram (20 MiB maximum). A duplicate is possible when Telegram's own preview works.\nA personal choice overrides this mode, including /fxclip off, while cleaning is enabled for this group. Choose yours in private.\n\nAdmins: /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off",
-                "Aperçus améliorés : \(previews).\nLorsqu’ils sont activés, les liens YouTube seuls peuvent recevoir un titre et une miniature récupérés directement sur YouTube, même s’ils sont déjà propres. Les vidéos Facebook activées séparément passent par Facebed pour les métadonnées ; le bot télécharge la vidéo publique sur son serveur puis en envoie une copie à Telegram (20 Mio maximum). Un doublon est possible si l’aperçu Telegram fonctionne.\nUn choix personnel passe avant ce mode, y compris /fxclip off, tant que le nettoyage est activé pour ce groupe. Choisissez le vôtre en privé.\n\nAdmins : /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off"),
+                "Improved previews: \(previews).\nWhen on, plain YouTube links request a native card via public Koutube (public processed-link cache), with our YouTube photo card as fallback, even if already clean. Separately enabled Facebook videos use Facebed metadata and download public Facebook video to the bot server for upload to Telegram (20 MiB maximum). A duplicate is possible when Telegram's own preview works.\nA personal choice overrides this mode, including /fxclip off, while cleaning is enabled for this group. Choose yours in private.\n\nAdmins: /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off",
+                "Aperçus améliorés : \(previews).\nLorsqu’ils sont activés, les liens YouTube seuls demandent une carte native via Koutube public (cache public des liens traités), avec notre photo YouTube en secours, même s’ils sont déjà propres. Les vidéos Facebook activées séparément passent par Facebed pour les métadonnées ; le bot télécharge la vidéo publique sur son serveur puis en envoie une copie à Telegram (20 Mio maximum). Un doublon est possible si l’aperçu Telegram fonctionne.\nUn choix personnel passe avant ce mode, y compris /fxclip off, tant que le nettoyage est activé pour ce groupe. Choisissez le vôtre en privé.\n\nAdmins : /fxclip reply · /fxclip replace · /fxclip off\n/fxclip previews on|off"),
                 to: message, markup: privateSettingsLink(language: language))
             return
         }
@@ -206,6 +206,7 @@ public final class Bot {
               settings.mode != .off, settings.mode != .secretary else { return }
         let senderID = message.sender_chat == nil ? message.from?.id : nil
         let settingsChatID = directMessage ? nil : message.chat.id
+        let youTubeStyle = youTubeStyle(chatID: settingsChatID, userID: senderID)
         let configured = configuredRewriter(chatID: settingsChatID, userID: senderID)
         let replyContent = configured.rewrite(message, previews: settings.previews, attribution: false,
                                               includeUnchangedLinks: directMessage)
@@ -365,7 +366,7 @@ public final class Bot {
             // Fetching metadata is safe to fall back from; a timed-out send is not.
             let fetched = try await fetchWithPendingPreview(api: api, parameters: pending,
                 originalMessageID: message.message_id, delayNanoseconds: pendingPreviewDelayNanoseconds) {
-                try await youTubeMetadata.fetch(videoID: videoID)
+                try await youTubeMetadata.fetch(videoID: videoID, nativePreview: youTubeStyle == .koutube)
             }
             pendingID = fetched.1
             if case .failure(let error) = fetched.0, error is CancellationError {
@@ -376,6 +377,42 @@ public final class Bot {
             if let metadata {
                 let cleanURL = configured.engine.clean(message.text ?? "").text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
+                if youTubeStyle == .koutube, metadata.nativePreviewAvailable, let mirror = YouTubePreview.koutubeURL(for: cleanURL) {
+                    let content = rendered ?? RenderedMessage(text: cleanURL,
+                        entities: [Entity(type: "url", offset: 0, length: cleanURL.utf16.count)], previewURL: cleanURL)
+                    var card = base(message)
+                    card["text"] = content.text
+                    card["entities"] = try jsonObject(content.entities)
+                    card["link_preview_options"] = ["is_disabled": false, "url": mirror, "prefer_large_media": true]
+                    card["disable_notification"] = true
+                    card["reply_markup"] = ["inline_keyboard": [[[
+                        "text": language.text("▶ Open YouTube", "▶ Ouvrir YouTube"), "url": cleanURL, "style": "danger",
+                    ]]]]
+                    let original = manualReplacementOriginal(message, replacement: replace, now: ownershipNow,
+                                                             content: content.text, limit: 4096)
+                    if removalPoster != nil { addRemovalButton(to: &card, language: language, replacement: replace, canReplace: original != nil) }
+                    if replace {
+                        if let parent = message.reply_to_message {
+                            card["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
+                        }
+                    } else { card["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true] }
+                    do {
+                        let sentID = try await deliverPreview("sendMessage", parameters: card, pendingID: pendingID)
+                        if let publicationPoster {
+                            try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: publicationPoster,
+                                now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970, original: original)
+                        }
+                        if let removalPoster {
+                            try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
+                                now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970, openButton: openingButton(in: card))
+                        }
+                        if replace { await deleteReplacedOriginal(message) }
+                        return
+                    } catch BotError.telegram(let code) where code == 400 || code == 403 {
+                        // Only a definite Telegram rejection permits the photo
+                        // fallback. A missing rendered web preview is not reported.
+                    }
+                }
                 if let caption = YouTubePreview.caption(title: metadata.title, url: cleanURL, credit: replace ? rendered : nil) {
                     var photo = base(message)
                     photo["photo"] = metadata.thumbnailURL.absoluteString
@@ -942,6 +979,12 @@ public final class Bot {
         return personal ?? group ?? store.state.defaultYouTubeCards
     }
 
+    private func youTubeStyle(chatID: Int64?, userID: Int64?) -> YouTubePreviewStyle {
+        let personal = userID.flatMap { store.state.personalYouTubeStyle[String($0)] }
+        let group = chatID.flatMap { store.state.chats[String($0)]?.youTubeStyle }
+        return personal ?? group ?? store.state.defaultYouTubeStyle
+    }
+
     private func facebookEnabled(chatID: Int64?, userID: Int64?) -> Bool {
         let personal = userID.flatMap { store.state.personalFacebookReels[String($0)] }
         let group = chatID.flatMap { store.state.chats[String($0)]?.facebookReels }
@@ -1287,6 +1330,26 @@ public final class Bot {
         }
     }
 
+    private func ruleYouTubeStyleOverride(_ scope: RuleScope) -> YouTubePreviewStyle? {
+        switch scope {
+        case .personal(let id): return store.state.personalYouTubeStyle[String(id)]
+        case .chat(let id): return store.state.chats[String(id)]?.youTubeStyle
+        case .defaults: return store.state.defaultYouTubeStyle
+        }
+    }
+
+    private func saveYouTubeStyle(_ scope: RuleScope, style: YouTubePreviewStyle?) throws {
+        switch scope {
+        case .personal(let id): try store.setPersonalYouTubeStyle(style, userID: id)
+        case .chat(let id):
+            if store.state.chats[String(id)] == nil, style == nil { return }
+            var settings = chatSettings(id)
+            settings.youTubeStyle = style
+            try store.set(settings, chatID: id)
+        case .defaults: try store.setDefaultYouTubeStyle(style ?? .koutube)
+        }
+    }
+
     private func ruleFacebookOverride(_ scope: RuleScope) -> Bool? {
         switch scope {
         case .personal(let id): return store.state.personalFacebookReels[String(id)]
@@ -1355,7 +1418,9 @@ public final class Bot {
                                     return true
                                 }(),
                                 redditVideos: ruleRedditOverride(scope) ?? store.state.defaultRedditVideos,
-                                redditInherited: ruleRedditOverride(scope) == nil)
+                                redditInherited: ruleRedditOverride(scope) == nil,
+                                youTubeStyle: ruleYouTubeStyleOverride(scope) ?? store.state.defaultYouTubeStyle,
+                                youTubeStyleInherited: ruleYouTubeStyleOverride(scope) == nil)
     }
 
     private func rulesCallback(_ callback: CallbackQuery, parts: [String]) async throws {
@@ -1411,12 +1476,19 @@ public final class Bot {
         var cards = ruleCardsOverride(scope)
         var facebook = ruleFacebookOverride(scope)
         var reddit = ruleRedditOverride(scope)
+        var youTubeStyle = ruleYouTubeStyleOverride(scope)
         var changed = false
         let builtins = rewriter.engine.rules
         switch actions {
         case ["show"], ["clean"], ["previews"], ["excluded"], ["info"], ["customize"]: break
         case ["reset", "show"]: section = "reset"
         case ["youtube", "show"]: section = "youtube"
+        case ["youtube", "style", "koutube"]:
+            youTubeStyle = .koutube; changed = true; section = "youtube"
+        case ["youtube", "style", "photo"]:
+            youTubeStyle = .photo; changed = true; section = "youtube"
+        case ["youtube", "style", "default"] where scope.key != "d":
+            youTubeStyle = nil; changed = true; section = "youtube"
         case ["facebook", "show"]: section = "facebook"
         case ["reddit", "show"]: section = "reddit"
         case ["customize", "confirm"]:
@@ -1431,7 +1503,7 @@ public final class Bot {
             }
             section = "show"
         case ["reset"]:
-            storedSettings = nil; cards = nil; facebook = nil; reddit = nil; changed = true; section = "show"
+            storedSettings = nil; cards = nil; facebook = nil; reddit = nil; youTubeStyle = nil; changed = true; section = "show"
         default:
             if actions.count == 3, actions[0] == "preview", actions[2] == "show",
                builtins.previews.contains(where: { $0.id == actions[1] }) {
@@ -1481,6 +1553,7 @@ public final class Bot {
         if changed {
             try saveRules(scope, settings: storedSettings, cards: cards, facebook: facebook)
             if reddit != ruleRedditOverride(scope) { try saveReddit(scope, enabled: reddit) }
+            if youTubeStyle != ruleYouTubeStyleOverride(scope) { try saveYouTubeStyle(scope, style: youTubeStyle) }
         }
         let saved: String
         switch scope {

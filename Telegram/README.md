@@ -106,25 +106,48 @@ Group admins can enable or disable enhanced previews in `/setup` or with
 `/fxclip previews on|off`. When enabled, X, Instagram and Reddit links can use
 `fxtwitter.com`, `zzinstagram.com` and `vxreddit.com`. Choose a mirror under **Links & previews → Previews**, then enable it or open its advanced provider settings.
 
-For a message containing only a plain YouTube video link, enhanced previews also
-fetch the title and thumbnail directly from YouTube. The title appears above the
-image; a red **Open YouTube / Ouvrir YouTube** button opens the cleaned source URL,
-including timestamps. The linked YouTube heading also retains that URL, without
-repeating a long address in the caption. Replacement credit is preserved.
+For a message containing only a plain YouTube video link, enhanced previews request
+Telegram's native web card through **Koutube (`koutu.be`) by default**. The visible
+cleaned YouTube URL and red **Open YouTube / Ouvrir YouTube** button retain timestamps
+and point to YouTube. Koutube controls the web card's description, statistics and
+media; an in-chat player is not guaranteed. No custom domain is needed. On the YouTube page, choose **🌐 Koutube** or
+**🖼 Our card / Notre carte**. Choosing our card skips every Koutube request;
+Koutube style keeps that photo card as fallback. Style inherits personal → group
+→ bot defaults independently of YouTube On/Off, and is cleared by link reset.
 
-When oEmbed declares a small or letterboxed thumbnail, the bot checks availability
-of YouTube's wide HD image with one cookie-free, redirect-blocked HEAD request
-(two-second request timeout). It keeps the original oEmbed image if unavailable.
-An explicitly rejected HD photo can retry that original image once; ambiguous
-sends never trigger another upload. This is a photo card: tapping the photo opens
-the image, not a YouTube player. The red button opens YouTube. Telegram controls
-the native web preview's side bar and overlaid player; those cannot be added to a
-photo message. Button colors require a compatible Telegram client.
+Before requesting that card, the bot performs one cookie-free, redirect-blocked
+Koutube HTML check (3-second request / 4-second
+resource budget, 128 KiB limit). Only the video ID is sent in that check. A valid
+response must identify the same YouTube video and supply image/video metadata.
+The bot uses the validated title but never follows URLs extracted from that HTML
+or downloads a YouTube video. A working native card does not depend on YouTube
+oEmbed; only photo mode or failed mirror checks request oEmbed metadata.
+Only supported, bounded timecodes are forwarded in the final mirror preview URL;
+tracking parameters, arbitrary query parameters and fragments are excluded.
 
-La carte affiche le titre au-dessus d’une miniature HD panoramique quand elle
-existe, puis un vrai bouton rouge **Ouvrir YouTube**. Le lien nettoyé et son
-horodatage sont conservés dans les liens cliquables, sans adresse répétée dans la
-légende. La photo n’est pas un lecteur intégré ; le bouton ouvre YouTube.
+**Koutube is a public third party whose processed-link cache is public.** Both the
+bot's check and Telegram's preview request disclose the video ID to it. This is
+shown on YouTube settings and group activation/resume pages. Turning YouTube cards
+off prevents both the Koutube check and YouTube metadata requests.
+
+If that check fails or Telegram explicitly rejects the native-card send/edit,
+our photo card is the fallback: compact linked title above a wide HD thumbnail
+when available, red Open button below. Replacement credit is preserved. A small
+or letterboxed oEmbed image may trigger one cookie-free, redirect-blocked HD HEAD
+check (2 seconds). An explicitly rejected HD photo may retry the verified oEmbed
+image once. Ambiguous sends/edits never retry or delete the original.
+
+Telegram does **not** report whether it rendered a web preview after accepting a
+text message. Such a missing preview cannot automatically trigger the photo
+fallback. The photo itself opens an image, not a YouTube player; it cannot reproduce
+the native card's side bar or overlaid player. Button colors depend on the client.
+
+Par défaut, YouTube passe par la carte native Koutube, dont le cache des liens est
+public. Le lien visible et le bouton rouge ouvrent toujours YouTube. Notre carte
+photo (titre au-dessus, miniature HD panoramique si disponible) sert de secours si
+la vérification Koutube échoue ou si Telegram refuse explicitement le message.
+Une absence d’aperçu après acceptation par Telegram n’est pas détectable. La lecture
+intégrée n’est pas garantie ; description et statistiques sont choisies par Koutube.
 
 This includes already-clean links. Telegram's Bot API does not expose
 whether its own card appeared, so a duplicate preview is possible. Turning
@@ -540,10 +563,10 @@ configuration: install new images explicitly.
 Cleaning runs locally on the server, but the bot communicates with Telegram.
 Telegram receives reposted messages; mirrors can receive links when previews are
 generated. The engine does not expand or visit links. No additional analytics or
-external account is used. Native YouTube cards request video metadata from
-YouTube's oEmbed endpoint, may check the HD thumbnail on YouTube's CDN without
-cookies or redirects, and let Telegram fetch the image bytes; they use
-no preview mirror. Fetched titles, thumbnails and videos are not persisted;
+external account is used. Koutube-style YouTube cards check the fixed public Koutube page and ask Telegram
+to generate a native preview from it. Koutube publishes its processed-link cache. The photo
+fallback may check YouTube’s HD CDN image without cookies or redirects and lets
+Telegram fetch the image bytes. Fetched titles, thumbnails and videos are not persisted;
 YouTube and oversized-notice opening-button URLs are retained only while
 removal-button cleanup is pending, for at most 48 hours. Full-video replies have
 no opening button or saved source Open URL. Separately, publication ownership

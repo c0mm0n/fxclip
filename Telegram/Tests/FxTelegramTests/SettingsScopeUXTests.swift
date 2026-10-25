@@ -173,8 +173,8 @@ final class SettingsScopeUXTests: XCTestCase {
                 let panel = SettingsUI.rules(UserSettings(), builtins: rules, scope: scope, section: "youtube",
                     inherited: true, language: language, youTubeInherited: true)
                 XCTAssertTrue(try uxActions(panel).contains("fxclip:rules:\(scope):youtube:off"))
-                for phrase in language == .en ? ["YouTube", "title", "thumbnail", "already", "duplicate", "Telegram"]
-                    : ["YouTube", "titre", "miniature", "déjà", "doublon", "Telegram"] {
+                for phrase in language == .en ? ["YouTube", "Koutube", "photo", "already", "public", "cache", "Telegram"]
+                    : ["YouTube", "Koutube", "photo", "déjà", "public", "cache", "Telegram"] {
                     XCTAssertTrue(panel.plainText.contains(phrase), "\(scope) \(phrase)")
                 }
                 XCTAssertTrue(panel.plainText.contains("5 minutes"))

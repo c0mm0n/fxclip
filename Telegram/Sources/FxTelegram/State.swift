@@ -75,6 +75,8 @@ public struct BotState: Codable {
     public var personalLinkSettings: [String: UserSettings] = [:]
     public var defaultYouTubeCards = true
     public var personalYouTubeCards: [String: Bool] = [:]
+    public var defaultYouTubeStyle: YouTubePreviewStyle = .koutube
+    public var personalYouTubeStyle: [String: YouTubePreviewStyle] = [:]
     public var defaultFacebookReels = false
     public var personalFacebookReels: [String: Bool] = [:]
     public var defaultRedditVideos = false
@@ -87,6 +89,7 @@ public struct BotState: Codable {
         case offset, chats, users, personalSecretary, defaultMode, lastUpdateAt, knownGroups, groupEnabled
         case userLanguages, detectedLanguages, groupLanguages
         case defaultLinkSettings, personalLinkSettings, defaultYouTubeCards, personalYouTubeCards
+        case defaultYouTubeStyle, personalYouTubeStyle
         case defaultFacebookReels, personalFacebookReels
         case defaultRedditVideos, personalRedditVideos
         case replyControls, publications
@@ -108,6 +111,8 @@ public struct BotState: Codable {
         personalLinkSettings = try values.decodeIfPresent([String: UserSettings].self, forKey: .personalLinkSettings) ?? [:]
         defaultYouTubeCards = try values.decodeIfPresent(Bool.self, forKey: .defaultYouTubeCards) ?? true
         personalYouTubeCards = try values.decodeIfPresent([String: Bool].self, forKey: .personalYouTubeCards) ?? [:]
+        defaultYouTubeStyle = try values.decodeIfPresent(YouTubePreviewStyle.self, forKey: .defaultYouTubeStyle) ?? .koutube
+        personalYouTubeStyle = try values.decodeIfPresent([String: YouTubePreviewStyle].self, forKey: .personalYouTubeStyle) ?? [:]
         defaultFacebookReels = try values.decodeIfPresent(Bool.self, forKey: .defaultFacebookReels) ?? false
         personalFacebookReels = try values.decodeIfPresent([String: Bool].self, forKey: .personalFacebookReels) ?? [:]
         defaultRedditVideos = try values.decodeIfPresent(Bool.self, forKey: .defaultRedditVideos) ?? false
@@ -206,6 +211,16 @@ public final class StateStore {
     public func setDefaultFacebookReels(_ enabled: Bool) throws {
         var next = state
         next.defaultFacebookReels = enabled
+        try save(next)
+    }
+    public func setDefaultYouTubeStyle(_ style: YouTubePreviewStyle) throws {
+        var next = state
+        next.defaultYouTubeStyle = style
+        try save(next)
+    }
+    public func setPersonalYouTubeStyle(_ style: YouTubePreviewStyle?, userID: Int64) throws {
+        var next = state
+        next.personalYouTubeStyle[String(userID)] = style
         try save(next)
     }
     /// Nil restores inheritance; unrelated link-settings writes preserve this override.

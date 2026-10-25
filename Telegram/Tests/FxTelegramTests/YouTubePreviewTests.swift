@@ -105,7 +105,7 @@ final class YouTubePreviewTests: XCTestCase {
             XCTAssertEqual(request.timeoutInterval, 4)
             return try self.response(request, title: "Une vidéo 😀 & <test>", contentType: "application/json; charset=utf-8")
         }
-        let provider: YouTubeMetadataProviding = YouTubeMetadataFetcher(session: session)
+        let provider: YouTubeMetadataProviding = YouTubeMetadataFetcher(session: session, nativePreviews: false)
         let result = try await provider.fetch(videoID: videoID)
         XCTAssertEqual(result.title, "Une vidéo 😀 & <test>")
         XCTAssertEqual(result.thumbnailURL.absoluteString, "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg")
@@ -115,7 +115,7 @@ final class YouTubePreviewTests: XCTestCase {
     func testFetchAcceptsAllowedThumbnailHostsAndUTF16TitleBoundary() async throws {
         let session = makeSession()
         defer { session.invalidateAndCancel() }
-        let fetcher = YouTubeMetadataFetcher(session: session)
+        let fetcher = YouTubeMetadataFetcher(session: session, nativePreviews: false)
         for thumbnail in ["https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg",
                           "https://img.youtube.com/vi/\(videoID)/0.jpg",
                           "https://i.ytimg.com/vi_webp/\(videoID)/hqdefault.webp"] {
@@ -134,7 +134,7 @@ final class YouTubePreviewTests: XCTestCase {
             XCTFail("Invalid input must not reach URLSession")
             throw URLError(.badURL)
         }
-        let fetcher = YouTubeMetadataFetcher(session: session)
+        let fetcher = YouTubeMetadataFetcher(session: session, nativePreviews: false)
         for id in ["", "1234567890", "123456789012", "https://evil.example/", "../oembed?v=x", "aB3_dE-fG09&url=x",
                    "1234567890é", "1234567890/", "1234567890\n"] {
             do {
@@ -151,7 +151,7 @@ final class YouTubePreviewTests: XCTestCase {
         for (status, type) in [(201, "application/json"), (302, "application/json"), (404, "application/json"),
                                (500, "application/json"), (200, "text/html"), (200, "text/plain"), (200, "")] {
             YouTubeURLProtocol.handler = { try self.response($0, status: status, contentType: type) }
-            await assertInvalidResponse(YouTubeMetadataFetcher(session: session))
+            await assertInvalidResponse(YouTubeMetadataFetcher(session: session, nativePreviews: false))
         }
         XCTAssertEqual(YouTubeURLProtocol.requests.count, 7)
         XCTAssertTrue(YouTubeURLProtocol.requests.allSatisfy { $0.url?.host == "www.youtube.com" })
@@ -173,7 +173,7 @@ final class YouTubePreviewTests: XCTestCase {
                 let (response, _) = try self.response(request)
                 return (response, body)
             }
-            await assertInvalidResponse(YouTubeMetadataFetcher(session: session))
+            await assertInvalidResponse(YouTubeMetadataFetcher(session: session, nativePreviews: false))
         }
     }
 
@@ -198,7 +198,7 @@ final class YouTubePreviewTests: XCTestCase {
             "https://i.ytimg.com/vi/%61B3_dE-fG09/hqdefault.jpg", "not a URL",
         ] {
             YouTubeURLProtocol.handler = { try self.response($0, thumbnail: thumbnail) }
-            await assertInvalidResponse(YouTubeMetadataFetcher(session: session), message: thumbnail)
+            await assertInvalidResponse(YouTubeMetadataFetcher(session: session, nativePreviews: false), message: thumbnail)
         }
     }
 
@@ -207,7 +207,7 @@ final class YouTubePreviewTests: XCTestCase {
         defer { session.invalidateAndCancel() }
         YouTubeURLProtocol.handler = { _ in throw URLError(.timedOut) }
         do {
-            _ = try await YouTubeMetadataFetcher(session: session).fetch(videoID: videoID)
+            _ = try await YouTubeMetadataFetcher(session: session, nativePreviews: false).fetch(videoID: videoID)
             XCTFail("Expected transport failure")
         } catch let error as URLError {
             XCTAssertEqual(error.code, .timedOut)
@@ -228,7 +228,7 @@ final class YouTubePreviewTests: XCTestCase {
             }
             return try self.sizedResponse(request)
         }
-        let metadata = try await YouTubeMetadataFetcher(session: session).fetch(videoID: videoID)
+        let metadata = try await YouTubeMetadataFetcher(session: session, nativePreviews: false).fetch(videoID: videoID)
         XCTAssertTrue(metadata.thumbnailURL.absoluteString.hasSuffix("/maxresdefault.jpg"))
         XCTAssertTrue(metadata.fallbackThumbnailURL?.absoluteString.hasSuffix("/hqdefault.jpg") == true)
         XCTAssertEqual(YouTubeURLProtocol.requests.map(\.httpMethod), ["GET", "HEAD"])
@@ -244,7 +244,7 @@ final class YouTubePreviewTests: XCTestCase {
                     httpVersion: nil, headerFields: ["Content-Type": mime, "Content-Length": length,
                         "Location": "https://example.invalid/untrusted"])), Data())
             }
-            let metadata = try await YouTubeMetadataFetcher(session: session).fetch(videoID: videoID)
+            let metadata = try await YouTubeMetadataFetcher(session: session, nativePreviews: false).fetch(videoID: videoID)
             XCTAssertTrue(metadata.thumbnailURL.absoluteString.hasSuffix("/hqdefault.jpg"))
         }
         XCTAssertTrue(YouTubeURLProtocol.requests.allSatisfy { ["www.youtube.com", "i.ytimg.com"].contains($0.url?.host) })
@@ -258,7 +258,7 @@ final class YouTubePreviewTests: XCTestCase {
                 return try self.sizedResponse(request)
             }
             do {
-                let metadata = try await YouTubeMetadataFetcher(session: session).fetch(videoID: videoID)
+                let metadata = try await YouTubeMetadataFetcher(session: session, nativePreviews: false).fetch(videoID: videoID)
                 XCTAssertEqual(code, .timedOut)
                 XCTAssertTrue(metadata.thumbnailURL.absoluteString.hasSuffix("/hqdefault.jpg"))
             } catch let error as URLError {
@@ -271,7 +271,7 @@ final class YouTubePreviewTests: XCTestCase {
     func testExistingWideHDMetadataSkipsAvailabilityProbe() async throws {
         let session = makeSession(); defer { session.invalidateAndCancel() }
         YouTubeURLProtocol.handler = { try self.sizedResponse($0, width: 1280, height: 720, file: "maxresdefault.jpg") }
-        let metadata = try await YouTubeMetadataFetcher(session: session).fetch(videoID: videoID)
+        let metadata = try await YouTubeMetadataFetcher(session: session, nativePreviews: false).fetch(videoID: videoID)
         XCTAssertTrue(metadata.thumbnailURL.absoluteString.hasSuffix("/maxresdefault.jpg"))
         XCTAssertEqual(YouTubeURLProtocol.requests.count, 1)
     }

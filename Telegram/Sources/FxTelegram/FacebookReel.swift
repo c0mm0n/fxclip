@@ -241,7 +241,7 @@ private func strictURL(_ value: String) -> URLComponents? {
 
 /// One bounded request. A delegate counts every delivered chunk, including when
 /// Content-Length is missing or understates the body. No download file is created.
-private final class ReelDataLoader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+final class ReelDataLoader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let configuration: URLSessionConfiguration
     private let request: URLRequest
     private let mime: String
@@ -352,8 +352,9 @@ private final class ReelDataLoader: NSObject, URLSessionDataDelegate, @unchecked
 
 /// A small, strict tokenizer for quoted/unquoted HTML attributes. It never
 /// interprets markup decoded from an attribute, nor metadata inside raw text.
-private enum ReelHTML {
-    static func metadata(_ html: String) throws -> [String: String] {
+enum ReelHTML {
+    static func metadata(_ html: String, keys wanted: Set<String> = ["og:title", "og:description", "og:video"],
+                         decodeContent: Bool = true) throws -> [String: String] {
         let bytes = Array(html.utf8)
         let lower = bytes.map { asciiLower($0) }
         var index = 0
@@ -378,11 +379,11 @@ private enum ReelHTML {
                 let property = try attributes["property"].map(decode)
                 let name = try attributes["name"].map(decode)
                 let keys = [property, name].compactMap { $0 }
-                let relevant = keys.filter { ["og:title", "og:description", "og:video"].contains($0) }
+                let relevant = keys.filter { wanted.contains($0) }
                 if let key = relevant.first {
                     guard keys.allSatisfy({ $0 == key }), result[key] == nil,
                           let raw = attributes["content"] else { throw FacebookReelError.invalidResponse }
-                    result[key] = try decode(raw)
+                    result[key] = decodeContent ? try decode(raw) : raw
                 }
             } else if ["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes"].contains(tag) {
                 // Skip until the actual end tag name, not a prefix such as </scripted>.

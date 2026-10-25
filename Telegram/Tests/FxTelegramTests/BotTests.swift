@@ -152,7 +152,10 @@ final class BotTests: XCTestCase {
             api.calls = []
             try await handle(["text": "/fxclip previews on"])
             let text = try XCTUnwrap(sent["text"] as? String)
-            XCTAssertTrue(text.contains(language == .fr ? "récupérés directement sur YouTube" : "fetched directly from YouTube"))
+            XCTAssertTrue(text.contains("Koutube"))
+            XCTAssertTrue(text.contains("public"))
+            XCTAssertTrue(text.contains("cache"))
+            XCTAssertTrue(text.contains(language == .fr ? "secours" : "fallback"))
             XCTAssertTrue(text.contains(language == .fr ? "doublon" : "duplicate"))
         }
     }

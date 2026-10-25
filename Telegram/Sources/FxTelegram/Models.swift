@@ -149,10 +149,11 @@ public struct ChatSettings: Codable {
     public var previews: Bool = true
     public var engineSettings: UserSettings?
     public var youTubeCards: Bool?
+    public var youTubeStyle: YouTubePreviewStyle?
     public var facebookReels: Bool?
     public var redditVideos: Bool?
     public init() {}
-    enum CodingKeys: String, CodingKey { case mode, modeInherited, previews, engineSettings, youTubeCards, facebookReels, redditVideos }
+    enum CodingKeys: String, CodingKey { case mode, modeInherited, previews, engineSettings, youTubeCards, youTubeStyle, facebookReels, redditVideos }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         mode = try values.decodeIfPresent(Mode.self, forKey: .mode) ?? .reply
@@ -160,6 +161,7 @@ public struct ChatSettings: Codable {
         previews = try values.decodeIfPresent(Bool.self, forKey: .previews) ?? true
         engineSettings = try values.decodeIfPresent(UserSettings.self, forKey: .engineSettings)
         youTubeCards = try values.decodeIfPresent(Bool.self, forKey: .youTubeCards)
+        youTubeStyle = try values.decodeIfPresent(YouTubePreviewStyle.self, forKey: .youTubeStyle)
         facebookReels = try values.decodeIfPresent(Bool.self, forKey: .facebookReels)
         redditVideos = try values.decodeIfPresent(Bool.self, forKey: .redditVideos)
     }
