@@ -5,6 +5,27 @@ from links and optionally improves X, Instagram and Reddit previews, without req
 members to install a client. Menus support English and French. Run your own instance
 using the [Docker setup](#docker-setup); this project does not configure a public bot.
 
+## Direct messages / Messages directs
+
+Send a link directly to the bot: it replies with the cleaned link or the enabled
+preview, even if the link is already clean. No group activation or Secretary
+connection is needed. Direct requests always keep your message; group Reply,
+Replace and Off choices do not change this behavior. Ordinary conversation and
+unknown commands do not trigger link replies.
+
+Your personal link, YouTube, Facebook and Reddit-video choices apply; absent
+choices use bot defaults, never a group's settings. Facebook and Reddit native
+videos stay off by default. Enabled previews use the same disclosed network
+providers as group previews. Direct replies have no Replace action or durable
+publication listing; the temporary Remove button still lasts five minutes.
+
+Envoyez un lien directement au bot : il répond avec le lien nettoyé ou l’aperçu
+activé, même si le lien est déjà propre. Aucun groupe ni connexion Secrétaire
+n’est nécessaire. Votre message reste toujours ; les modes de groupe ne changent
+pas ces réponses. Vos préférences de liens et d’aperçus s’appliquent, sinon les
+réglages du bot. Les vidéos Facebook et Reddit restent désactivées par défaut.
+Les aperçus activés utilisent les mêmes fournisseurs réseau qu’en groupe.
+
 ## Settings / Réglages
 
 Open the bot privately with `/settings`. Start from **My preferences / Mes
@@ -141,7 +162,7 @@ advanced provider setting never changes the native video source.
 Personal, group and bot-default video choices inherit independently of the full
 link configuration, like Facebook videos. **Enable/Disable for me**, **for this
 group** or **by default** changes only that scope. **Follow group again** or
-**Use bot default** removes the scalar override. These are group-only replies;
+**Use bot default** removes the scalar override. These replies work in groups and direct requests to the bot;
 Secretary never sends native videos. Pausing group cleaning or enhanced previews
 also pauses them. Resetting link preferences includes this video preference:
 personal/group choices return to inheritance, and bot defaults return to off.
@@ -289,7 +310,7 @@ les réglages avancés de ce service.
 Personal link rules also apply to your outgoing messages in connected private chats
 when Secretary Mode is enabled. Without a personal link configuration, those
 private chats use the bot defaults; groups use their own defaults. YouTube cards
-and Facebook/Reddit video replies remain group features, not Secretary actions.
+and Facebook/Reddit video replies work in groups and direct requests to the bot, not Secretary actions.
 
 Les règles personnelles des liens s’appliquent aussi aux messages sortants en
 privé connecté lorsque Secrétaire est activé. Sans personnalisation, Secrétaire

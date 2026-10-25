@@ -353,11 +353,10 @@ final class RedditBotTests: XCTestCase {
         XCTAssertTrue(provider.requestedIDs.isEmpty)
     }
 
-    func testExplicitlyAllowedNormalPrivateChatNeverFetchesNativeRedditDespiteOptIns() async throws {
+    func testDirectRequestFetchesNativeRedditWithPersonalOptIn() async throws {
         try enable()
         try store.setPersonalRedditVideos(true, userID: 7)
         try store.setMode(.reply, userID: 7)
-        provider.delay = 20_000_000
         bot = Bot(api: api, store: store, engine: engine, allowedChats: [-100, 7], allowedOwners: [7],
                   botID: 99, username: "fxclipbot", pendingPreviewDelayNanoseconds: 0,
                   redditVideos: provider)
@@ -367,10 +366,10 @@ final class RedditBotTests: XCTestCase {
         XCTAssertTrue(store.state.defaultRedditVideos)
         XCTAssertEqual(store.state.personalRedditVideos["7"], true)
         XCTAssertEqual(store.state.users["7"], .reply)
-        XCTAssertTrue(provider.requestedIDs.isEmpty)
-        XCTAssertFalse(api.methods.contains("sendVideo"))
-        XCTAssertFalse(api.methods.contains("editMessageMedia"))
-        XCTAssertTrue(api.calls.isEmpty)
+        XCTAssertEqual(provider.requestedIDs, ["abc123"])
+        XCTAssertTrue(api.methods.contains("sendVideo"))
+        XCTAssertFalse(api.methods.contains("getChatMember"))
+        XCTAssertFalse(api.methods.contains("deleteMessage"))
     }
 
     func testProtectedPaidOldBotAndUnapprovedGroupsNeverFetch() async throws {

@@ -81,6 +81,8 @@ struct SettingsUI {
             text += "\n\n" + about(language: language)
             rows.append([back("p", language: language), closeButton(language: language)])
         default:
+            text += "\n\n" + language.text("Send me a link here: I reply and keep your message. Your link preferences apply; group behavior and Secretary do not affect these replies.",
+                                          "Envoyez-moi un lien ici : je réponds et garde votre message. Vos préférences de liens s’appliquent ; le comportement en groupe et Secrétaire ne changent pas ces réponses.")
             text += "\n\n<b>\(language.text("Group behavior: ", "Comportement en groupe : "))</b>\(current)"
             text += "\n" + language.text("Personal choices take priority. A paused group stays paused.", "Les choix personnels sont prioritaires. Un groupe en pause le reste.")
             text += "\n\n" + secretaryStatus + "\n" + language.text(
@@ -381,8 +383,8 @@ struct SettingsUI {
             add(language.text("Reset link preferences", "Réinitialiser les préférences de liens"), "reset")
         case "info", "about":
             text += "\n\n" + about(language: language)
-            text += "\n\n" + language.text("In groups: personal link rules, then group, then bot defaults. Secretary private chats use personal rules or bot defaults, never group rules. A custom configuration replaces cleaning, mirrors and exclusions together. YouTube, Facebook and Reddit videos inherit independently and are group-only features.",
-                                          "En groupe : règles personnelles, puis groupe, puis bot. En privé, Secrétaire suit les règles personnelles ou celles du bot, jamais celles d’un groupe. Une configuration personnalisée remplace ensemble nettoyage, miroirs et exclusions. YouTube, les vidéos Facebook et Reddit sont hérités séparément et réservés aux groupes.")
+            text += "\n\n" + language.text("In groups: personal link rules, then group, then bot defaults. Secretary private chats use personal rules or bot defaults, never group rules. A custom configuration replaces cleaning, mirrors and exclusions together. YouTube, Facebook and Reddit videos inherit independently, in groups and direct requests to this bot, never Secretary.",
+                                          "En groupe : règles personnelles, puis groupe, puis bot. En privé, Secrétaire suit les règles personnelles ou celles du bot, jamais celles d’un groupe. Une configuration personnalisée remplace ensemble nettoyage, miroirs et exclusions. YouTube, les vidéos Facebook et Reddit sont hérités séparément, en groupe et dans vos demandes directes à ce bot, jamais Secrétaire.")
         case let leaf where leaf.hasPrefix("preview:") || leaf.hasPrefix("provider:"):
             let provider = leaf.hasPrefix("provider:")
             let id = String(leaf.dropFirst(provider ? 9 : 8))
@@ -431,6 +433,10 @@ struct SettingsUI {
             rows.append([back(scope, language: language), close])
         } else {
             rows.append([button(backLabel, key + backAction), close])
+        }
+        if scope == "p" {
+            text += "\n\n" + language.text("Direct links sent to this bot use your choices, otherwise bot defaults. I always reply and keep your message here.",
+                                          "Les liens envoyés directement à ce bot suivent vos choix, sinon les réglages du bot. Ici, je réponds toujours et garde votre message.")
         }
         return panel(text, rows)
     }
@@ -521,8 +527,8 @@ struct SettingsUI {
 
     private static func redditDisclosure(language: BotLanguage) -> String {
         language.text(
-            "Off by default; enable explicitly for group messages only, never Secretary. Fetches public Reddit videos privately on the bot server using pinned vx code and Reddit CDN, then uploads a copy to Telegram. No public vx service or Reddit login. Chooses the highest resolution that fits 20 MiB, possibly lowering quality; combines audio when present and prepares video for quick playback (faststart). Keeps the clean original. Link-mirror choices are independent and unchanged. Unsupported videos or failures may use a mirror only if separately enabled; Reddit availability is not guaranteed. Duplicates are possible.",
-            "Désactivées par défaut ; à activer explicitement pour les messages de groupe, jamais Secrétaire. Le bot récupère les vidéos Reddit publiques sur son serveur, avec du code vx à version figée et le CDN Reddit, puis envoie une copie à Telegram. Sans service vx public ni connexion Reddit. La meilleure résolution tenant dans 20 Mio est choisie, quitte à réduire la qualité ; le son est assemblé s’il existe et la vidéo préparée pour une lecture rapide (faststart). L’original propre reste. Les choix de liens miroirs sont indépendants et inchangés. Vidéo non prise en charge ou échec : un miroir peut servir seulement s’il est activé séparément ; la disponibilité Reddit n’est pas garantie. Des doublons sont possibles.")
+            "Off by default; enable explicitly for group messages and direct links to this bot, never Secretary. Fetches public Reddit videos privately on the bot server using pinned vx code and Reddit CDN, then uploads a copy to Telegram. No public vx service or Reddit login. Chooses the highest resolution that fits 20 MiB, possibly lowering quality; combines audio when present and prepares video for quick playback (faststart). Keeps the clean original. Link-mirror choices are independent and unchanged. Unsupported videos or failures may use a mirror only if separately enabled; Reddit availability is not guaranteed. Duplicates are possible.",
+            "Désactivées par défaut ; à activer explicitement pour les messages de groupe et les liens envoyés directement à ce bot, jamais Secrétaire. Le bot récupère les vidéos Reddit publiques sur son serveur, avec du code vx à version figée et le CDN Reddit, puis envoie une copie à Telegram. Sans service vx public ni connexion Reddit. La meilleure résolution tenant dans 20 Mio est choisie, quitte à réduire la qualité ; le son est assemblé s’il existe et la vidéo préparée pour une lecture rapide (faststart). L’original propre reste. Les choix de liens miroirs sont indépendants et inchangés. Vidéo non prise en charge ou échec : un miroir peut servir seulement s’il est activé séparément ; la disponibilité Reddit n’est pas garantie. Des doublons sont possibles.")
     }
 
     private static func resumeDisclosure(language: BotLanguage) -> String {
@@ -533,8 +539,8 @@ struct SettingsUI {
 
     private static func activationDisclosure(language: BotLanguage) -> String {
         language.text(
-            "Links pass through Telegram and enabled mirror providers. YouTube may fetch titles/thumbnails; Facebook videos are off by default and separately opt-in. Reddit native videos are also off by default and separately opt-in, independent of link mirrors. Enabled videos are fetched on the bot server and copied to Telegram, in groups only. Duplicate previews are possible.",
-            "Les liens passent par Telegram et les fournisseurs miroirs activés. YouTube peut fournir titres et miniatures ; les vidéos Facebook sont désactivées par défaut et à activer séparément. Les vidéos natives Reddit sont aussi désactivées par défaut et à activer séparément, indépendamment des liens miroirs. Une fois activées, les vidéos sont récupérées sur le serveur du bot et copiées dans Telegram, en groupe uniquement. Des doublons d’aperçu sont possibles.") + "\n\n" + removalDisclosure(language: language)
+            "Links pass through Telegram and enabled mirror providers. YouTube may fetch titles/thumbnails; Facebook videos are off by default and separately opt-in. Reddit native videos are also off by default and separately opt-in, independent of link mirrors. Enabled videos are fetched on the bot server and copied to Telegram, in groups and direct requests to this bot. Duplicate previews are possible.",
+            "Les liens passent par Telegram et les fournisseurs miroirs activés. YouTube peut fournir titres et miniatures ; les vidéos Facebook sont désactivées par défaut et à activer séparément. Les vidéos natives Reddit sont aussi désactivées par défaut et à activer séparément, indépendamment des liens miroirs. Une fois activées, les vidéos sont récupérées sur le serveur du bot et copiées dans Telegram, en groupe et dans vos demandes directes à ce bot. Des doublons d’aperçu sont possibles.") + "\n\n" + removalDisclosure(language: language)
     }
 
     private static func modeDisclosure(language: BotLanguage) -> String {

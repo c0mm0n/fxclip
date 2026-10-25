@@ -210,7 +210,7 @@ final class RedditSettingsTests: XCTestCase {
                             }
                             XCTAssertFalse(actions.compactMap { $0["callback_data"] }.contains { $0.contains(":provider:") || $0.contains(":preview:reddit:on") || $0.contains(":customize") })
                             XCTAssertTrue(actions.contains { $0["callback_data"] == "fxclip:rules:\(scope):preview:reddit:show" })
-                            let phrases = language == .en ? ["Off by default", "enable explicitly", "group messages only", "never Secretary",
+                            let phrases = language == .en ? ["Off by default", "enable explicitly", "group messages and direct links to this bot", "never Secretary",
                                 "public Reddit", "privately", "bot server", "pinned vx code", "Reddit CDN", "copy to Telegram",
                                 "No public vx service or Reddit login", "highest resolution", "20 MiB", "lowering quality",
                                 "audio when present", "faststart", "clean original", "independent and unchanged",

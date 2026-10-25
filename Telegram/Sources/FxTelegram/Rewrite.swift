@@ -7,7 +7,7 @@ public struct Rewriter {
     public init(engine: Engine) { self.engine = engine }
 
     public func rewrite(_ message: Message, previews: Bool, attribution: Bool = true,
-                        language: BotLanguage = .en) -> RenderedMessage? {
+                        language: BotLanguage = .en, includeUnchangedLinks: Bool = false) -> RenderedMessage? {
         guard let text = message.text ?? message.caption else { return nil }
         let entities = message.text == nil ? (message.caption_entities ?? []) : (message.entities ?? [])
         let source = text as NSString
@@ -30,6 +30,7 @@ public struct Rewriter {
                 NSIntersectionRange(range, NSRange(location: $0.offset, length: $0.length)).length > 0
             }) else { return url }
             let value = clean(url)
+            if includeUnchangedLinks, preview == nil { preview = value }
             if value != url {
                 edits.append(Edit(range: range, value: value))
                 if preview == nil { preview = value }
@@ -41,7 +42,7 @@ public struct Rewriter {
         for var entity in entities {
             if entity.type == "text_link", let url = entity.url {
                 let value = clean(url)
-                if value != url { preview = preview ?? value; entity.url = value }
+                if value != url || includeUnchangedLinks { preview = preview ?? value; entity.url = value }
             }
             let start = entity.offset, end = start + entity.length
             // Drop formatting with a boundary inside a rewritten URL, where no exact mapping exists.

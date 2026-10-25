@@ -147,6 +147,7 @@ public final class Bot {
         }
         var settings = chatSettings(message.chat.id)
         if command == "/fxclip" {
+            guard message.chat.isGroup else { return }
             if words.count > 1 {
                 // Anonymous admin identities cannot be authenticated as a particular member.
                 guard message.sender_chat == nil, let user = message.from,
@@ -182,25 +183,41 @@ public final class Bot {
                 to: message, markup: privateSettingsLink(language: language))
             return
         }
-        guard isEnabled(chatID: message.chat.id) else { return }
-        if message.sender_chat == nil, let user = message.from,
+        // Sending a link to the bot is an explicit request, independent of group
+        // activation, group modes and connected Business/Secretary conversations.
+        let directMessage = message.chat.type == "private"
+            && message.sender_chat == nil && message.from?.is_bot == false
+            && message.chat.id > 0 && message.chat.id == message.from?.id
+            && message.business_connection_id == nil && message.sender_business_bot == nil
+        if message.chat.type == "private" {
+            guard directMessage else { return }
+            // Unknown commands and media captions are not direct link requests.
+            guard !command.hasPrefix("/"), message.text != nil else { return }
+            settings = ChatSettings()
+            settings.mode = .reply
+        } else {
+            guard message.chat.isGroup, isEnabled(chatID: message.chat.id) else { return }
+        }
+        if !directMessage, message.sender_chat == nil, let user = message.from,
            let personal = store.state.users[String(user.id)], personal != .secretary { settings.mode = personal }
         guard ["group", "supergroup", "private"].contains(message.chat.type),
               settings.mode != .off, settings.mode != .secretary else { return }
         let senderID = message.sender_chat == nil ? message.from?.id : nil
-        let configured = configuredRewriter(chatID: message.chat.id, userID: senderID)
-        let replyContent = configured.rewrite(message, previews: settings.previews, attribution: false)
+        let settingsChatID = directMessage ? nil : message.chat.id
+        let configured = configuredRewriter(chatID: settingsChatID, userID: senderID)
+        let replyContent = configured.rewrite(message, previews: settings.previews, attribution: false,
+                                              includeUnchangedLinks: directMessage)
         // This is presentation, not another cleaning engine. Only plain, single-link
         // messages qualify; formatting, hidden links and media keep their existing path.
         let videoID: String?
-        if settings.previews, cardsEnabled(chatID: message.chat.id, userID: senderID),
+        if settings.previews, cardsEnabled(chatID: settingsChatID, userID: senderID),
            message.link_preview_options?.is_disabled != true,
            youTubeMetadata != nil, let text = message.text,
            (message.entities ?? []).allSatisfy({ $0.type == "url" }), isBareURL(text) {
             videoID = YouTubePreview.videoID(in: text.trimmingCharacters(in: .whitespacesAndNewlines))
         } else { videoID = nil }
         let facebookSource: String?
-        if settings.previews, facebookEnabled(chatID: message.chat.id, userID: senderID),
+        if settings.previews, facebookEnabled(chatID: settingsChatID, userID: senderID),
            message.link_preview_options?.is_disabled != true, facebookReels != nil,
            message.forward_origin == nil, message.sender_chat == nil,
            let text = message.text, (message.entities ?? []).allSatisfy({ $0.type == "url" }), isBareURL(text) {
@@ -208,7 +225,8 @@ public final class Bot {
             facebookSource = FacebookReelPreview.facebedURL(in: source) == nil ? nil : source
         } else { facebookSource = nil }
         let redditSource: (id: String, url: String)?
-        if message.chat.isGroup, settings.previews, redditEnabled(chatID: message.chat.id, userID: senderID), redditVideos != nil,
+        if (message.chat.isGroup || directMessage), settings.previews,
+           redditEnabled(chatID: settingsChatID, userID: senderID), redditVideos != nil,
            message.link_preview_options?.is_disabled != true, message.forward_origin == nil, message.sender_chat == nil,
            let text = message.text, (message.entities ?? []).allSatisfy({ $0.type == "url" }), isBareURL(text) {
             let source = configured.engine.clean(text).text.trimmingCharacters(in: .whitespacesAndNewlines)
