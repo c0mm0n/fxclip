@@ -107,8 +107,26 @@ Group admins can enable or disable enhanced previews in `/setup` or with
 `fxtwitter.com`, `zzinstagram.com` and `vxreddit.com`. Choose a mirror under **Links & previews → Previews**, then enable it or open its advanced provider settings.
 
 For a message containing only a plain YouTube video link, enhanced previews also
-fetch the title and thumbnail directly from YouTube and send them with the clean
-link. This includes already-clean links. Telegram's Bot API does not expose
+fetch the title and thumbnail directly from YouTube. The title appears above the
+image; a red **Open YouTube / Ouvrir YouTube** button opens the cleaned source URL,
+including timestamps. The linked YouTube heading also retains that URL, without
+repeating a long address in the caption. Replacement credit is preserved.
+
+When oEmbed declares a small or letterboxed thumbnail, the bot checks availability
+of YouTube's wide HD image with one cookie-free, redirect-blocked HEAD request
+(two-second request timeout). It keeps the original oEmbed image if unavailable.
+An explicitly rejected HD photo can retry that original image once; ambiguous
+sends never trigger another upload. This is a photo card: tapping the photo opens
+the image, not a YouTube player. The red button opens YouTube. Telegram controls
+the native web preview's side bar and overlaid player; those cannot be added to a
+photo message. Button colors require a compatible Telegram client.
+
+La carte affiche le titre au-dessus d’une miniature HD panoramique quand elle
+existe, puis un vrai bouton rouge **Ouvrir YouTube**. Le lien nettoyé et son
+horodatage sont conservés dans les liens cliquables, sans adresse répétée dans la
+légende. La photo n’est pas un lecteur intégré ; le bouton ouvre YouTube.
+
+This includes already-clean links. Telegram's Bot API does not expose
 whether its own card appeared, so a duplicate preview is possible. Turning
 enhanced previews off disables these cards. Explicitly suppressed previews,
 formatted or hidden links, captions and messages containing more than one link
@@ -523,7 +541,8 @@ Cleaning runs locally on the server, but the bot communicates with Telegram.
 Telegram receives reposted messages; mirrors can receive links when previews are
 generated. The engine does not expand or visit links. No additional analytics or
 external account is used. Native YouTube cards request video metadata from
-YouTube's oEmbed endpoint and let Telegram fetch the YouTube thumbnail; they use
+YouTube's oEmbed endpoint, may check the HD thumbnail on YouTube's CDN without
+cookies or redirects, and let Telegram fetch the image bytes; they use
 no preview mirror. Fetched titles, thumbnails and videos are not persisted;
 YouTube and oversized-notice opening-button URLs are retained only while
 removal-button cleanup is pending, for at most 48 hours. Full-video replies have

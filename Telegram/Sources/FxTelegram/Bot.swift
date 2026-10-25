@@ -376,30 +376,18 @@ public final class Bot {
             if let metadata {
                 let cleanURL = configured.engine.clean(message.text ?? "").text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                let cleanText = rendered?.text ?? cleanURL
-                let heading = "YouTube\n"
-                let prefix = heading + metadata.title + "\n\n"
-                let caption = prefix + cleanText
-                if caption.utf16.count <= 1024 {
+                if let caption = YouTubePreview.caption(title: metadata.title, url: cleanURL, credit: replace ? rendered : nil) {
                     var photo = base(message)
                     photo["photo"] = metadata.thumbnailURL.absoluteString
-                    photo["caption"] = caption
+                    photo["caption"] = caption.text
+                    photo["show_caption_above_media"] = true
                     photo["disable_notification"] = true
-                    var entities = [Entity(type: "text_link", offset: 0, length: 7, url: cleanURL),
-                                    Entity(type: "bold", offset: heading.utf16.count, length: metadata.title.utf16.count)]
-                    if let rendered {
-                        var originalEntities = rendered.entities
-                        for index in originalEntities.indices { originalEntities[index].offset += prefix.utf16.count }
-                        entities += originalEntities
-                    } else {
-                        entities.append(Entity(type: "url", offset: prefix.utf16.count, length: cleanText.utf16.count))
-                    }
-                    photo["caption_entities"] = try jsonObject(entities)
+                    photo["caption_entities"] = try jsonObject(caption.entities)
                     photo["reply_markup"] = ["inline_keyboard": [[[
-                        "text": language.text("▶ Open YouTube", "▶ Ouvrir YouTube"), "url": cleanURL,
+                        "text": language.text("▶ Open YouTube", "▶ Ouvrir YouTube"), "url": cleanURL, "style": "danger",
                     ]]]]
                     let original = manualReplacementOriginal(message, replacement: replace, now: ownershipNow,
-                                                             content: caption, limit: 1024)
+                                                             content: caption.text, limit: 1024)
                     if removalPoster != nil { addRemovalButton(to: &photo, language: language, replacement: replace, canReplace: original != nil) }
                     if replace {
                         if let parent = message.reply_to_message {
@@ -409,7 +397,15 @@ public final class Bot {
                         photo["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true]
                     }
                     do {
-                        let sentID = try await deliverPreview("sendPhoto", parameters: photo, pendingID: pendingID)
+                        let sentID: Int64
+                        do {
+                            sentID = try await deliverPreview("sendPhoto", parameters: photo, pendingID: pendingID)
+                        } catch BotError.telegram(400) where metadata.fallbackThumbnailURL != nil {
+                            // A definite HD-image rejection permits one attempt with
+                            // the verified oEmbed image, including on the same placeholder.
+                            photo["photo"] = metadata.fallbackThumbnailURL!.absoluteString
+                            sentID = try await deliverPreview("sendPhoto", parameters: photo, pendingID: pendingID)
+                        }
                         if let publicationPoster {
                             try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: publicationPoster,
                                                         now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970, original: original)
@@ -478,7 +474,7 @@ public final class Bot {
             } else {
                 var media: [String: Any] = ["type": method == "sendVideo" ? "video" : "photo",
                                            "media": parameters[method == "sendVideo" ? "video" : "photo"]!]
-                for key in ["caption", "caption_entities", "supports_streaming", "width", "height"] { media[key] = parameters[key] }
+                for key in ["caption", "caption_entities", "show_caption_above_media", "supports_streaming", "width", "height"] { media[key] = parameters[key] }
                 edit["media"] = media
                 result = try await api.call("editMessageMedia", edit)
             }
@@ -614,7 +610,9 @@ public final class Bot {
             if let button = control.openButton, let url = button.url,
                let parts = URLComponents(string: url), let scheme = parts.scheme?.lowercased(),
                ["http", "https"].contains(scheme), parts.host != nil, parts.user == nil, parts.password == nil {
-                rows = [[["text": button.text, "url": url]]]
+                var opening = ["text": button.text, "url": url]
+                if let style = button.style, ["danger", "primary", "success"].contains(style) { opening["style"] = style }
+                rows = [[opening]]
             }
             let completed: Bool
             do {
@@ -666,7 +664,9 @@ public final class Bot {
                                      confirmation: Bool = false, canReplace: Bool = false) -> [String: Any] {
         var parameters: [String: Any] = [:]
         if let open = control.openButton, let url = open.url {
-            parameters["reply_markup"] = ["inline_keyboard": [[["text": open.text, "url": url]]]]
+            var opening = ["text": open.text, "url": url]
+            if let style = open.style, ["danger", "primary", "success"].contains(style) { opening["style"] = style }
+            parameters["reply_markup"] = ["inline_keyboard": [[opening]]]
         }
         if confirmation {
             var rows = (parameters["reply_markup"] as? [String: Any])?["inline_keyboard"] as? [[[String: String]]] ?? []
@@ -747,6 +747,7 @@ public final class Bot {
                                       "reply_markup": manualPreviewMarkup(control, language: language)]
             edit[isText ? "text" : "caption"] = credited
             edit[isText ? "entities" : "caption_entities"] = try jsonObject(prefix.entities + originalEntities)
+            if !isText, let above = message.show_caption_above_media { edit["show_caption_above_media"] = above }
             if isText, let options = message.link_preview_options { edit["link_preview_options"] = try jsonObject(options) }
             // One durable attempt: an ambiguous edit or a repeated/stale callback
             // cannot add another credit or later authorize original deletion.

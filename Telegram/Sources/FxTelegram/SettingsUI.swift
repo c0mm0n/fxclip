@@ -360,6 +360,9 @@ struct SettingsUI {
             text += "\n\n" + language.text(
                 "When enabled, a single plain link gets a title and thumbnail fetched directly from YouTube, even if already clean. Telegram may also show its own preview: duplicates are possible.",
                 "Une fois activé, un lien seul et sans mise en forme reçoit un titre et une miniature récupérés directement sur YouTube, même déjà propre. Telegram peut aussi afficher son aperçu : un doublon est possible.")
+            text += "\n" + language.text(
+                "Title above the image; wide HD thumbnail when available; red Open YouTube button on compatible clients. The photo is not an in-chat player. HD availability may be checked on YouTube’s CDN.",
+                "Titre au-dessus de l’image, miniature HD panoramique si disponible, bouton rouge Ouvrir YouTube sur les clients compatibles. La photo n’est pas un lecteur intégré. La disponibilité HD peut être vérifiée sur le CDN YouTube.")
             text += "\n\n" + removalDisclosure(language: language)
             serviceActions("youtube", enabled: youTubeCards, follows: youTubeInherited && scope != "d")
             backAction = "previews"; backLabel = language.text("← Previews", "← Aperçus")

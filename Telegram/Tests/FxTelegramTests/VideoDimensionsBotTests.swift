@@ -268,7 +268,8 @@ final class VideoDimensionsBotTests: XCTestCase {
             let media = slow ? try XCTUnwrap(envelope["media"] as? [String: Any]) : envelope
             assertDimensions(media, width: nil, height: nil)
             XCTAssertNil(media["supports_streaming"])
-            XCTAssertTrue((media["caption"] as? String)?.hasPrefix("YouTube\nFixture video\n\n") == true)
+            XCTAssertEqual(media["caption"] as? String, "YouTube\nFixture video")
+            XCTAssertEqual(media["show_caption_above_media"] as? Bool, true)
             XCTAssertNotNil(media["caption_entities"])
             XCTAssertEqual(media[slow ? "media" : "photo"] as? String, "https://example.invalid/thumbnail.jpg")
             if slow { XCTAssertEqual(media["type"] as? String, "photo") }

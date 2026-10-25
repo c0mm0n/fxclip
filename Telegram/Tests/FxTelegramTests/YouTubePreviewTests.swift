@@ -215,6 +215,75 @@ final class YouTubePreviewTests: XCTestCase {
         XCTAssertEqual(YouTubeURLProtocol.requests.count, 1)
     }
 
+    func testLetterboxedOEmbedThumbnailPrefersAvailableWideHDImage() async throws {
+        let session = makeSession(); defer { session.invalidateAndCancel() }
+        YouTubeURLProtocol.handler = { request in
+            if request.httpMethod == "HEAD" {
+                XCTAssertEqual(request.url?.absoluteString, "https://i.ytimg.com/vi/\(self.videoID)/maxresdefault.jpg")
+                XCTAssertEqual(request.timeoutInterval, 2)
+                XCTAssertFalse(request.httpShouldHandleCookies)
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "image/jpeg")
+                return (try XCTUnwrap(HTTPURLResponse(url: XCTUnwrap(request.url), statusCode: 200,
+                    httpVersion: nil, headerFields: ["Content-Type": "image/jpeg", "Content-Length": "12345"])), Data())
+            }
+            return try self.sizedResponse(request)
+        }
+        let metadata = try await YouTubeMetadataFetcher(session: session).fetch(videoID: videoID)
+        XCTAssertTrue(metadata.thumbnailURL.absoluteString.hasSuffix("/maxresdefault.jpg"))
+        XCTAssertTrue(metadata.fallbackThumbnailURL?.absoluteString.hasSuffix("/hqdefault.jpg") == true)
+        XCTAssertEqual(YouTubeURLProtocol.requests.map(\.httpMethod), ["GET", "HEAD"])
+    }
+
+    func testUnavailableOrInvalidWideThumbnailKeepsVerifiedOEmbedURL() async throws {
+        let session = makeSession(); defer { session.invalidateAndCancel() }
+        for (status, mime, length) in [(404, "image/jpeg", "100"), (302, "image/jpeg", "100"),
+                                       (200, "text/html", "100"), (200, "image/jpeg", "0")] {
+            YouTubeURLProtocol.handler = { request in
+                if request.httpMethod != "HEAD" { return try self.sizedResponse(request) }
+                return (try XCTUnwrap(HTTPURLResponse(url: XCTUnwrap(request.url), statusCode: status,
+                    httpVersion: nil, headerFields: ["Content-Type": mime, "Content-Length": length,
+                        "Location": "https://example.invalid/untrusted"])), Data())
+            }
+            let metadata = try await YouTubeMetadataFetcher(session: session).fetch(videoID: videoID)
+            XCTAssertTrue(metadata.thumbnailURL.absoluteString.hasSuffix("/hqdefault.jpg"))
+        }
+        XCTAssertTrue(YouTubeURLProtocol.requests.allSatisfy { ["www.youtube.com", "i.ytimg.com"].contains($0.url?.host) })
+    }
+
+    func testWideProbeTimeoutFallsBackButCancellationPropagates() async throws {
+        let session = makeSession(); defer { session.invalidateAndCancel() }
+        for code in [URLError.timedOut, .cancelled] {
+            YouTubeURLProtocol.handler = { request in
+                if request.httpMethod == "HEAD" { throw URLError(code) }
+                return try self.sizedResponse(request)
+            }
+            do {
+                let metadata = try await YouTubeMetadataFetcher(session: session).fetch(videoID: videoID)
+                XCTAssertEqual(code, .timedOut)
+                XCTAssertTrue(metadata.thumbnailURL.absoluteString.hasSuffix("/hqdefault.jpg"))
+            } catch let error as URLError {
+                XCTAssertEqual(code, .cancelled)
+                XCTAssertEqual(error.code, .cancelled)
+            }
+        }
+    }
+
+    func testExistingWideHDMetadataSkipsAvailabilityProbe() async throws {
+        let session = makeSession(); defer { session.invalidateAndCancel() }
+        YouTubeURLProtocol.handler = { try self.sizedResponse($0, width: 1280, height: 720, file: "maxresdefault.jpg") }
+        let metadata = try await YouTubeMetadataFetcher(session: session).fetch(videoID: videoID)
+        XCTAssertTrue(metadata.thumbnailURL.absoluteString.hasSuffix("/maxresdefault.jpg"))
+        XCTAssertEqual(YouTubeURLProtocol.requests.count, 1)
+    }
+
+    private func sizedResponse(_ request: URLRequest, width: Int = 480, height: Int = 360,
+                               file: String = "hqdefault.jpg") throws -> (URLResponse, Data) {
+        let body: [String: Any] = ["title": "Example video", "thumbnail_url": "https://i.ytimg.com/vi/\(videoID)/\(file)",
+                                   "thumbnail_width": width, "thumbnail_height": height]
+        return (try XCTUnwrap(HTTPURLResponse(url: XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"])), try JSONSerialization.data(withJSONObject: body))
+    }
+
     private func makeSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [YouTubeURLProtocol.self]

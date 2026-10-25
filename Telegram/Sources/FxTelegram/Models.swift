@@ -67,6 +67,7 @@ public struct Message: Decodable {
     public var entities: [Entity]?
     public var caption: String?
     public var caption_entities: [Entity]?
+    public var show_caption_above_media: Bool?
     public var message_thread_id: Int64?
     public var reply_to_message: ReplyTarget?
     public var is_automatic_forward: Bool?
@@ -92,6 +93,7 @@ public struct InlineKeyboardButton: Codable, Equatable {
     public let text: String
     public var callback_data: String?
     public var url: String?
+    public var style: String?
 }
 public struct ForwardOrigin: Codable {
     public let type: String

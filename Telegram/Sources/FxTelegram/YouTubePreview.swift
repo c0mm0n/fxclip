@@ -10,14 +10,39 @@ public protocol YouTubeMetadataProviding {
 public struct YouTubeMetadata {
     public let title: String
     public let thumbnailURL: URL
+    public let fallbackThumbnailURL: URL?
 
-    public init(title: String, thumbnailURL: URL) {
+    public init(title: String, thumbnailURL: URL, fallbackThumbnailURL: URL? = nil) {
         self.title = title
         self.thumbnailURL = thumbnailURL
+        self.fallbackThumbnailURL = fallbackThumbnailURL
     }
 }
 
 public enum YouTubePreview {
+    /// Keep the source in the linked heading and Open button, without repeating
+    /// a long URL in the caption. An automatic replacement must retain its credit.
+    static func caption(title: String, url: String, credit: RenderedMessage?) -> RenderedMessage? {
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, title.utf16.count <= 512 else { return nil }
+        var prefix = ""
+        var entities: [Entity] = []
+        if let credit {
+            guard let source = credit.text.range(of: url, options: [.backwards, .literal]),
+                  source.upperBound == credit.text.endIndex else { return nil }
+            prefix = String(credit.text[..<source.lowerBound])
+            entities = credit.entities.filter {
+                $0.offset >= 0 && $0.length > 0 && $0.offset <= prefix.utf16.count
+                    && $0.length <= prefix.utf16.count - $0.offset
+            }
+        }
+        let heading = "YouTube\n"
+        let text = prefix + heading + title
+        guard text.utf16.count <= 1024 else { return nil }
+        entities += [Entity(type: "text_link", offset: prefix.utf16.count, length: 7, url: url),
+                     Entity(type: "bold", offset: prefix.utf16.count + heading.utf16.count, length: title.utf16.count)]
+        return RenderedMessage(text: text, entities: entities, previewURL: url)
+    }
+
     public static func videoID(in url: String) -> String? {
         guard !url.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.union(.controlCharacters).contains($0) }),
               let components = URLComponents(string: url), components.url != nil,
@@ -101,12 +126,39 @@ public final class YouTubeMetadataFetcher: YouTubeMetadataProviding {
               path[2] == videoID, !path[3].isEmpty, !path[3].contains("%"), path[3] != ".", path[3] != ".." else {
             throw YouTubeMetadataError.invalidResponse
         }
-        return YouTubeMetadata(title: body.title, thumbnailURL: thumbnailURL)
+        var preferred = thumbnailURL
+        // oEmbed often supplies a letterboxed 480×360 image. Prefer YouTube's
+        // wide high-resolution thumbnail when available, retaining oEmbed on failure.
+        if let width = body.thumbnail_width, let height = body.thumbnail_height,
+           width > 0, height > 0,
+           width < 1280 || abs(Double(width) / Double(height) - 16.0 / 9.0) > 0.02 {
+            let candidate = URL(string: "https://i.ytimg.com/vi/\(videoID)/maxresdefault.jpg")!
+            var check = URLRequest(url: candidate, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 2)
+            check.httpMethod = "HEAD"
+            check.httpShouldHandleCookies = false
+            check.setValue("image/jpeg", forHTTPHeaderField: "Accept")
+            do {
+                let (_, response) = try await session.data(for: check, delegate: redirects)
+                if let response = response as? HTTPURLResponse, response.statusCode == 200,
+                   response.mimeType?.lowercased() == "image/jpeg", response.expectedContentLength != 0 {
+                    preferred = candidate
+                }
+            } catch {
+                try Task.checkCancellation()
+                if error is CancellationError { throw error }
+                if let error = error as? URLError, error.code == .cancelled { throw error }
+            }
+            try Task.checkCancellation()
+        }
+        return YouTubeMetadata(title: body.title, thumbnailURL: preferred,
+                               fallbackThumbnailURL: preferred == thumbnailURL ? nil : thumbnailURL)
     }
 
     private struct Response: Decodable {
         let title: String
         let thumbnail_url: String
+        let thumbnail_width: Int?
+        let thumbnail_height: Int?
     }
 }
 

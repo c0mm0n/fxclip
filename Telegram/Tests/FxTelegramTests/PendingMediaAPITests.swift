@@ -107,8 +107,9 @@ final class PendingMediaAPITests: XCTestCase {
         let parameters: [String: Any] = [
             "chat_id": 123, "message_id": 456,
             "media": ["type": "photo", "media": "https://images.example/thumbnail.jpg",
-                      "caption": "😀 A title", "caption_entities": [["type": "bold", "offset": 3, "length": 7]]] as [String: Any],
-            "reply_markup": ["inline_keyboard": [[["text": "Watch", "url": "https://example.com/watch"]]]],
+                      "caption": "😀 A title", "show_caption_above_media": true,
+                      "caption_entities": [["type": "bold", "offset": 3, "length": 7]]] as [String: Any],
+            "reply_markup": ["inline_keyboard": [[["text": "Watch", "url": "https://example.com/watch", "style": "danger"]]]],
         ]
         _ = try await api.call("editMessageMedia", parameters)
         let (request, body) = try onlyRequest()

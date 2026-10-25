@@ -218,7 +218,8 @@ extension BotTests {
             XCTAssertEqual(Set(receipt.keys), expectedKeys)
             if kind == .photo {
                 let open = try XCTUnwrap(receipt["openButton"] as? [String: Any])
-                XCTAssertEqual(Set(open.keys), ["text", "url"])
+                XCTAssertEqual(Set(open.keys), ["text", "url", "style"])
+                XCTAssertEqual(open["style"] as? String, "danger")
                 XCTAssertEqual(open["url"] as? String, kind.source)
             }
             let encoded = try String(decoding: JSONSerialization.data(withJSONObject: receipt), as: UTF8.self)
