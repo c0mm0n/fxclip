@@ -210,9 +210,10 @@ private final class NativeCardAPI: BotAPI {
 }
 
 extension BotTests {
-    private func nativeBot(_ transport: NativeCardAPI, provider: NativeYouTubeProvider) {
+    private func nativeBot(_ transport: NativeCardAPI, provider: NativeYouTubeProvider,
+                           pendingDelay: UInt64 = 1_000_000_000) {
         bot = Bot(api: transport, store: store, engine: engine, allowedChats: [-100], allowedOwners: [7], botID: 99,
-            username: "examplebot", youTubeMetadata: provider, pendingPreviewDelayNanoseconds: 0)
+            username: "examplebot", youTubeMetadata: provider, pendingPreviewDelayNanoseconds: pendingDelay)
     }
 
     func testKoutubeCardUsesCleanVisibleYouTubeURLAndFixedNativePreview() async throws {
@@ -289,7 +290,7 @@ extension BotTests {
 
     func testSlowNativeCardEditsSamePlaceholderAndRecordsCompletionClock() async throws {
         let transport = NativeCardAPI(), provider = NativeYouTubeProvider(); provider.delay = 25_000_000
-        nativeBot(transport, provider: provider)
+        nativeBot(transport, provider: provider, pendingDelay: 0)
         try await handle(["text": "https://youtu.be/aB3_dE-fG09"])
         XCTAssertEqual(transport.calls.map(\.0), ["sendMessage", "editMessageText"])
         XCTAssertEqual(transport.calls.last?.1["message_id"] as? Int64, 42)
@@ -299,7 +300,7 @@ extension BotTests {
 
     func testRejectedPendingNativeEditUsesPhotoInSameMessage() async throws {
         let transport = NativeCardAPI(), provider = NativeYouTubeProvider(); provider.delay = 25_000_000
-        nativeBot(transport, provider: provider)
+        nativeBot(transport, provider: provider, pendingDelay: 0)
         transport.outcomes["editMessageText"] = [.failure(BotError.telegram(400))]
         try await handle(["text": "https://youtu.be/aB3_dE-fG09"])
         XCTAssertEqual(transport.calls.map(\.0), ["sendMessage", "editMessageText", "editMessageMedia"])
@@ -309,7 +310,7 @@ extension BotTests {
 
     func testNativeEditWrongReceiptNeverSendsPhotoOrDeletesOriginal() async throws {
         let transport = NativeCardAPI(), provider = NativeYouTubeProvider(); provider.delay = 25_000_000
-        nativeBot(transport, provider: provider)
+        nativeBot(transport, provider: provider, pendingDelay: 0)
         transport.outcomes["editMessageText"] = [.success(["message_id": 999])]
         do { try await handle(["text": "https://youtu.be/aB3_dE-fG09"]); XCTFail("Expected wrong receipt rejection") } catch {}
         XCTAssertEqual(transport.calls.map(\.0), ["sendMessage", "editMessageText"])
