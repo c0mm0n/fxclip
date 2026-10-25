@@ -9,6 +9,7 @@ services:
     environment:
       TELEGRAM_ALLOWED_CHATS: ${TELEGRAM_ALLOWED_CHATS:-}
       TELEGRAM_OWNER_IDS: ${TELEGRAM_OWNER_IDS:-}
+      FXCLIP_DIAGNOSTICS: ${FXCLIP_DIAGNOSTICS:-0}
     secrets:
       - telegram_token
     volumes:

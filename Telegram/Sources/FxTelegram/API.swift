@@ -23,12 +23,46 @@ public struct VideoUpload {
 public final class TelegramAPI: BotAPI {
     private let token: String
     private let session: URLSession
-    public init(token: String, session: URLSession? = nil) {
+    private let diagnostics: Bool
+    public init(token: String, session: URLSession? = nil, diagnostics: Bool = false) {
         self.token = token
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 45
         config.timeoutIntervalForResource = 50
         self.session = session ?? URLSession(configuration: config)
+        self.diagnostics = diagnostics
+    }
+
+    /// Only closed labels may leave the API boundary. Telegram descriptions and
+    /// URLSession errors can contain tokens, URLs, names or message contents.
+    static func failureSummary(method: String, code: Int, description: String?) -> String {
+        let safeMethod = diagnosticMethod(method)
+        let text = description?.lowercased() ?? ""
+        let reasons: [(String, String)] = [
+            ("can't parse entities", "entities"), ("entity bounds", "entities"),
+            ("button_data_invalid", "button_data"), ("button_type_invalid", "button_type"),
+            ("inline keyboard", "keyboard"), ("reply markup", "keyboard"),
+            ("message to reply not found", "reply_missing"), ("reply message not found", "reply_missing"),
+            ("message thread not found", "thread_missing"),
+            ("message is not modified", "unchanged"), ("message can't be edited", "edit_forbidden"),
+            ("message to edit not found", "edit_missing"),
+            ("webpage_curl_failed", "preview_fetch"), ("webpage_media_empty", "preview_media"),
+            ("wrong http url", "media_url"), ("failed to get http url", "media_fetch"),
+            ("wrong file identifier", "media_identifier"),
+            ("bot was blocked", "blocked"), ("chat not found", "chat_missing"),
+            ("not enough rights", "permissions"), ("can't initiate conversation", "private_not_started"),
+            ("too many requests", "rate_limit"), ("not enough stars", "stars")
+        ]
+        let reason = reasons.first { text.contains($0.0) }?.1 ?? "other"
+        return "Telegram \(safeMethod) rejected: code=\((100...599).contains(code) ? code : 0), reason=\(reason)."
+    }
+
+    private static func diagnosticMethod(_ method: String) -> String {
+        let known: Set<String> = ["getMe", "getUpdates", "getWebhookInfo", "getChatMember", "getBusinessConnection",
+            "sendMessage", "sendPhoto", "sendVideo", "editMessageText", "editMessageCaption", "editMessageMedia",
+            "editMessageReplyMarkup", "deleteMessage", "answerCallbackQuery", "setMyCommands", "setMyDescription",
+            "setMyName", "setMyShortDescription"]
+        return known.contains(method) ? method : "other"
     }
 
     public func call(_ method: String, _ parameters: [String: Any] = [:]) async throws -> Any {
@@ -61,7 +95,10 @@ public final class TelegramAPI: BotAPI {
             upload = nil
         }
         // Reject uploads anywhere except the two supported locations before URLSession sees them.
-        guard JSONSerialization.isValidJSONObject(fields) else { throw BotError.invalidResponse }
+        guard JSONSerialization.isValidJSONObject(fields) else {
+            print("Telegram \(Self.diagnosticMethod(method)) rejected locally: invalid JSON fields.")
+            throw BotError.invalidResponse
+        }
         if let video = upload {
             let boundary = "fxclip-\(UUID().uuidString)"
             var body = Data()
@@ -87,11 +124,22 @@ public final class TelegramAPI: BotAPI {
             request.httpBody = try JSONSerialization.data(withJSONObject: fields)
         }
         for attempt in 0..<2 {
-            let (data, _) = try await session.data(for: request)
+            let data: Data
+            do { (data, _) = try await session.data(for: request) }
+            catch {
+                let category = (error as? URLError).map { "url_\($0.code.rawValue)" } ?? "transport"
+                print("Telegram \(Self.diagnosticMethod(method)) failed: \(category).")
+                throw error
+            }
             guard let body = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 throw BotError.invalidResponse
             }
-            if body["ok"] as? Bool == true { return body["result"] ?? NSNull() }
+            if body["ok"] as? Bool == true {
+                if diagnostics, ["sendMessage", "sendPhoto", "sendVideo", "editMessageText", "editMessageMedia"].contains(method) {
+                    print("Telegram \(Self.diagnosticMethod(method)) accepted.")
+                }
+                return body["result"] ?? NSNull()
+            }
             let code = body["error_code"] as? Int ?? 0
             if code == 429, attempt == 0,
                let parameters = body["parameters"] as? [String: Any],
@@ -99,6 +147,7 @@ public final class TelegramAPI: BotAPI {
                 try await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000_000)
                 continue
             }
+            print(Self.failureSummary(method: method, code: code, description: body["description"] as? String))
             throw BotError.telegram(code)
         }
         throw BotError.invalidResponse

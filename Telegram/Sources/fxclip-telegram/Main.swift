@@ -44,7 +44,8 @@ import FxTelegram
             print("fxclip Telegram: token readable, rules/configuration valid, state writable")
             return
         }
-        let api = TelegramAPI(token: token)
+        let diagnostics = env["FXCLIP_DIAGNOSTICS"] == "1"
+        let api = TelegramAPI(token: token, diagnostics: diagnostics)
         let me = try decode(TelegramUser.self, from: await api.call("getMe"))
         let webhook = try await api.call("getWebhookInfo") as? [String: Any]
         guard (webhook?["url"] as? String) == "" else {
@@ -85,8 +86,24 @@ import FxTelegram
                 // A state write failure is fatal, before any Telegram side effect.
                 guard try store.reserve(update.update_id) else { continue }
                 try await bot.expireReplyControls()
+                if diagnostics {
+                    let scope = update.message?.chat.type == "private" ? "private"
+                        : update.business_message != nil ? "business" : "other"
+                    print("Update handling started: \(scope).")
+                }
                 do { try await bot.handle(update) }
-                catch { print("Update skipped after an error; original message retained.") }
+                catch {
+                    let category: String
+                    if let error = error as? BotError {
+                        switch error {
+                        case .telegram(let code): category = "telegram_\((100...599).contains(code) ? code : 0)"
+                        case .invalidResponse: category = "invalid_response"
+                        case .configuration: category = "configuration"
+                        }
+                    } else if let error = error as? URLError { category = "url_\(error.code.rawValue)" }
+                    else { category = "processing" }
+                    print("Update skipped after an error (\(category)); original message retained.")
+                }
             }
         }
     }
