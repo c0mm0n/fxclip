@@ -893,6 +893,9 @@ public final class Bot {
 
     private func base(_ message: Message) -> [String: Any] {
         var parameters: [String: Any] = ["chat_id": message.chat.id]
+        // Protection must be set on the initial send: a later Replace action can
+        // add account attribution, but Telegram's edit methods cannot add this flag.
+        if message.chat.isGroup { parameters["protect_content"] = true }
         if let thread = message.message_thread_id { parameters["message_thread_id"] = thread }
         return parameters
     }
@@ -998,6 +1001,9 @@ public final class Bot {
                 parameters.removeValue(forKey: "message_id")
             }
         }
+        // Group settings/welcome messages use this separate send path. Do not pass
+        // protect_content to editMessageText, which cannot change that property.
+        if chatID < 0 { parameters["protect_content"] = true }
         let sent = try await api.call("sendMessage", parameters)
         // Remove only this handled group command, after a confirmed panel send.
         // Permission lookup and cleanup are best effort: the panel remains usable.

@@ -26,6 +26,29 @@ final class PendingMediaAPITests: XCTestCase {
         super.tearDown()
     }
 
+    func testProtectedTextAndPhotoSendFlagsReachJSONWireAsTrue() async throws {
+        for method in ["sendMessage", "sendPhoto"] {
+            PendingMediaURLProtocol.requests = []
+            let parameters: [String: Any] = ["chat_id": -100, "protect_content": true,
+                method == "sendPhoto" ? "photo" : "text": method == "sendPhoto" ? "https://example.com/image.jpg" : "Posted by Example"]
+            _ = try await api.call(method, parameters)
+            let (_, body) = try onlyRequest()
+            let fields = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(fields["protect_content"] as? Bool, true)
+            XCTAssertEqual(fields["chat_id"] as? Int, -100)
+        }
+    }
+
+    func testProtectedVideoSendFlagReachesMultipartWithoutChangingBytes() async throws {
+        let video = mp4()
+        _ = try await api.call("sendVideo", ["chat_id": -100, "protect_content": true,
+            "video": VideoUpload(data: video), "caption": "Posted by Example"])
+        let (request, body) = try onlyRequest()
+        let (boundary, text) = try multipart(request, body)
+        XCTAssertEqual(try field("protect_content", in: text, boundary: boundary), "true")
+        XCTAssertNotNil(body.range(of: video))
+    }
+
     func testVideoEditUploadsAttachmentAndPreservesNestedCaptionEntitiesAndMarkup() async throws {
         let caption = "😀 A <caption> & \"quote\"\nSecond line"
         let entities: [[String: Any]] = [

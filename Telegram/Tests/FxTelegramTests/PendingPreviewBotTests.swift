@@ -15,6 +15,14 @@ private final class PendingPreviewAPI: BotAPI {
     var methods: [String] { calls.map(\.0) }
 
     func call(_ method: String, _ parameters: [String: Any]) async throws -> Any {
+        if ["sendMessage", "sendPhoto", "sendVideo"].contains(method),
+           let chatID = parameters["chat_id"] as? Int64, chatID < 0 {
+            XCTAssertEqual(parameters["protect_content"] as? Bool, true,
+                           "Even the placeholder must already be protected")
+        }
+        if ["editMessageText", "editMessageMedia"].contains(method) {
+            XCTAssertNil(parameters["protect_content"], "Telegram edits cannot set content protection")
+        }
         calls.append((method, parameters))
         beforeCall?(method, parameters)
         if var queued = outcomes[method], !queued.isEmpty {

@@ -152,6 +152,7 @@ final class VideoDimensionsBotTests: XCTestCase {
             XCTAssertNil(envelope["message_thread_id"], file: file, line: line)
         }
         let sent = try parameters(slow ? "sendMessage" : "sendVideo")
+        XCTAssertEqual(sent["protect_content"] as? Bool, true)
         XCTAssertEqual((sent["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5, file: file, line: line)
         XCTAssertEqual(sent["message_thread_id"] as? Int64, 123, file: file, line: line)
     }
@@ -215,6 +216,7 @@ final class VideoDimensionsBotTests: XCTestCase {
             try await handle(source + "?utm_source=fixture")
             XCTAssertEqual(api.methods, ["getChatMember", "sendVideo", "deleteMessage"])
             let video = try parameters("sendVideo")
+            XCTAssertEqual(video["protect_content"] as? Bool, true)
             assertDimensions(video, width: usable ? 1920 : nil, height: usable ? 1080 : nil)
             XCTAssertEqual((video["video"] as? VideoUpload)?.data, reddit.video)
             XCTAssertEqual(video["caption"] as? String, "Posted by Member 😀")

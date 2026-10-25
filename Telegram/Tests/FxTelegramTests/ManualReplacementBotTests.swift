@@ -55,6 +55,11 @@ final class ManualReplacementBotTests: XCTestCase {
     private func publish(_ source: [String: Any]? = nil, now: Int = 1100) async throws -> [String: Any] {
         api.calls = []
         try await bot.handle(wire(Update.self, ["update_id": 1, "message": source ?? original()]), now: now)
+        for call in api.calls where ["sendMessage", "sendPhoto", "sendVideo"].contains(call.0)
+            && (call.1["chat_id"] as? Int64 ?? 0) < 0 {
+            XCTAssertEqual(call.1["protect_content"] as? Bool, true,
+                           "Replacement-capable replies must be protected before attribution is added")
+        }
         return api.calls.first { ["sendMessage", "sendPhoto", "sendVideo"].contains($0.0) }?.1 ?? [:]
     }
 
@@ -64,6 +69,7 @@ final class ManualReplacementBotTests: XCTestCase {
         result.removeValue(forKey: "reply_parameters")
         result["message_id"] = Int64(42)
         result["date"] = 1100
+        if sent["protect_content"] as? Bool == true { result["has_protected_content"] = true }
         result["chat"] = ["id": Int64(-100), "type": "supergroup"]
         result["from"] = user(99, name: "fxclip", bot: true)
         result["reply_to_message"] = source ?? original()
@@ -122,6 +128,9 @@ final class ManualReplacementBotTests: XCTestCase {
     }
 
     private func assertOriginalDeleted(file: StaticString = #filePath, line: UInt = #line) {
+        for call in api.calls where ["editMessageText", "editMessageCaption"].contains(call.0) {
+            XCTAssertNil(call.1["protect_content"], "Edits preserve initial protection", file: file, line: line)
+        }
         let deletes = api.calls.filter { $0.0 == "deleteMessage" }
         XCTAssertEqual(deletes.count, 1, file: file, line: line)
         XCTAssertEqual(deletes.first?.1["chat_id"] as? Int64, -100, file: file, line: line)

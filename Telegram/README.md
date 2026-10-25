@@ -5,6 +5,24 @@ from links and optionally improves X, Instagram and Reddit previews, without req
 members to install a client. Menus support English and French. Run your own instance
 using the [Docker setup](#docker-setup); this project does not configure a public bot.
 
+## Forwarding privacy / Confidentialité des transferts
+
+Group replies (text, cards and videos), including pending previews and automatic
+replacements, are sent with Telegram content protection: forwarding and saving
+from Telegram are blocked. The same protection applies when a group preview is
+edited later with **Replace**. Credit remains visible and clickable inside the
+group. This does not hide it from group members or prevent manual copying by
+someone who can see it. Direct-message link replies remain shareable.
+Protection applies to new sends only: Telegram's Bot API cannot add it to an
+existing message through an edit. Existing unprotected posts must be removed and
+posted again to receive it; already forwarded copies cannot be recalled.
+
+Les réponses du bot dans les groupes sont protégées contre le transfert et
+l’enregistrement, dès l’envoi, y compris les aperçus en préparation et les
+remplacements. Le crédit reste visible et cliquable dans le groupe ; il n’est
+pas masqué à ses membres. Les liens traités en message direct restent
+partageables. Les anciens messages ne sont pas verrouillés rétroactivement.
+
 ## Direct messages / Messages directs
 
 Send a link directly to the bot: it replies with the cleaned link or the enabled
