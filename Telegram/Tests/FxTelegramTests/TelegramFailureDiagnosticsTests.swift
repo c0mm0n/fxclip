@@ -17,6 +17,32 @@ private final class RejectedTelegramProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
+private final class LimitedTelegramProtocol: URLProtocol {
+    private static let lock = NSLock()
+    private static var bodies: [Data?] = []
+    private static var retryDelay = 1
+    static func reset(delay: Int) { lock.lock(); defer { lock.unlock() }; bodies = []; retryDelay = delay }
+    static var requests: [Data?] { lock.lock(); defer { lock.unlock() }; return bodies }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        Self.lock.lock()
+        Self.bodies.append(request.httpBody)
+        let limited = Self.bodies.count == 1
+        let delay = Self.retryDelay
+        Self.lock.unlock()
+        let payload: [String: Any] = limited
+            ? ["ok": false, "error_code": 429, "description": "Too many requests", "parameters": ["retry_after": delay]]
+            : ["ok": true, "result": ["message_id": 42]]
+        let response = HTTPURLResponse(url: request.url!, statusCode: limited ? 429 : 200,
+                                       httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: try! JSONSerialization.data(withJSONObject: payload))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
 final class TelegramFailureDiagnosticsTests: XCTestCase {
     func testKnownFailuresEmitOnlyClosedMethodCodeAndReasonLabels() {
         let description = "Bad Request: can't parse entities: secret https://example.invalid/private name@example.invalid"
@@ -36,6 +62,17 @@ final class TelegramFailureDiagnosticsTests: XCTestCase {
                        "Telegram sendMessage rejected: code=500, reason=other.")
     }
 
+    func testRateLimitDiagnosticOnlyIncludesBoundedStructuredDelay() {
+        XCTAssertEqual(TelegramAPI.failureSummary(method: "sendMessage", code: 429, description: "Too many requests", retryAfter: 23),
+                       "Telegram sendMessage rejected: code=429, reason=rate_limit, retry_seconds=23.")
+        for invalid in [-1, 0, 86_401, Int.max] {
+            XCTAssertEqual(TelegramAPI.failureSummary(method: "sendMessage", code: 429, description: "Too many requests", retryAfter: invalid),
+                           "Telegram sendMessage rejected: code=429, reason=rate_limit.")
+        }
+        XCTAssertEqual(TelegramAPI.failureSummary(method: "sendMessage", code: 400, description: nil, retryAfter: 23),
+                       "Telegram sendMessage rejected: code=400, reason=other.")
+    }
+
     func testDiagnosticsDoNotChangeTheRejectionErrorOrRetryTheSend() async throws {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [RejectedTelegramProtocol.self]
@@ -48,5 +85,33 @@ final class TelegramFailureDiagnosticsTests: XCTestCase {
                 XCTFail("Expected the original Telegram rejection")
             } catch BotError.telegram(let code) { XCTAssertEqual(code, 400) }
         }
+    }
+
+    func testExplicitShortRateLimitRetriesTheIdenticalSendOnce() async throws {
+        LimitedTelegramProtocol.reset(delay: 1)
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [LimitedTelegramProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let api = TelegramAPI(token: "123:synthetic-token", session: session)
+        let response = try await api.call("sendMessage", ["chat_id": 7, "text": "example"])
+        XCTAssertEqual((response as? [String: Any])?["message_id"] as? Int, 42)
+        let requests = LimitedTelegramProtocol.requests
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests.first, requests.last)
+    }
+
+    func testLongRateLimitIsReportedWithoutAnImmediateRepeat() async throws {
+        LimitedTelegramProtocol.reset(delay: 61)
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [LimitedTelegramProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let api = TelegramAPI(token: "123:synthetic-token", session: session)
+        do {
+            _ = try await api.call("sendMessage", ["chat_id": 7, "text": "example"])
+            XCTFail("Expected rate limit")
+        } catch BotError.telegram(429) {}
+        XCTAssertEqual(LimitedTelegramProtocol.requests.count, 1)
     }
 }

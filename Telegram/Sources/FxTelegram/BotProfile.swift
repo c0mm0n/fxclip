@@ -3,19 +3,18 @@ public enum BotProfile {
     public static func configure(api: BotAPI, ownerIDs: Set<Int64>,
                                  userLanguages: [String: BotLanguage]) async throws {
         for (code, language): (String, BotLanguage) in [("", .en), ("fr", .fr)] {
-            _ = try await api.call("setMyName", ["language_code": code, "name": "fxclip"])
-            _ = try await api.call("setMyDescription", [
-                "language_code": code,
-                "description": language.text(
+            try await setProfileField(api: api, getter: "getMyName", setter: "setMyName",
+                                      field: "name", code: code, value: "fxclip")
+            try await setProfileField(api: api, getter: "getMyDescription", setter: "setMyDescription",
+                field: "description", code: code, value: language.text(
                     "fxclip cleans tracking from links and improves previews in Telegram. Open /settings to choose your preferences.",
                     "fxclip retire les paramètres de suivi des liens et améliore leurs aperçus dans Telegram. Ouvrez /settings pour choisir vos réglages.")
-            ])
-            _ = try await api.call("setMyShortDescription", [
-                "language_code": code,
-                "short_description": language.text(
+            )
+            try await setProfileField(api: api, getter: "getMyShortDescription", setter: "setMyShortDescription",
+                field: "short_description", code: code, value: language.text(
                     "Clean links and better previews in Telegram.",
                     "Des liens nettoyés et de meilleurs aperçus dans Telegram.")
-            ])
+            )
             try await setCommands(api: api, scope: ["type": "default"], code: code,
                                   commands: privateCommands(language: language, owner: false))
             try await setCommands(api: api, scope: ["type": "all_group_chats"], code: code,
@@ -43,9 +42,21 @@ public enum BotProfile {
         }
     }
 
+    private static func setProfileField(api: BotAPI, getter: String, setter: String,
+                                       field: String, code: String, value: String) async throws {
+        guard let current = try await api.call(getter, ["language_code": code]) as? [String: Any],
+              let saved = current[field] as? String else { throw BotError.invalidResponse }
+        if saved != value { _ = try await api.call(setter, ["language_code": code, field: value]) }
+    }
+
     private static func setCommands(api: BotAPI, scope: [String: Any], code: String,
                                     commands: [[String: String]]) async throws {
-        _ = try await api.call("setMyCommands", ["scope": scope, "language_code": code, "commands": commands])
+        guard let current = try await api.call("getMyCommands", ["scope": scope, "language_code": code]) as? [[String: String]] else {
+            throw BotError.invalidResponse
+        }
+        if current != commands {
+            _ = try await api.call("setMyCommands", ["scope": scope, "language_code": code, "commands": commands])
+        }
     }
 
     private static func privateCommands(language: BotLanguage, owner: Bool) -> [[String: String]] {

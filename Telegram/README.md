@@ -563,12 +563,15 @@ configuration: install new images explicitly.
 ## Privacy and limits
 
 Operational failures log only a fixed method label, numeric error code and a
-closed reason category. Raw Telegram descriptions, request URLs and URLSession
+closed reason category, plus a bounded structured retry delay for rate limits.
+Raw Telegram descriptions, request URLs and URLSession
 error descriptions are never printed. For a focused delivery investigation,
 `FXCLIP_DIAGNOSTICS=1` also logs request scope (private/business/other), Boolean
 private-input eligibility checks, and accepted send/edit method labels; it never
 logs text, URLs, tokens or user/chat/message IDs.
 Keep this temporary diagnostic switch off during normal operation.
+Profile and command menus are read before updating; restarting the bot does not
+rewrite unchanged names, descriptions or menus.
 
 Cleaning runs locally on the server, but the bot communicates with Telegram.
 Telegram receives reposted messages; mirrors can receive links when previews are

@@ -35,7 +35,7 @@ public final class TelegramAPI: BotAPI {
 
     /// Only closed labels may leave the API boundary. Telegram descriptions and
     /// URLSession errors can contain tokens, URLs, names or message contents.
-    static func failureSummary(method: String, code: Int, description: String?) -> String {
+    static func failureSummary(method: String, code: Int, description: String?, retryAfter: Int? = nil) -> String {
         let safeMethod = diagnosticMethod(method)
         let text = description?.lowercased() ?? ""
         let reasons: [(String, String)] = [
@@ -54,14 +54,15 @@ public final class TelegramAPI: BotAPI {
             ("too many requests", "rate_limit"), ("not enough stars", "stars")
         ]
         let reason = reasons.first { text.contains($0.0) }?.1 ?? "other"
-        return "Telegram \(safeMethod) rejected: code=\((100...599).contains(code) ? code : 0), reason=\(reason)."
+        let wait = code == 429 ? retryAfter.flatMap { (1...86_400).contains($0) ? ", retry_seconds=\($0)" : nil } ?? "" : ""
+        return "Telegram \(safeMethod) rejected: code=\((100...599).contains(code) ? code : 0), reason=\(reason)\(wait)."
     }
 
     private static func diagnosticMethod(_ method: String) -> String {
         let known: Set<String> = ["getMe", "getUpdates", "getWebhookInfo", "getChatMember", "getBusinessConnection",
             "sendMessage", "sendPhoto", "sendVideo", "editMessageText", "editMessageCaption", "editMessageMedia",
             "editMessageReplyMarkup", "deleteMessage", "answerCallbackQuery", "setMyCommands", "setMyDescription",
-            "setMyName", "setMyShortDescription"]
+            "setMyName", "setMyShortDescription", "getMyName", "getMyDescription", "getMyShortDescription", "getMyCommands"]
         return known.contains(method) ? method : "other"
     }
 
@@ -141,13 +142,13 @@ public final class TelegramAPI: BotAPI {
                 return body["result"] ?? NSNull()
             }
             let code = body["error_code"] as? Int ?? 0
+            let retryAfter = (body["parameters"] as? [String: Any])?["retry_after"] as? Int
+            print(Self.failureSummary(method: method, code: code, description: body["description"] as? String, retryAfter: retryAfter))
             if code == 429, attempt == 0,
-               let parameters = body["parameters"] as? [String: Any],
-               let delay = parameters["retry_after"] as? Int, (1...60).contains(delay) {
+               let delay = retryAfter, (1...60).contains(delay) {
                 try await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000_000)
                 continue
             }
-            print(Self.failureSummary(method: method, code: code, description: body["description"] as? String))
             throw BotError.telegram(code)
         }
         throw BotError.invalidResponse

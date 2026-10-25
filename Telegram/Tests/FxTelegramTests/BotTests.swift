@@ -25,6 +25,11 @@ final class FakeAPI: BotAPI {
     func call(_ method: String, _ parameters: [String: Any]) async throws -> Any {
         calls.append((method, parameters))
         switch method {
+        case "getMyCommands":
+            let code = parameters["language_code"] as? String ?? ""
+            let scope = parameters["scope"] as? [String: Any]
+            let userID = scope?["chat_id"] as? Int64 ?? 0
+            return commandMenus["\(userID):\(code)"] ?? [[String: String]]()
         case "sendVideo":
             if let videoError { throw videoError }
             return sendResult
