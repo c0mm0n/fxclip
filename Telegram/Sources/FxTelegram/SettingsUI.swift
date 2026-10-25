@@ -25,8 +25,8 @@ struct SettingsUI {
     static func outcome(_ mode: Mode, language: BotLanguage = .en) -> String {
         switch mode {
         case .reply:
-            return language.text("Replies with the clean link; keeps the original message.",
-                                 "Répond avec le lien propre ; garde le message original.")
+            return language.text("Replies with the clean link; keeps the original unless you explicitly confirm Replace.",
+                                 "Répond avec le lien propre ; garde l’original sauf si vous confirmez explicitement Remplacer.")
         case .replace:
             return language.text(
                 "Reposts clean text with the author’s name, then deletes the original if allowed. Media and forwarded messages get a reply instead.",
@@ -509,8 +509,8 @@ struct SettingsUI {
 
     private static func removalDisclosure(language: BotLanguage) -> String {
         language.text(
-            "Removal buttons last 5 minutes, including replacements. Reply /delete or /supprimer, or open My publications privately, to remove your bot publications for less than 48 h. Author/chat/message IDs and dates stay locally for that period. Open-button URLs stay until button cleanup, up to 48 h. Message text and media are not saved.",
-            "Les boutons de retrait durent 5 minutes, y compris sur les remplacements. Répondez /supprimer ou /delete, ou ouvrez Mes publications en privé, pour retirer vos publications du bot pendant moins de 48 h. Identifiants auteur/groupe/message et dates restent localement pendant ce délai. Les URL des boutons d’ouverture restent jusqu’au retrait du bouton, au plus 48 h. Texte et médias ne sont pas enregistrés.")
+            "Buttons last 5 minutes, for the original poster only. Eligible group text replies offer Remove / Replace. Automatic cards/videos keep clean originals; confirming Replace deletes the original after keeping your name and any forwarded source in the bot reply. Saved preferences stay unchanged. Only the original’s message ID/date stay locally during those 5 minutes, cleared before the replacement attempt, at expiry or on button cleanup. Reply /delete or /supprimer, or open My publications privately, to remove bot publications for less than 48 h. Author/chat/message IDs and dates stay locally for that period; Open-button URLs may stay for cleanup up to 48 h; videos without a button retain no opening URL. Original text, names, source titles and media are not saved.",
+            "Les boutons durent 5 minutes, pour l’auteur uniquement. Les réponses aux textes de groupe éligibles proposent Retirer / Remplacer. Les fiches et vidéos automatiques gardent les originaux propres ; confirmer Remplacer supprime l’original après avoir conservé votre nom et la source d’un transfert dans la réponse du bot. Les préférences restent inchangées. Seuls l’identifiant et la date de l’original restent localement durant ces 5 minutes, effacés avant la tentative, à expiration ou au retrait des boutons. Répondez /supprimer ou /delete, ou ouvrez Mes publications en privé, pour retirer les publications du bot pendant moins de 48 h. Identifiants auteur/groupe/message et dates restent localement pendant ce délai ; les URL des boutons d’ouverture peuvent rester au plus 48 h pour le retrait des boutons ; une vidéo sans bouton ne garde aucune URL d’ouverture. Texte original, noms, titres des sources et médias ne sont pas enregistrés.")
     }
 
     private static func facebookDisclosure(language: BotLanguage) -> String {
@@ -527,8 +527,8 @@ struct SettingsUI {
 
     private static func resumeDisclosure(language: BotLanguage) -> String {
         language.text(
-            "Enabled previews contact Telegram, mirrors, YouTube, Facebook or Reddit for native videos. Publication author/chat/message IDs and dates stay locally on the bot server up to 48 h for sender-only deletion. Opening links may stay for button cleanup, up to 48 h.",
-            "Les aperçus activés contactent Telegram, des miroirs, YouTube, Facebook ou Reddit pour les vidéos natives. Identifiants auteur/groupe/message et dates restent localement sur le serveur du bot au plus 48 h pour le retrait par l’auteur. Les liens d’ouverture restent pour le retrait des boutons, au plus 48 h.")
+            "Enabled previews contact Telegram, mirrors, YouTube, Facebook or Reddit for native videos. Automatic cards/videos keep clean originals; explicitly confirming Replace can remove one; its message ID/date stay locally for the 5-minute buttons, cleared before the attempt, at expiry or on button cleanup. Publication author/chat/message IDs and dates stay locally on the bot server up to 48 h for sender-only deletion. Opening links may stay for button cleanup, up to 48 h. Original text, names, source titles and media are not saved.",
+            "Les aperçus activés contactent Telegram, des miroirs, YouTube, Facebook ou Reddit pour les vidéos natives. Les fiches et vidéos automatiques gardent les originaux propres ; confirmer explicitement Remplacer peut en supprimer un ; son identifiant et sa date restent localement pour les boutons de 5 minutes, effacés avant la tentative, à expiration ou au retrait des boutons. Identifiants auteur/groupe/message et dates restent localement sur le serveur du bot au plus 48 h pour le retrait par l’auteur. Les liens d’ouverture restent pour le retrait des boutons, au plus 48 h. Texte original, noms, titres des sources et médias ne sont pas enregistrés.")
     }
 
     private static func activationDisclosure(language: BotLanguage) -> String {
@@ -539,8 +539,8 @@ struct SettingsUI {
 
     private static func modeDisclosure(language: BotLanguage) -> String {
         language.text(
-            "Enabled previews use Telegram, mirror providers or YouTube. Facebook and Reddit native videos are off by default and separately opt-in. Duplicates are possible. Author/chat/message IDs and dates stay locally up to 48 h so you can remove your bot publications. Open-button URLs stay locally for cleanup, up to 48 h.",
-            "Les aperçus activés passent par Telegram, des miroirs ou YouTube. Les vidéos natives Facebook et Reddit sont désactivées par défaut et à activer séparément. Des doublons sont possibles. Identifiants auteur/groupe/message et dates restent localement au plus 48 h pour retirer vos publications du bot. Les URL d’ouverture restent localement pour le retrait des boutons, 48 h maximum.")
+            "Enabled previews use Telegram, mirror providers or YouTube. Facebook and Reddit native videos are off by default and separately opt-in. Duplicates are possible. Eligible replies offer Remove / Replace for 5 minutes; confirming Replace keeps your name and any forwarded source, then deletes the original without changing preferences. Only its message ID/date stay locally during those 5 minutes, cleared before the attempt, at expiry or on button cleanup. Author/chat/message IDs and dates stay locally up to 48 h so you can remove your bot publications. Open-button URLs stay locally for cleanup, up to 48 h; videos without a button retain no opening URL. Original text, names, source titles and media are not saved.",
+            "Les aperçus activés passent par Telegram, des miroirs ou YouTube. Les vidéos natives Facebook et Reddit sont désactivées par défaut et à activer séparément. Des doublons sont possibles. Les réponses éligibles proposent Retirer / Remplacer pendant 5 minutes ; confirmer Remplacer garde votre nom et la source d’un transfert, puis supprime l’original sans changer les préférences. Seuls son identifiant et sa date restent localement durant ces 5 minutes, effacés avant la tentative, à expiration ou au retrait des boutons. Identifiants auteur/groupe/message et dates restent localement au plus 48 h pour retirer vos publications du bot. Les URL des boutons d’ouverture restent localement pour le retrait des boutons, 48 h maximum ; une vidéo sans bouton ne garde aucune URL d’ouverture. Texte original, noms, titres des sources et médias ne sont pas enregistrés.")
     }
 
     private static func about(language: BotLanguage) -> String {

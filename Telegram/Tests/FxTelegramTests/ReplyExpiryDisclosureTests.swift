@@ -14,8 +14,14 @@ final class ReplyExpiryDisclosureTests: XCTestCase {
                 XCTAssertTrue(panel.plainText.contains("5 minutes"))
                 XCTAssertTrue(panel.plainText.contains("48 h"))
                 XCTAssertTrue(panel.plainText.contains(language == .en
-                    ? "Open-button URLs" : "URL des boutons d’ouverture"))
+                    ? "Open-button URLs" : "URL d’ouverture"))
                 XCTAssertTrue(panel.plainText.contains(language == .en ? "locally" : "localement"))
+                XCTAssertTrue(panel.plainText.contains(language == .en ? "Remove / Replace" : "Retirer / Remplacer"))
+                XCTAssertTrue(panel.plainText.contains(language == .en ? "message ID/date" : "date"))
+                XCTAssertTrue(panel.plainText.contains(language == .en ? "before" : "avant la tentative"))
+                XCTAssertTrue(panel.plainText.contains(language == .en
+                    ? "Original text, names, source titles and media are not saved."
+                    : "Texte original, noms, titres des sources et médias ne sont pas enregistrés."))
                 XCTAssertLessThanOrEqual(panel.plainText.utf16.count, 4096)
             }
         }

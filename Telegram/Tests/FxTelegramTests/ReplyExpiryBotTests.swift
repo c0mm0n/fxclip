@@ -143,7 +143,9 @@ extension BotTests {
     func testReplyExpiryTextWaitsUntilExactlyFiveMinutesAndOnlyClearsMarkup() async throws {
         let parameters = try await replyExpirySend()
         let originalRows = try replyExpiryRows(parameters)
-        XCTAssertEqual(originalRows.flatMap { $0 }.map(\.callback_data), ["fxclip:preview:delete"])
+        XCTAssertEqual(originalRows.map(\.count), [2])
+        XCTAssertEqual(originalRows.flatMap { $0 }.map(\.callback_data), ["fxclip:preview:delete", "fxclip:preview:replace"])
+        XCTAssertEqual(store.state.publications["-100:7301"]?.original, OriginalPublication(messageID: 5, date: 1000))
         XCTAssertNil(store.state.replyControls["-100:7301"]?.openButton)
         try replyExpiryRestart()
         api.calls = []
@@ -159,6 +161,8 @@ extension BotTests {
         XCTAssertTrue(try replyExpiryRows(edit).isEmpty)
         XCTAssertTrue(store.state.replyControls.isEmpty)
         XCTAssertTrue(try StateStore(directory: directory).state.replyControls.isEmpty)
+        XCTAssertNil(store.state.publications["-100:7301"]?.original)
+        XCTAssertNotNil(store.state.publications["-100:7301"])
 
         api.calls = []
         try await bot.expireReplyControls(now: 1500)

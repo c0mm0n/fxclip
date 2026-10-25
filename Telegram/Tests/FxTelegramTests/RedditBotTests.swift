@@ -143,8 +143,10 @@ final class RedditBotTests: XCTestCase {
         XCTAssertNil(parameters["caption"], file: file, line: line)
         XCTAssertNil(parameters["caption_entities"], file: file, line: line)
         let controls = try buttons(parameters)
-        XCTAssertEqual(controls.count, 1, file: file, line: line)
-        XCTAssertEqual(controls.first?.callback_data, "fxclip:preview:delete", file: file, line: line)
+        XCTAssertEqual(controls.map(\.callback_data), ["fxclip:preview:delete", "fxclip:preview:replace"], file: file, line: line)
+        let rows = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(parameters["reply_markup"])).inline_keyboard
+        XCTAssertEqual(rows.map(\.count), [2], file: file, line: line)
+        XCTAssertEqual(store.state.publications[receiptKey]?.original, OriginalPublication(messageID: 5, date: 1000), file: file, line: line)
         XCTAssertNil(controls.first?.url, file: file, line: line)
     }
 

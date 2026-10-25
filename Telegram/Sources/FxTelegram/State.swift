@@ -1,16 +1,38 @@
 import Foundation
 import FxEngine
 
+/// The exact original that a single explicit replacement may delete.
+public struct OriginalPublication: Codable, Equatable {
+    public let messageID: Int64
+    public let date: Int
+
+    public init(messageID: Int64, date: Int) {
+        self.messageID = messageID
+        self.date = date
+    }
+}
+
 /// Ownership metadata only; publication content is never persisted here.
 public struct PublicationReceipt: Codable, Equatable {
     public let posterID: Int64
     public let createdAt: TimeInterval
+    public var original: OriginalPublication?
     public static let retention: TimeInterval = 172_800
     static let capacity = 20_000
 
-    public init(posterID: Int64, createdAt: TimeInterval) {
+    public init(posterID: Int64, createdAt: TimeInterval, original: OriginalPublication? = nil) {
         self.posterID = posterID
         self.createdAt = createdAt
+        self.original = original
+    }
+
+    enum CodingKeys: String, CodingKey { case posterID, createdAt, original }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        posterID = try values.decode(Int64.self, forKey: .posterID)
+        createdAt = try values.decode(TimeInterval.self, forKey: .createdAt)
+        original = try values.decodeIfPresent(OriginalPublication.self, forKey: .original)
     }
 }
 
@@ -214,7 +236,7 @@ public final class StateStore {
         }.prefix(Self.publicationCapacity).count < Self.publicationCapacity
     }
     public func recordPublication(chatID: Int64, messageID: Int64, posterID: Int64,
-                                  now: TimeInterval) throws {
+                                  now: TimeInterval, original: OriginalPublication? = nil) throws {
         guard chatID != 0, messageID > 0, posterID > 0, now.isFinite else {
             throw PublicationStateError.invalidReceipt
         }
@@ -224,8 +246,41 @@ public final class StateStore {
             if next.publications != state.publications { try save(next) }
             throw PublicationStateError.capacityReached
         }
-        next.publications["\(chatID):\(messageID)"] = PublicationReceipt(posterID: posterID, createdAt: now)
+        next.publications["\(chatID):\(messageID)"] = PublicationReceipt(posterID: posterID, createdAt: now,
+                                                                    original: original)
         try save(next)
+    }
+    /// Persist consumption before crediting through Telegram. An ambiguous edit
+    /// or restart must never authorize a second attempt to delete the original.
+    public func consumePublicationOriginal(chatID: Int64, messageID: Int64, posterID: Int64,
+                                           now: TimeInterval) throws -> OriginalPublication? {
+        let key = "\(chatID):\(messageID)"
+        guard chatID != 0, messageID > 0, posterID > 0, now.isFinite,
+              let receipt = state.publications[key], receipt.posterID == posterID,
+              receipt.createdAt.isFinite,
+              now >= receipt.createdAt, now - receipt.createdAt < ReplyControl.lifetime,
+              let original = receipt.original,
+              Self.validOriginal(original, botMessageID: messageID, now: now) else { return nil }
+        var next = state
+        next.publications[key]?.original = nil
+        try save(next)
+        return original
+    }
+    /// An observed original edit retires only its replacement authority. The
+    /// poster can still remove the bot publication through the existing paths.
+    public func invalidatePublicationOriginal(chatID: Int64, originalMessageID: Int64) throws {
+        let keys = state.publications.keys.filter {
+            $0.hasPrefix("\(chatID):") && state.publications[$0]?.original?.messageID == originalMessageID
+        }
+        guard !keys.isEmpty else { return }
+        var next = state
+        for key in keys { next.publications[key]?.original = nil }
+        try save(next)
+    }
+    private static func validOriginal(_ original: OriginalPublication, botMessageID: Int64,
+                                      now: TimeInterval) -> Bool {
+        original.messageID > 0 && original.messageID != botMessageID && original.date > 0 &&
+            TimeInterval(original.date) <= now && now - TimeInterval(original.date) < PublicationReceipt.retention
     }
     public func removePublication(chatID: Int64, messageID: Int64) throws {
         let key = "\(chatID):\(messageID)"
@@ -238,6 +293,13 @@ public final class StateStore {
     public func prunePublications(now: TimeInterval) throws {
         guard now.isFinite else { throw PublicationStateError.invalidReceipt }
         let retained = state.publications.filter { now - $0.value.createdAt < PublicationReceipt.retention }
+            .mapValues { receipt in
+                var receipt = receipt
+                // Expire deletion metadata even if no keyboard cleanup was
+                // recorded, or Telegram keeps failing to remove its buttons.
+                if now - receipt.createdAt >= ReplyControl.lifetime { receipt.original = nil }
+                return receipt
+            }
         guard retained != state.publications else { return }
         var next = state
         next.publications = retained
@@ -259,9 +321,10 @@ public final class StateStore {
         try removeReplyControl(key: "\(chatID):\(messageID)")
     }
     func removeReplyControl(key: String) throws {
-        guard state.replyControls[key] != nil else { return }
+        guard state.replyControls[key] != nil || state.publications[key]?.original != nil else { return }
         var next = state
         next.replyControls.removeValue(forKey: key)
+        next.publications[key]?.original = nil
         try save(next)
     }
     public func pruneReplyControls(now: TimeInterval = Date().timeIntervalSince1970) throws {

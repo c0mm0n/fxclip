@@ -34,6 +34,9 @@ public final class Bot {
         let now = fixedNow ?? Int(Date().timeIntervalSince1970)
         try store.observeLanguage(update.callback_query?.from ?? update.message?.from ?? update.edited_message?.from
                                   ?? update.business_message?.from ?? update.edited_business_message?.from)
+        if let edited = update.edited_message {
+            try store.invalidatePublicationOriginal(chatID: edited.chat.id, originalMessageID: edited.message_id)
+        }
         if let membership = update.my_chat_member {
             try store.discover(membership.chat, member: membership.new_chat_member)
             // Only an explicit arrival is a greeting: missing old membership is ambiguous.
@@ -313,7 +316,9 @@ public final class Bot {
                         ])
                     }
                 }
-                if removalPoster != nil { addRemovalButton(to: &video, language: language, replacement: replace) }
+                let original = manualReplacementOriginal(message, replacement: replace, now: ownershipNow,
+                    content: video["caption"] as? String ?? "", limit: 1024)
+                if removalPoster != nil { addRemovalButton(to: &video, language: language, replacement: replace, canReplace: original != nil) }
                 if replace {
                     if let parent = message.reply_to_message {
                         video["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
@@ -323,7 +328,7 @@ public final class Bot {
                     let sentID = try await deliverPreview("sendVideo", parameters: video, pendingID: pendingID)
                     if let publicationPoster {
                         try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: publicationPoster,
-                                                    now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
+                                                    now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970, original: original)
                     }
                     if let removalPoster {
                         try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
@@ -373,7 +378,9 @@ public final class Bot {
                     photo["reply_markup"] = ["inline_keyboard": [[[
                         "text": language.text("▶ Open YouTube", "▶ Ouvrir YouTube"), "url": cleanURL,
                     ]]]]
-                    if removalPoster != nil { addRemovalButton(to: &photo, language: language, replacement: replace) }
+                    let original = manualReplacementOriginal(message, replacement: replace, now: ownershipNow,
+                                                             content: caption, limit: 1024)
+                    if removalPoster != nil { addRemovalButton(to: &photo, language: language, replacement: replace, canReplace: original != nil) }
                     if replace {
                         if let parent = message.reply_to_message {
                             photo["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
@@ -385,7 +392,7 @@ public final class Bot {
                         let sentID = try await deliverPreview("sendPhoto", parameters: photo, pendingID: pendingID)
                         if let publicationPoster {
                             try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: publicationPoster,
-                                                        now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
+                                                        now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970, original: original)
                         }
                         if let removalPoster {
                             try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
@@ -410,7 +417,9 @@ public final class Bot {
         parameters["entities"] = try jsonObject(rendered.entities)
         parameters["link_preview_options"] = ["is_disabled": false, "url": rendered.previewURL]
         parameters["disable_notification"] = true
-        if removalPoster != nil { addRemovalButton(to: &parameters, language: language, replacement: replace) }
+        let original = manualReplacementOriginal(message, replacement: replace, now: ownershipNow,
+                                                 content: rendered.text, limit: 4096)
+        if removalPoster != nil { addRemovalButton(to: &parameters, language: language, replacement: replace, canReplace: original != nil) }
         if replace {
             if let parent = message.reply_to_message {
                 parameters["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
@@ -427,7 +436,7 @@ public final class Bot {
         }
         if let publicationPoster {
             try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: publicationPoster,
-                                        now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
+                                        now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970, original: original)
         }
         if let removalPoster {
             try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
@@ -474,12 +483,31 @@ public final class Bot {
         }
     }
 
-    private func addRemovalButton(to parameters: inout [String: Any], language: BotLanguage, replacement: Bool = false) {
+    private func manualReplacementOriginal(_ message: Message, replacement: Bool, now: TimeInterval,
+                                           content: String, limit: Int) -> OriginalPublication? {
+        guard !replacement, message.chat.isGroup, message.message_id > 0, message.date > 0,
+              TimeInterval(message.date) <= now, now - TimeInterval(message.date) < PublicationReceipt.retention,
+              message.text != nil, message.edit_date == nil, message.sender_chat == nil,
+              let poster = message.from, poster.is_bot == false, poster.id > 0,
+              store.state.replyControls.count < 4096, store.canRecordPublication(now: now),
+              let prefix = PreviewAttribution.prefix(poster: poster, origin: message.forward_origin,
+                                                     language: store.groupLanguage(message.chat.id)),
+              prefix.text.utf16.count + content.utf16.count <= limit else { return nil }
+        return OriginalPublication(messageID: message.message_id, date: message.date)
+    }
+
+    private func addRemovalButton(to parameters: inout [String: Any], language: BotLanguage, replacement: Bool = false,
+                                  canReplace: Bool = false) {
         var markup = parameters["reply_markup"] as? [String: Any] ?? [:]
         var rows = markup["inline_keyboard"] as? [[[String: String]]] ?? []
-        rows.append([["text": replacement ? language.text("🗑 Delete my message", "🗑 Supprimer mon message")
+        if canReplace {
+            rows.append([["text": language.text("🗑 Remove", "🗑 Retirer"), "callback_data": "fxclip:preview:delete"],
+                         ["text": language.text("🔁 Replace", "🔁 Remplacer"), "callback_data": "fxclip:preview:replace"]])
+        } else {
+            rows.append([["text": replacement ? language.text("🗑 Delete my message", "🗑 Supprimer mon message")
                       : language.text("🗑 Remove preview", "🗑 Retirer l’aperçu"),
                       "callback_data": "fxclip:preview:delete"]])
+        }
         markup["inline_keyboard"] = rows
         parameters["reply_markup"] = markup
     }
@@ -611,6 +639,113 @@ public final class Bot {
             await answer(callback, nil)
         } catch {
             await answer(callback, language.text("Could not remove the preview. Please try again.", "Impossible de retirer l’aperçu. Réessayez."), alert: true)
+        }
+    }
+
+    private func manualPreviewMarkup(_ control: ReplyControl, language: BotLanguage,
+                                     confirmation: Bool = false, canReplace: Bool = false) -> [String: Any] {
+        var parameters: [String: Any] = [:]
+        if let open = control.openButton, let url = open.url {
+            parameters["reply_markup"] = ["inline_keyboard": [[["text": open.text, "url": url]]]]
+        }
+        if confirmation {
+            var rows = (parameters["reply_markup"] as? [String: Any])?["inline_keyboard"] as? [[[String: String]]] ?? []
+            rows.append([["text": language.text("✓ Confirm", "✓ Confirmer"), "callback_data": "fxclip:preview:replace:confirm"],
+                         ["text": language.text("← Cancel", "← Annuler"), "callback_data": "fxclip:preview:replace:cancel"]])
+            return ["inline_keyboard": rows]
+        }
+        addRemovalButton(to: &parameters, language: language, replacement: !canReplace, canReplace: canReplace)
+        return parameters["reply_markup"] as! [String: Any]
+    }
+
+    private func replacePreview(_ callback: CallbackQuery, parts: [String], now: TimeInterval) async {
+        let language = callback.message.map(interfaceLanguage) ?? store.userLanguage(callback.from.id)
+        guard parts == ["fxclip", "preview", "replace"] || parts == ["fxclip", "preview", "replace", "confirm"]
+                || parts == ["fxclip", "preview", "replace", "cancel"],
+              let message = callback.message, message.chat.isGroup, message.from?.id == botID, message.from?.is_bot == true,
+              callback.from.is_bot == false,
+              let control = store.state.replyControls["\(message.chat.id):\(message.message_id)"],
+              control.posterID == callback.from.id, now >= control.createdAt,
+              now - control.createdAt < ReplyControl.lifetime,
+              ownsPublication(chatID: message.chat.id, messageID: message.message_id, userID: callback.from.id, now: now) else {
+            await answer(callback, language.text("Only the original poster can choose, for 5 minutes.",
+                                                 "Seule la personne qui a partagé le message peut choisir, pendant 5 minutes."), alert: true)
+            return
+        }
+        let receipt = store.state.publications["\(message.chat.id):\(message.message_id)"]!
+        if parts.last == "cancel" {
+            do {
+                _ = try await api.call("editMessageReplyMarkup", ["chat_id": message.chat.id, "message_id": message.message_id,
+                    "reply_markup": manualPreviewMarkup(control, language: language, canReplace: receipt.original != nil)])
+                await answer(callback, nil)
+            } catch {
+                await answer(callback, language.text("Could not restore the buttons. Nothing was deleted.",
+                                                     "Impossible de rétablir les boutons. Aucun message supprimé."), alert: true)
+            }
+            return
+        }
+        guard let original = receipt.original,
+              let source = message.reply_to_message, source.message_id == original.messageID,
+              source.message_id != message.message_id, source.date == original.date,
+              TimeInterval(original.date) <= now, now - TimeInterval(original.date) < PublicationReceipt.retention,
+              source.sender_chat == nil, source.from?.id == callback.from.id, source.from?.is_bot == false,
+              source.text != nil, source.edit_date == nil, source.has_protected_content != true,
+              source.is_paid_post != true, source.is_automatic_forward != true,
+              let prefix = PreviewAttribution.prefix(poster: callback.from, origin: source.forward_origin, language: language) else {
+            await answer(callback, language.text("The original is unavailable, changed or no longer replaceable. Both messages are kept.",
+                                                 "L’original est indisponible, modifié ou ne peut plus être remplacé. Les deux messages sont conservés."), alert: true)
+            return
+        }
+        do {
+            guard try await canDelete(in: message.chat) else {
+                await answer(callback, language.text("fxclip needs Delete messages permission. Both messages are kept.",
+                                                     "fxclip a besoin du droit de supprimer les messages. Les deux messages sont conservés."), alert: true)
+                return
+            }
+            if parts.count == 3 {
+                let response = try await api.call("editMessageReplyMarkup", ["chat_id": message.chat.id, "message_id": message.message_id,
+                    "reply_markup": manualPreviewMarkup(control, language: language, confirmation: true)])
+                let confirmed = (response as? [String: Any]).flatMap { confirmedMessageID($0["message_id"]) } == message.message_id
+                let boolean = (response as? NSNumber).map { CFGetTypeID($0) == CFBooleanGetTypeID() && $0.boolValue } ?? false
+                guard confirmed || boolean else { throw BotError.invalidResponse }
+                await answer(callback, language.text(
+                    "Your original will be deleted. The fxclip version will keep your name and its source. Use Confirm to continue.",
+                    "Votre original sera supprimé. La version fxclip gardera votre nom et sa source. Utilisez Confirmer pour continuer."), alert: true)
+                return
+            }
+            let isText = message.text != nil
+            let content = isText ? message.text! : (message.caption ?? "")
+            let credited = prefix.text + content
+            guard credited.utf16.count <= (isText ? 4096 : 1024) else {
+                await answer(callback, language.text("Not enough room for attribution. Both messages are kept.",
+                                                     "Pas assez de place pour l’attribution. Les deux messages sont conservés."), alert: true)
+                return
+            }
+            var originalEntities = (isText ? message.entities : message.caption_entities) ?? []
+            for index in originalEntities.indices { originalEntities[index].offset += prefix.text.utf16.count }
+            var edit: [String: Any] = ["chat_id": message.chat.id, "message_id": message.message_id,
+                                      "reply_markup": manualPreviewMarkup(control, language: language)]
+            edit[isText ? "text" : "caption"] = credited
+            edit[isText ? "entities" : "caption_entities"] = try jsonObject(prefix.entities + originalEntities)
+            if isText, let options = message.link_preview_options { edit["link_preview_options"] = try jsonObject(options) }
+            // One durable attempt: an ambiguous edit or a repeated/stale callback
+            // cannot add another credit or later authorize original deletion.
+            guard try store.consumePublicationOriginal(chatID: message.chat.id, messageID: message.message_id,
+                posterID: callback.from.id, now: now) == original else {
+                throw BotError.invalidResponse
+            }
+            let response = try await api.call(isText ? "editMessageText" : "editMessageCaption", edit)
+            guard let response = response as? [String: Any], confirmedMessageID(response["message_id"]) == message.message_id else {
+                throw BotError.invalidResponse
+            }
+            let deleted = try await api.call("deleteMessage", ["chat_id": message.chat.id, "message_id": original.messageID])
+            guard let boolean = deleted as? NSNumber, CFGetTypeID(boolean) == CFBooleanGetTypeID(), boolean.boolValue else {
+                throw BotError.invalidResponse
+            }
+            await answer(callback, language.text("Original replaced ✓", "Original remplacé ✓"))
+        } catch {
+            await answer(callback, language.text("Replacement could not be confirmed. The original was not confirmed deleted; check the chat.",
+                                                 "Le remplacement n’a pas pu être confirmé. La suppression de l’original n’est pas confirmée ; vérifiez la conversation."), alert: true)
         }
     }
 
@@ -860,7 +995,7 @@ public final class Bot {
         let language = store.userLanguage(callback.from.id)
         // Callback data is client-controlled. Bind every action to a button that
         // Telegram confirms is attached to this exact bot message, before routing.
-        guard let message = callback.message, message.from?.id == botID,
+        guard let message = callback.message, message.from?.id == botID, message.from?.is_bot == true,
               let data = callback.data,
               message.reply_markup?.inline_keyboard.joined().contains(where: { $0.callback_data == data }) == true else {
             await answer(callback, language.text("This button is no longer available. Open settings again.", "Ce bouton n’est plus disponible. Ouvrez de nouveau les réglages."), alert: true)
@@ -868,7 +1003,9 @@ public final class Bot {
         }
         let parts = (callback.data ?? "").split(separator: ":").map(String.init)
         if parts.prefix(2) == ["fxclip", "preview"] {
-            await removePreview(callback, now: TimeInterval(now))
+            if parts.prefix(3) == ["fxclip", "preview", "replace"] {
+                await replacePreview(callback, parts: parts, now: now)
+            } else { await removePreview(callback, now: now) }
             return
         }
         if parts.prefix(2) == ["fxclip", "posts"] {

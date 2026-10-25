@@ -57,9 +57,11 @@ extension BotTests {
         XCTAssertNil(video["caption_entities"], file: file, line: line)
         if removal {
             let buttons = try facebookButtons(video)
-            XCTAssertEqual(buttons.count, 1, file: file, line: line)
-            XCTAssertEqual(buttons.first?.callback_data, "fxclip:preview:delete", file: file, line: line)
+            XCTAssertEqual(buttons.map(\.callback_data), ["fxclip:preview:delete", "fxclip:preview:replace"], file: file, line: line)
+            let rows = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(video["reply_markup"])).inline_keyboard
+            XCTAssertEqual(rows.map(\.count), [2], file: file, line: line)
             XCTAssertNil(buttons.first?.url, file: file, line: line)
+            XCTAssertEqual(store.state.publications["-100:42"]?.original, OriginalPublication(messageID: 5, date: 1000), file: file, line: line)
         } else {
             XCTAssertNil(video["reply_markup"], file: file, line: line)
         }
@@ -165,7 +167,7 @@ extension BotTests {
         let video = try facebookVideo()
         XCTAssertEqual(provider.requestedIDs, ["123456"])
         try facebookAssertBareVideo(video)
-        XCTAssertEqual(try facebookButtons(video).last?.text, "🗑 Retirer l’aperçu")
+        XCTAssertEqual(try facebookButtons(video).map(\.text), ["🗑 Retirer", "🔁 Remplacer"])
         let persisted = String(decoding: try facebookStateSnapshot(), as: UTF8.self)
         XCTAssertFalse(persisted.contains(source))
         XCTAssertFalse(persisted.contains(clean))

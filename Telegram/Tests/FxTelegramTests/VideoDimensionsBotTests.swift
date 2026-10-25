@@ -140,7 +140,8 @@ final class VideoDimensionsBotTests: XCTestCase {
         XCTAssertNil(video["caption"], file: file, line: line)
         XCTAssertNil(video["caption_entities"], file: file, line: line)
         let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(envelope["reply_markup"]))
-        XCTAssertEqual(markup.inline_keyboard.flatMap { $0 }.map(\.callback_data), ["fxclip:preview:delete"], file: file, line: line)
+        XCTAssertEqual(markup.inline_keyboard.map(\.count), [2], file: file, line: line)
+        XCTAssertEqual(markup.inline_keyboard.flatMap { $0 }.map(\.callback_data), ["fxclip:preview:delete", "fxclip:preview:replace"], file: file, line: line)
         XCTAssertEqual(Set(store.state.replyControls.keys), ["-100:\(api.sentID)"], file: file, line: line)
         XCTAssertEqual(store.state.replyControls["-100:\(api.sentID)"]?.posterID, 7, file: file, line: line)
         if slow {

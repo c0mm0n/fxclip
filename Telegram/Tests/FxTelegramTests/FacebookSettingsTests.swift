@@ -200,7 +200,7 @@ final class FacebookSettingsTests: XCTestCase {
                 XCTAssertTrue(panel.text.contains("Telegram"))
                 XCTAssertTrue(panel.plainText.contains("5 minutes"))
                 XCTAssertTrue(panel.plainText.contains("48 h"))
-                XCTAssertTrue(panel.plainText.contains(language == .en ? "Open-button URLs" : "URL des boutons d’ouverture"))
+                XCTAssertTrue(panel.plainText.contains(language == .en ? "Open-button URLs" : "URL d’ouverture"))
                 XCTAssertTrue(panel.plainText.contains(language == .en ? "locally" : "localement"))
                 let rows = try XCTUnwrap(panel.markup["inline_keyboard"] as? [[[String: String]]])
                 XCTAssertTrue(rows.flatMap { $0 }.compactMap { $0["callback_data"] }.allSatisfy { $0.utf8.count <= 64 })

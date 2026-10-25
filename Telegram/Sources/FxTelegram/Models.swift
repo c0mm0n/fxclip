@@ -15,6 +15,7 @@ public struct Chat: Codable, Equatable {
     public let id: Int64
     public let type: String
     public var title: String?
+    public var username: String?
     var isGroup: Bool { type == "group" || type == "supergroup" }
 }
 
@@ -58,6 +59,7 @@ public struct Entity: Codable, Equatable {
 public struct Message: Decodable {
     public let message_id: Int64
     public let date: Int
+    public var edit_date: Int?
     public let chat: Chat
     public var from: TelegramUser?
     public var sender_chat: Chat?
@@ -76,8 +78,12 @@ public struct Message: Decodable {
     public var reply_markup: InlineKeyboardMarkup?
     public var link_preview_options: LinkPreviewOptions?
 }
-public struct LinkPreviewOptions: Decodable {
+public struct LinkPreviewOptions: Codable {
     public var is_disabled: Bool?
+    public var url: String?
+    public var prefer_small_media: Bool?
+    public var prefer_large_media: Bool?
+    public var show_above_text: Bool?
 }
 public struct InlineKeyboardMarkup: Decodable, Equatable {
     public let inline_keyboard: [[InlineKeyboardButton]]
@@ -87,9 +93,29 @@ public struct InlineKeyboardButton: Codable, Equatable {
     public var callback_data: String?
     public var url: String?
 }
-public struct ForwardOrigin: Codable { public let type: String }
+public struct ForwardOrigin: Codable {
+    public let type: String
+    public var date: Int?
+    public var sender_user: TelegramUser?
+    public var sender_user_name: String?
+    public var sender_chat: Chat?
+    public var chat: Chat?
+    public var message_id: Int64?
+    public var author_signature: String?
+}
 
-public struct ReplyTarget: Decodable { public let message_id: Int64 }
+public struct ReplyTarget: Decodable {
+    public let message_id: Int64
+    public var date: Int?
+    public var from: TelegramUser?
+    public var sender_chat: Chat?
+    public var text: String?
+    public var edit_date: Int?
+    public var forward_origin: ForwardOrigin?
+    public var has_protected_content: Bool?
+    public var is_paid_post: Bool?
+    public var is_automatic_forward: Bool?
+}
 public struct CallbackQuery: Decodable {
     public let id: String
     public let from: TelegramUser

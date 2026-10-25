@@ -133,17 +133,20 @@ extension BotTests {
     }
 
     func testPreviewRemovalTextReplyHasLocalizedButtonAndMinimalReceipt() async throws {
-        for (language, label) in [(BotLanguage.en, "🗑 Remove preview"), (.fr, "🗑 Retirer l’aperçu")] {
+        for (language, label) in [(BotLanguage.en, "🗑 Remove"), (.fr, "🗑 Retirer")] {
             try store.setGroupLanguage(language, chatID: -100)
             api.calls = []
             try await handle()
             XCTAssertEqual(api.methods, ["sendMessage"])
             XCTAssertEqual((sent["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5)
             let buttons = try previewRemovalButtons(sent)
-            XCTAssertEqual(buttons.count, 1)
+            XCTAssertEqual(buttons.count, 2)
             XCTAssertEqual(buttons.first?.text, label)
             XCTAssertEqual(buttons.first?.callback_data, "fxclip:preview:delete")
             XCTAssertNil(buttons.first?.url)
+            XCTAssertEqual(buttons.last?.callback_data, "fxclip:preview:replace")
+            XCTAssertEqual(buttons.last?.text, language == .fr ? "🔁 Remplacer" : "🔁 Replace")
+            XCTAssertEqual(store.state.publications["-100:42"]?.original, OriginalPublication(messageID: 5, date: 1000))
             XCTAssertEqual(store.state.replyControls["-100:42"]?.posterID, 7)
             XCTAssertEqual(store.state.replyControls["-100:42"]?.createdAt, 1100)
         }
@@ -158,7 +161,7 @@ extension BotTests {
     func testPreviewRemovalYouTubeReplyKeepsOpenActionAndAddsSecondRow() async throws {
         _ = enableYouTubeCards()
         try replaceMode() // An already clean YouTube URL is still an actual reply.
-        for (language, label) in [(BotLanguage.en, "🗑 Remove preview"), (.fr, "🗑 Retirer l’aperçu")] {
+        for (language, label) in [(BotLanguage.en, "🗑 Remove"), (.fr, "🗑 Retirer")] {
             try store.setGroupLanguage(language, chatID: -100)
             api.calls = []
             try await handle(["text": "https://youtu.be/dQw4w9WgXcQ?t=42"])
@@ -170,6 +173,8 @@ extension BotTests {
             XCTAssertEqual(rows.first?.first?.text, language == .fr ? "▶ Ouvrir YouTube" : "▶ Open YouTube")
             XCTAssertEqual(rows.last?.first?.text, label)
             XCTAssertEqual(rows.last?.first?.callback_data, "fxclip:preview:delete")
+            XCTAssertEqual(rows.last?.count, 2)
+            XCTAssertEqual(rows.last?.last?.callback_data, "fxclip:preview:replace")
             XCTAssertEqual(store.state.replyControls["-100:42"]?.posterID, 7)
         }
     }

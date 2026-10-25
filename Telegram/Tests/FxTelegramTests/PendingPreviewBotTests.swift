@@ -200,9 +200,9 @@ final class PendingPreviewBotTests: XCTestCase {
             XCTAssertNil(media["caption_entities"])
             XCTAssertNil(edit["video"])
             let buttons = try rows(edit).flatMap { $0 }
-            XCTAssertEqual(buttons.count, 1)
-            XCTAssertEqual(buttons.first?.callback_data, "fxclip:preview:delete")
-            XCTAssertEqual(buttons.first?.text, language == .fr ? "🗑 Retirer l’aperçu" : "🗑 Remove preview")
+            XCTAssertEqual(buttons.map(\.callback_data), ["fxclip:preview:delete", "fxclip:preview:replace"])
+            XCTAssertEqual(try rows(edit).map(\.count), [2])
+            XCTAssertEqual(buttons.map(\.text), language == .fr ? ["🗑 Retirer", "🔁 Remplacer"] : ["🗑 Remove", "🔁 Replace"])
             XCTAssertNil(buttons.first?.url)
             XCTAssertEqual(Set(store.state.replyControls.keys), ["-100:7301"])
             XCTAssertEqual(store.state.replyControls["-100:7301"]?.posterID, 7)
