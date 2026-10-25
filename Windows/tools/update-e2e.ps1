@@ -68,8 +68,8 @@ try {
     Run-Phase $exe 'automatic' "$base/normal" 'automatic-daily'
     Run-Phase $exe 'download' "$base/normal" 'download'
     Run-Phase $exe 'pending' "$base/normal" 'installed-and-relaunched'
-    if (!(Select-String $log -SimpleMatch '/normal/fxclip-1.0.1-full.nupkg') -or
-        (Select-String $log -SimpleMatch 'FxclipUpdateQA-1.0.1-full.nupkg')) { throw 'Updater did not use the neutral public filename' }
+    if (!(Select-String -LiteralPath $log -Pattern '/normal/fxclip-1.0.1-full.nupkg' -SimpleMatch) -or
+        (Select-String -LiteralPath $log -Pattern 'FxclipUpdateQA-1.0.1-full.nupkg' -SimpleMatch)) { throw 'Updater did not use the neutral public filename' }
     # Verify a real replacement: the current executable's version and unchanged AppData.
     if ((Get-Content (Join-Path $proof 'installed-and-relaunched.json') -Raw | ConvertFrom-Json).version -ne '1.0.1') { throw 'New version not running' }
     $running = @(Get-Process fxclip -ErrorAction SilentlyContinue | Where-Object {
