@@ -281,6 +281,10 @@ public final class Bot {
                 var video = base(message)
                 video["video"] = VideoUpload(data: data)
                 video["supports_streaming"] = true
+                if let geometry = MP4VideoGeometry.read(data) {
+                    video["width"] = geometry.width
+                    video["height"] = geometry.height
+                }
                 video["disable_notification"] = true
                 // A reply already identifies the poster. Only actual replacement
                 // needs credit because the original is removed after confirmation.
@@ -416,7 +420,7 @@ public final class Bot {
             } else {
                 var media: [String: Any] = ["type": method == "sendVideo" ? "video" : "photo",
                                            "media": parameters[method == "sendVideo" ? "video" : "photo"]!]
-                for key in ["caption", "caption_entities", "supports_streaming"] { media[key] = parameters[key] }
+                for key in ["caption", "caption_entities", "supports_streaming", "width", "height"] { media[key] = parameters[key] }
                 edit["media"] = media
                 result = try await api.call("editMessageMedia", edit)
             }
