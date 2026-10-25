@@ -307,7 +307,8 @@ final class PendingPreviewBotTests: XCTestCase {
                     media = try XCTUnwrap(parameters("editMessageMedia")["media"] as? [String: Any])
                 }
                 XCTAssertEqual(deletedIDs(), [5])
-                XCTAssertTrue(store.state.replyControls.isEmpty)
+                XCTAssertEqual(store.state.replyControls["-100:7301"]?.posterID, 7)
+                XCTAssertEqual(store.state.publications["-100:7301"]?.posterID, 7)
                 let caption = try XCTUnwrap(media["caption"] as? String)
                 let entities = try decode([Entity].self, from: XCTUnwrap(media["caption_entities"]))
                 let credit = try XCTUnwrap(entities.first { $0.type == "text_mention" })
@@ -371,7 +372,8 @@ final class PendingPreviewBotTests: XCTestCase {
                 XCTAssertTrue((edit["text"] as? String ?? "").hasSuffix(clean))
                 XCTAssertNotNil(edit["entities"])
                 XCTAssertEqual(deletedIDs(), replace ? [5] : [])
-                XCTAssertEqual(Set(store.state.replyControls.keys), replace ? [] : ["-100:7301"])
+                XCTAssertEqual(Set(store.state.replyControls.keys), ["-100:7301"])
+                XCTAssertEqual(store.state.publications["-100:7301"]?.posterID, 7)
             }
         }
     }
@@ -445,7 +447,8 @@ final class PendingPreviewBotTests: XCTestCase {
                 XCTAssertEqual(api.methods, isFacebook ? ["sendMessage", "sendVideo"]
                     : ["getChatMember", "sendMessage", "sendPhoto", "deleteMessage"])
                 XCTAssertEqual(deletedIDs(), isFacebook ? [] : [5])
-                XCTAssertEqual(Set(store.state.replyControls.keys), isFacebook ? ["-100:7301"] : [])
+                XCTAssertEqual(Set(store.state.replyControls.keys), ["-100:7301"])
+                XCTAssertEqual(store.state.publications["-100:7301"]?.posterID, 7)
             }
         }
     }

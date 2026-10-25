@@ -312,31 +312,36 @@ extension BotTests {
         XCTAssertTrue(try StateStore(directory: directory).state.replyControls.isEmpty)
     }
 
-    func testPreviewRemovalActualReplacementHasNoButtonOrReceipt() async throws {
+    func testPreviewRemovalActualReplacementHasButtonAndOwnershipReceipt() async throws {
         try replaceMode()
         try await handle()
         XCTAssertEqual(api.methods, ["getChatMember", "sendMessage", "deleteMessage"])
-        XCTAssertTrue(try previewRemovalButtons(sent).isEmpty)
-        XCTAssertTrue(store.state.replyControls.isEmpty)
+        XCTAssertEqual(try previewRemovalButtons(sent).first?.callback_data, "fxclip:preview:delete")
+        XCTAssertEqual(try previewRemovalButtons(sent).first?.text, "🗑 Delete my message")
+        XCTAssertEqual(store.state.replyControls["-100:42"]?.posterID, 7)
+        XCTAssertEqual(store.state.publications["-100:42"]?.posterID, 7)
         _ = enableYouTubeCards()
         api.calls = []
         try await handle(["text": "https://youtu.be/dQw4w9WgXcQ?si=tracking"])
         XCTAssertEqual(api.methods, ["getChatMember", "sendPhoto", "deleteMessage"])
         let buttons = try previewRemovalButtons(XCTUnwrap(api.calls.first { $0.0 == "sendPhoto" }?.1))
-        XCTAssertEqual(buttons.count, 1)
+        XCTAssertEqual(buttons.count, 2)
         XCTAssertNotNil(buttons.first?.url)
         XCTAssertNil(buttons.first?.callback_data)
-        XCTAssertTrue(store.state.replyControls.isEmpty)
+        XCTAssertEqual(buttons.last?.callback_data, "fxclip:preview:delete")
+        XCTAssertEqual(store.state.replyControls["-100:42"]?.posterID, 7)
+        XCTAssertEqual(store.state.publications["-100:42"]?.posterID, 7)
     }
 
-    func testPreviewRemovalReplacementDeleteFailureKeepsOriginalWithoutReplyControl() async throws {
+    func testPreviewRemovalReplacementDeleteFailureKeepsOriginalAndPublicationControl() async throws {
         try replaceMode()
         api.failDelete = true
         try await handle()
         XCTAssertEqual(api.methods, ["getChatMember", "sendMessage", "deleteMessage"])
         XCTAssertEqual(api.calls.last?.1["message_id"] as? Int64, 5)
-        XCTAssertTrue(try previewRemovalButtons(sent).isEmpty)
-        XCTAssertTrue(store.state.replyControls.isEmpty)
+        XCTAssertEqual(try previewRemovalButtons(sent).first?.callback_data, "fxclip:preview:delete")
+        XCTAssertEqual(store.state.replyControls["-100:42"]?.posterID, 7)
+        XCTAssertEqual(store.state.publications["-100:42"]?.posterID, 7)
     }
 
     func testPreviewRemovalReplacementWithoutDeleteRightsIsControllableReply() async throws {

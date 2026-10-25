@@ -1,6 +1,24 @@
 import Foundation
 import FxEngine
 
+/// Ownership metadata only; publication content is never persisted here.
+public struct PublicationReceipt: Codable, Equatable {
+    public let posterID: Int64
+    public let createdAt: TimeInterval
+    public static let retention: TimeInterval = 172_800
+    static let capacity = 20_000
+
+    public init(posterID: Int64, createdAt: TimeInterval) {
+        self.posterID = posterID
+        self.createdAt = createdAt
+    }
+}
+
+public enum PublicationStateError: Error, Equatable {
+    case invalidReceipt
+    case capacityReached
+}
+
 public struct ReplyControl: Codable, Equatable {
     public let posterID: Int64
     public let createdAt: TimeInterval
@@ -40,6 +58,7 @@ public struct BotState: Codable {
     public var defaultRedditVideos = false
     public var personalRedditVideos: [String: Bool] = [:]
     public var replyControls: [String: ReplyControl] = [:]
+    public var publications: [String: PublicationReceipt] = [:]
     public init() {}
 
     enum CodingKeys: String, CodingKey {
@@ -48,7 +67,7 @@ public struct BotState: Codable {
         case defaultLinkSettings, personalLinkSettings, defaultYouTubeCards, personalYouTubeCards
         case defaultFacebookReels, personalFacebookReels
         case defaultRedditVideos, personalRedditVideos
-        case replyControls
+        case replyControls, publications
     }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -72,6 +91,17 @@ public struct BotState: Codable {
         defaultRedditVideos = try values.decodeIfPresent(Bool.self, forKey: .defaultRedditVideos) ?? false
         personalRedditVideos = try values.decodeIfPresent([String: Bool].self, forKey: .personalRedditVideos) ?? [:]
         replyControls = try values.decodeIfPresent([String: ReplyControl].self, forKey: .replyControls) ?? [:]
+        publications = try values.decodeIfPresent([String: PublicationReceipt].self, forKey: .publications) ?? [:]
+        for (key, control) in replyControls.sorted(by: { $0.key < $1.key }) where !values.contains(.publications) {
+            guard publications.count < PublicationReceipt.capacity else { break }
+            let parts = key.split(separator: ":", omittingEmptySubsequences: false)
+            guard parts.count == 2,
+                  let chatID = Int64(parts[0]), chatID != 0,
+                  let messageID = Int64(parts[1]), messageID > 0,
+                  key == "\(chatID):\(messageID)",
+                  control.posterID > 0, control.createdAt.isFinite else { continue }
+            publications[key] = PublicationReceipt(posterID: control.posterID, createdAt: control.createdAt)
+        }
     }
 }
 
@@ -171,6 +201,46 @@ public final class StateStore {
     public func setPersonalRedditVideos(_ enabled: Bool?, userID: Int64) throws {
         var next = state
         next.personalRedditVideos[String(userID)] = enabled
+        try save(next)
+    }
+    private static let publicationCapacity = PublicationReceipt.capacity
+
+    /// Future-dated receipts still occupy a slot, but callers must reject them
+    /// for authorization until now >= createdAt. Ownership expires at exact 48 h.
+    public func canRecordPublication(now: TimeInterval) -> Bool {
+        guard now.isFinite else { return false }
+        return state.publications.values.lazy.filter {
+            now - $0.createdAt < PublicationReceipt.retention
+        }.prefix(Self.publicationCapacity).count < Self.publicationCapacity
+    }
+    public func recordPublication(chatID: Int64, messageID: Int64, posterID: Int64,
+                                  now: TimeInterval) throws {
+        guard chatID != 0, messageID > 0, posterID > 0, now.isFinite else {
+            throw PublicationStateError.invalidReceipt
+        }
+        var next = state
+        next.publications = state.publications.filter { now - $0.value.createdAt < PublicationReceipt.retention }
+        guard next.publications.count < Self.publicationCapacity else {
+            if next.publications != state.publications { try save(next) }
+            throw PublicationStateError.capacityReached
+        }
+        next.publications["\(chatID):\(messageID)"] = PublicationReceipt(posterID: posterID, createdAt: now)
+        try save(next)
+    }
+    public func removePublication(chatID: Int64, messageID: Int64) throws {
+        let key = "\(chatID):\(messageID)"
+        guard state.publications[key] != nil || state.replyControls[key] != nil else { return }
+        var next = state
+        next.publications.removeValue(forKey: key)
+        next.replyControls.removeValue(forKey: key)
+        try save(next)
+    }
+    public func prunePublications(now: TimeInterval) throws {
+        guard now.isFinite else { throw PublicationStateError.invalidReceipt }
+        let retained = state.publications.filter { now - $0.value.createdAt < PublicationReceipt.retention }
+        guard retained != state.publications else { return }
+        var next = state
+        next.publications = retained
         try save(next)
     }
     public func recordReplyControl(chatID: Int64, messageID: Int64, posterID: Int64, now: TimeInterval,

@@ -225,7 +225,8 @@ final class VideoDimensionsBotTests: XCTestCase {
             XCTAssertEqual(entities.first?.length, "Member 😀".utf16.count)
             XCTAssertEqual((video["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 3)
             XCTAssertEqual(try parameters("deleteMessage")["message_id"] as? Int64, 5)
-            XCTAssertTrue(store.state.replyControls.isEmpty)
+            XCTAssertEqual(store.state.replyControls["-100:\(api.sentID)"]?.posterID, 7)
+            XCTAssertEqual(store.state.publications["-100:\(api.sentID)"]?.posterID, 7)
         }
     }
 

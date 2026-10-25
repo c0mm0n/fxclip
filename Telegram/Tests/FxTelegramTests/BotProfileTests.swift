@@ -58,8 +58,8 @@ final class BotProfileTests: XCTestCase {
         for code in ["", "fr"] {
             let personal = try menu(api, scope: "default", code: code)
             let group = try menu(api, scope: "all_group_chats", code: code)
-            XCTAssertEqual(personal.compactMap { $0["command"] }, ["settings", "language", "help", "chatid"])
-            XCTAssertEqual(group.compactMap { $0["command"] }, ["setup", "fxclip", "help", "chatid"])
+            XCTAssertEqual(personal.compactMap { $0["command"] }, ["settings", "publications", "language", "help", "chatid"])
+            XCTAssertEqual(group.compactMap { $0["command"] }, ["setup", "delete", "supprimer", "fxclip", "help", "chatid"])
             XCTAssertEqual(personal.first?["description"], code == "fr" ? "Choisir vos réglages" : "Choose your settings")
             XCTAssertEqual(group.first?["description"], code == "fr" ? "Configurer ce groupe" : "Configure this group")
         }
@@ -84,7 +84,7 @@ final class BotProfileTests: XCTestCase {
             let fallback = try menu(api, scope: "chat", code: "", userID: 8_642_135_790)
             XCTAssertEqual(fallback, try menu(api, scope: "chat", code: "fr", userID: 8_642_135_790))
             XCTAssertEqual(fallback.first?["description"], language == .fr ? "Choisir vos réglages" : "Choose your settings")
-            XCTAssertEqual(fallback.compactMap { $0["command"] }, ["settings", "language", "help", "chatid"])
+            XCTAssertEqual(fallback.compactMap { $0["command"] }, ["settings", "publications", "language", "help", "chatid"])
         }
     }
 
@@ -109,13 +109,13 @@ final class BotProfileTests: XCTestCase {
             let explicitOwner = try menu(api, scope: "chat", code: code, userID: 314)
             let autoOwner = try menu(api, scope: "chat", code: code, userID: 927)
             for commands in [explicitOwner, autoOwner] {
-                XCTAssertEqual(commands.compactMap { $0["command"] }, ["settings", "language", "help", "chatid", "default", "groups"])
+                XCTAssertEqual(commands.compactMap { $0["command"] }, ["settings", "publications", "language", "help", "chatid", "default", "groups"])
             }
             XCTAssertEqual(explicitOwner.last?["description"], "Manage connected groups")
             XCTAssertEqual(autoOwner.last?["description"], code == "fr" ? "Gérer les groupes connectés" : "Manage connected groups")
             let user = try menu(api, scope: "chat", code: code, userID: 681)
             XCTAssertEqual(user.first?["description"], "Choisir vos réglages")
-            XCTAssertEqual(user.compactMap { $0["command"] }, ["settings", "language", "help", "chatid"])
+            XCTAssertEqual(user.compactMap { $0["command"] }, ["settings", "publications", "language", "help", "chatid"])
         }
     }
 

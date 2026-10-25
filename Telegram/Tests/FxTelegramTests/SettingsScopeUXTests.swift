@@ -24,9 +24,9 @@ final class SettingsScopeUXTests: XCTestCase {
         for language in BotLanguage.allCases {
             let panels: [(SettingsUI, Set<String>)] = [
                 (SettingsUI.personal(mode: nil, defaultMode: .replace, owner: false, language: language),
-                 ["fxclip:personal:mode", "fxclip:personal:secretary_setup", "fxclip:personal:about", "fxclip:rules:p:show", "fxclip:language:show", "fxclip:panel:close"]),
+                 ["fxclip:personal:mode", "fxclip:personal:secretary_setup", "fxclip:personal:about", "fxclip:personal:publications", "fxclip:rules:p:show", "fxclip:language:show", "fxclip:panel:close"]),
                 (SettingsUI.personal(mode: nil, defaultMode: .replace, owner: true, language: language),
-                 ["fxclip:personal:mode", "fxclip:personal:secretary_setup", "fxclip:personal:about", "fxclip:rules:p:show", "fxclip:language:show", "fxclip:default:show", "fxclip:groups:show", "fxclip:panel:close"]),
+                 ["fxclip:personal:mode", "fxclip:personal:secretary_setup", "fxclip:personal:about", "fxclip:personal:publications", "fxclip:rules:p:show", "fxclip:language:show", "fxclip:default:show", "fxclip:groups:show", "fxclip:panel:close"]),
                 (SettingsUI.defaults(mode: .replace, language: language),
                  ["fxclip:default:mode", "fxclip:default:about", "fxclip:rules:d:show", "fxclip:groups:show", "fxclip:personal:show", "fxclip:panel:close"]),
                 (SettingsUI.chat(chat, settings: ChatSettings(), enabled: true, inherited: true,
@@ -36,7 +36,8 @@ final class SettingsScopeUXTests: XCTestCase {
             for (panel, navigation) in panels {
                 let actions = try uxActions(panel)
                 XCTAssertTrue(actions.isSuperset(of: navigation))
-                XCTAssertLessThanOrEqual(try uxRows(panel).count, 7)
+                let ownerDashboard = actions.contains("fxclip:personal:publications") && actions.contains("fxclip:default:show")
+                XCTAssertLessThanOrEqual(try uxRows(panel).count, ownerDashboard ? 8 : 7)
                 XCTAssertLessThan(panel.plainText.utf16.count, 800)
                 for mode in [Mode.reply, .replace, .secretary, .off] {
                     XCTAssertFalse(actions.contains("fxclip:personal:\(mode.rawValue)"))

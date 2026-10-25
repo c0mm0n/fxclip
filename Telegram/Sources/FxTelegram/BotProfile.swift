@@ -51,6 +51,7 @@ public enum BotProfile {
     private static func privateCommands(language: BotLanguage, owner: Bool) -> [[String: String]] {
         var commands = [
             ["command": "settings", "description": language.text("Choose your settings", "Choisir vos réglages")],
+            ["command": "publications", "description": language.text("View and remove your recent publications", "Voir et retirer vos publications récentes")],
             ["command": "language", "description": language.text("Choose your language", "Choisir votre langue")],
             ["command": "help", "description": language.text("How fxclip works", "Comprendre fxclip")],
             ["command": "chatid", "description": language.text("Show this chat's ID", "Afficher l’identifiant de cette conversation")]
@@ -67,6 +68,8 @@ public enum BotProfile {
     private static func groupCommands(language: BotLanguage) -> [[String: String]] {
         [
             ["command": "setup", "description": language.text("Configure this group", "Configurer ce groupe")],
+            ["command": "delete", "description": language.text("Reply to your fxclip message to delete it (under 48 h)", "Répondre à votre message fxclip pour le supprimer (moins de 48 h)")],
+            ["command": "supprimer", "description": language.text("Same as /delete: remove your fxclip message", "Comme /delete : retirer votre message fxclip")],
             ["command": "fxclip", "description": language.text("Choose this group's link settings", "Choisir les réglages des liens de ce groupe")],
             ["command": "help", "description": language.text("How fxclip works", "Comprendre fxclip")],
             ["command": "chatid", "description": language.text("Show this chat's ID", "Afficher l’identifiant de cette conversation")]

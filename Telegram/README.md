@@ -113,8 +113,9 @@ completion cannot be tracked this way.
 
 Full-video replies show just the video and the five-minute **Remove preview**
 control, without a heading, author/description, raw link or **Open Facebook**
-button. When replacement is attempted, a small poster credit is added; the
-original stays if deletion fails. Full-video removal records need no source Open URL.
+button. Replacements offer **Delete my message** for five minutes. When replacement
+is attempted, a small poster credit is added; the original stays if deletion
+fails. Full-video removal records need no source Open URL.
 
 Videos are limited to 20 MiB; temporary downloads are discarded after the attempt.
 For a larger video, the bot replies with its title and **Open Facebook**
@@ -180,8 +181,10 @@ la meilleure résolution tenant dans **20 Mio**, quitte à réduire la qualité,
 assemble le son s’il existe et prépare la lecture rapide. L’original propre reste ;
 un échec peut laisser agir un miroir seulement s’il est activé séparément. La
 disponibilité Reddit n’est pas garantie et des doublons sont possibles. Le retrait
-reste disponible cinq minutes ; les URL d’ouverture en attente de retrait du
-bouton restent localement au plus 48 heures. Texte et médias ne sont pas conservés.
+par bouton reste disponible cinq minutes ; `/delete` ou `/supprimer` permet
+ensuite de retirer la publication du bot pendant moins de 48 heures. Les URL
+d’ouverture en attente de retrait du bouton restent localement au plus 48 heures.
+Texte et médias ne sont pas conservés.
 
 ## Preview fallback and removal
 
@@ -194,26 +197,40 @@ preserve the original; normal link cleaning can still apply.
 Metadata failures fall back to normal cleaning. Photo rejection can fall back to
 cleaned text; an ambiguous send is never retried.
 
-Bot replies include **Remove preview**. Anyone can see the button, but only the
-person who posted the original link can use it; admins and the bot owner have no
-override. It removes only the bot's reply. The removal button expires after five
-minutes and is removed automatically; the preview stays. YouTube cards keep their opening
-button as well. Facebook video replies also offer removal; deleting the reply
-does not remove the original Facebook post. Replacement posts do not offer removal because they may be the
-only remaining copy. Anonymous/channel-authored messages have no identifiable
-personal owner and do not receive this control.
+Bot replies offer **Remove preview / Retirer l’aperçu**; replacements offer
+**Delete my message / Supprimer mon message**. Both buttons last five minutes,
+then disappear while the publication stays. Only the original poster can remove
+it; admins and the bot owner have no override. Deletion removes the bot's message
+for everyone, never the website post, and never restores a replaced original.
+Anonymous/channel-authored messages have no identifiable personal owner and do
+not receive this control.
+
+For less than 48 hours after publication, reply to the bot's message with
+`/delete` or `/supprimer`; both aliases work in either language. Privately, open
+`/publications` or **My publications / Mes publications** to see only your own
+tracked group publications, five per page. Entries show the group, UTC date and
+message ID; **View / Voir** is available for supergroup messages. **Delete /
+Supprimer** opens a confirmation. Older messages are not reconstructed, except
+when a surviving legacy removal control supplies ownership metadata.
+
+Ownership records retain only chat/message IDs, poster ID and publication date,
+independently of button cleanup. No link, title, message text or media is saved
+in this register; group titles are resolved for display. It holds at most 20,000
+unexpired records and never evicts one early. At capacity, replacement falls back
+to a reply and keeps the original.
 
 Pending cleanup keeps chat/message IDs, the poster's ID and a timestamp. For
 YouTube cards and oversized-video notices it also temporarily keeps the source
-Open button's label and URL, so that button can stay after removal expires,
-including across a restart. Full-video replies have no Open button and retain no
-source Open URL.
-The record is deleted after successful cleanup; failed cleanup can retry for up
-to 48 hours, with a limit of 4096 pending replies. No message text or media is
-stored. A full queue skips offering removal on new replies. Replies sent before
-this upgrade have no saved opening button; their old keyboard is cleared, while
-links in their captions remain usable. Cleanup resumes when the bot reconnects;
-the removal action itself is always refused after five minutes.
+Open button's label and URL, so that button can stay after the removal button
+expires, including across a restart. Full-video replies have no Open button and
+retain no source Open URL.
+The cleanup record is deleted after successful cleanup; the separate ownership
+record remains until its 48-hour expiry. Failed cleanup can retry for up
+to 48 hours; its existing 4096-record limit is unchanged. No message text or media
+is stored. Legacy replies without a saved opening button have their old keyboard
+cleared; links in their captions remain usable. Cleanup resumes when the bot reconnects;
+the button action itself is always refused after five minutes. The command and
+private list use the separate ownership window of less than 48 hours.
 
 ## Link settings / Réglages des liens
 
@@ -419,7 +436,11 @@ YouTube's oEmbed endpoint and let Telegram fetch the YouTube thumbnail; they use
 no preview mirror. Fetched titles, thumbnails and videos are not persisted;
 YouTube and oversized-notice opening-button URLs are retained only while
 removal-button cleanup is pending, for at most 48 hours. Full-video replies have
-no opening button or saved source Open URL. Facebook videos are off by default. Opting in
+no opening button or saved source Open URL. Separately, publication ownership
+IDs and dates remain for less than 48 hours for author-only deletion and the
+private recent-publications list; no URL, title or message content is stored in
+that register. See [publication removal](#preview-fallback-and-removal).
+Facebook videos are off by default. Opting in
 sends the cleaned public Facebook or Facebed link to the private resolver running
 pinned upstream Facebed code on the same server. The resolver contacts Facebook
 for metadata; the bot downloads validated Facebook CDN video and uploads a copy

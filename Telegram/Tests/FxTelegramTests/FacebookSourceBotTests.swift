@@ -206,10 +206,12 @@ final class FacebookSourceBotTests: XCTestCase {
         XCTAssertEqual(mention.user?.id, 7)
         XCTAssertEqual(mention.offset, "Posted by ".utf16.count)
         XCTAssertEqual(mention.length, "Example123".utf16.count)
-        XCTAssertNil(video["reply_markup"])
+        let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(video["reply_markup"]))
+        XCTAssertEqual(markup.inline_keyboard.flatMap { $0 }.map(\.callback_data), ["fxclip:preview:delete"])
         XCTAssertEqual((video["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 3)
         XCTAssertEqual(api.base.calls.last?.1["message_id"] as? Int64, 5)
-        XCTAssertTrue(store.state.replyControls.isEmpty)
+        XCTAssertEqual(store.state.replyControls["-100:84"]?.posterID, 7)
+        XCTAssertEqual(store.state.publications["-100:84"]?.posterID, 7)
     }
 
     func testCleanSourceInReplaceModeRemainsBareReplyAndKeepsOriginal() async throws {

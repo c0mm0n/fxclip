@@ -287,9 +287,11 @@ final class RedditBotTests: XCTestCase {
         XCTAssertEqual(credit.offset, "Posted by ".utf16.count)
         XCTAssertEqual(credit.length, "Member 😀".utf16.count)
         XCTAssertEqual((video["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 3)
-        XCTAssertNil(video["reply_markup"])
+        let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(video["reply_markup"]))
+        XCTAssertEqual(markup.inline_keyboard.flatMap { $0 }.map(\.callback_data), ["fxclip:preview:delete"])
         XCTAssertEqual(try parameters("deleteMessage")["message_id"] as? Int64, 5)
-        XCTAssertTrue(store.state.replyControls.isEmpty)
+        XCTAssertEqual(store.state.replyControls["-100:7301"]?.posterID, 7)
+        XCTAssertEqual(store.state.publications["-100:7301"]?.posterID, 7)
     }
 
     func testMissingDeleteRightsProducesBareReplyWithoutDeletingOriginal() async throws {

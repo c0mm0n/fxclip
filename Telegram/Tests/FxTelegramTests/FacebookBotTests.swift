@@ -104,8 +104,10 @@ extension BotTests {
         let credit = try XCTUnwrap(entities.first { $0.type == "text_mention" })
         XCTAssertEqual(credit.user?.id, 7)
         XCTAssertEqual((caption as NSString).substring(with: NSRange(location: credit.offset, length: credit.length)), "Member")
-        XCTAssertNil(video["reply_markup"])
-        XCTAssertTrue(store.state.replyControls.isEmpty)
+        let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(video["reply_markup"]))
+        XCTAssertEqual(markup.inline_keyboard.flatMap { $0 }.map(\.callback_data), ["fxclip:preview:delete"])
+        XCTAssertEqual(store.state.replyControls["-100:1234567890123"]?.posterID, 7)
+        XCTAssertEqual(store.state.publications["-100:1234567890123"]?.posterID, 7)
         XCTAssertEqual(api.calls.last?.1["message_id"] as? Int64, 5)
     }
 
@@ -423,9 +425,12 @@ extension BotTests {
             XCTAssertEqual(mention.offset, prefix.utf16.count)
             XCTAssertEqual(mention.length, name.utf16.count)
             XCTAssertNil(video["reply_parameters"])
-            XCTAssertNil(video["reply_markup"])
+            let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(video["reply_markup"]))
+            XCTAssertEqual(markup.inline_keyboard.flatMap { $0 }.map(\.callback_data), ["fxclip:preview:delete"])
+            XCTAssertEqual(markup.inline_keyboard.first?.first?.text, language == .fr ? "🗑 Supprimer mon message" : "🗑 Delete my message")
             XCTAssertEqual(api.methods, ["getChatMember", "sendVideo", "deleteMessage"])
-            XCTAssertTrue(store.state.replyControls.isEmpty)
+            XCTAssertEqual(store.state.replyControls["-100:42"]?.posterID, 7)
+            XCTAssertEqual(store.state.publications["-100:42"]?.posterID, 7)
         }
     }
 

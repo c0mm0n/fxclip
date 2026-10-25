@@ -68,6 +68,20 @@ public final class Bot {
            target[1].lowercased() != username.lowercased() { return }
         let command = target.first ?? ""
         let language = interfaceLanguage(message)
+        if ["/supprimer", "/delete"].contains(command) {
+            await deletePublicationCommand(message, now: TimeInterval(now), language: language)
+            return
+        }
+        if command == "/publications" || (command == "/start" && words.dropFirst().first == "publications") {
+            if message.chat.type == "private", message.chat.id == message.from?.id, message.from?.is_bot == false {
+                try await sendPanel(publicationsPanel(userID: message.chat.id, page: 0, now: TimeInterval(now)), to: message.chat.id)
+            } else {
+                try await reply(language.text("Find your recent publications in private.", "Retrouvez vos publications récentes en privé."),
+                    to: message, markup: ["inline_keyboard": [[["text": language.text("🗂 My publications", "🗂 Mes publications"),
+                        "url": "https://t.me/\(username)?start=publications"]]]])
+            }
+            return
+        }
         if try await rulesCommand(message, command: command, words: words, language: language) { return }
         if command == "/chatid" {
             try await reply(language.text("Chat ID: \(message.chat.id)", "Identifiant de cette conversation : \(message.chat.id)"), to: message)
@@ -203,7 +217,10 @@ public final class Bot {
         } ?? false
         // Media, forwards and anonymous/channel-authored posts retain their originals.
         var replace = false
-        if replyContent != nil && settings.mode == .replace && message.text != nil && message.sender_chat == nil && message.forward_origin == nil && !cleanRedditOriginal {
+        let ownershipNow = fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970
+        let publicationPoster = message.chat.isGroup && message.sender_chat == nil && message.from?.is_bot == false
+            && (message.from?.id ?? 0) > 0 && store.canRecordPublication(now: ownershipNow) ? message.from?.id : nil
+        if replyContent != nil && settings.mode == .replace && message.text != nil && publicationPoster != nil && message.forward_origin == nil && !cleanRedditOriginal {
             replace = try await canDelete(in: message.chat)
         }
         let rendered: RenderedMessage?
@@ -214,7 +231,7 @@ public final class Bot {
             // Telegram's reply header already identifies the original sender.
             rendered = replyContent
         }
-        let removalPoster = !replace && message.sender_chat == nil && message.from?.is_bot == false
+        let removalPoster = message.sender_chat == nil && message.from?.is_bot == false
             && store.state.replyControls.count < 4096 ? message.from?.id : nil
         var pendingID: Int64?
         var pending = base(message)
@@ -296,7 +313,7 @@ public final class Bot {
                         ])
                     }
                 }
-                if removalPoster != nil { addRemovalButton(to: &video, language: language) }
+                if removalPoster != nil { addRemovalButton(to: &video, language: language, replacement: replace) }
                 if replace {
                     if let parent = message.reply_to_message {
                         video["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
@@ -304,6 +321,10 @@ public final class Bot {
                 } else { video["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true] }
                 do {
                     let sentID = try await deliverPreview("sendVideo", parameters: video, pendingID: pendingID)
+                    if let publicationPoster {
+                        try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: publicationPoster,
+                                                    now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
+                    }
                     if let removalPoster {
                         try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
                                                      now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
@@ -352,7 +373,7 @@ public final class Bot {
                     photo["reply_markup"] = ["inline_keyboard": [[[
                         "text": language.text("▶ Open YouTube", "▶ Ouvrir YouTube"), "url": cleanURL,
                     ]]]]
-                    if removalPoster != nil { addRemovalButton(to: &photo, language: language) }
+                    if removalPoster != nil { addRemovalButton(to: &photo, language: language, replacement: replace) }
                     if replace {
                         if let parent = message.reply_to_message {
                             photo["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
@@ -362,6 +383,10 @@ public final class Bot {
                     }
                     do {
                         let sentID = try await deliverPreview("sendPhoto", parameters: photo, pendingID: pendingID)
+                        if let publicationPoster {
+                            try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: publicationPoster,
+                                                        now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
+                        }
                         if let removalPoster {
                             try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
                                                          now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970,
@@ -385,7 +410,7 @@ public final class Bot {
         parameters["entities"] = try jsonObject(rendered.entities)
         parameters["link_preview_options"] = ["is_disabled": false, "url": rendered.previewURL]
         parameters["disable_notification"] = true
-        if removalPoster != nil { addRemovalButton(to: &parameters, language: language) }
+        if removalPoster != nil { addRemovalButton(to: &parameters, language: language, replacement: replace) }
         if replace {
             if let parent = message.reply_to_message {
                 parameters["reply_parameters"] = ["message_id": parent.message_id, "allow_sending_without_reply": true]
@@ -399,6 +424,10 @@ public final class Bot {
         catch BotError.telegram(let code) where code == 400 || code == 403 {
             await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
             throw BotError.telegram(code)
+        }
+        if let publicationPoster {
+            try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: publicationPoster,
+                                        now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
         }
         if let removalPoster {
             try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: removalPoster,
@@ -445,10 +474,11 @@ public final class Bot {
         }
     }
 
-    private func addRemovalButton(to parameters: inout [String: Any], language: BotLanguage) {
+    private func addRemovalButton(to parameters: inout [String: Any], language: BotLanguage, replacement: Bool = false) {
         var markup = parameters["reply_markup"] as? [String: Any] ?? [:]
         var rows = markup["inline_keyboard"] as? [[[String: String]]] ?? []
-        rows.append([["text": language.text("🗑 Remove preview", "🗑 Retirer l’aperçu"),
+        rows.append([["text": replacement ? language.text("🗑 Delete my message", "🗑 Supprimer mon message")
+                      : language.text("🗑 Remove preview", "🗑 Retirer l’aperçu"),
                       "callback_data": "fxclip:preview:delete"]])
         markup["inline_keyboard"] = rows
         parameters["reply_markup"] = markup
@@ -482,14 +512,19 @@ public final class Bot {
         parameters["reply_markup"] = ["inline_keyboard": [[[
             "text": language.text("▶ Open \(service)", "▶ Ouvrir \(service)"), "url": cleanURL,
         ]]]]
-        let poster = message.sender_chat == nil && message.from?.is_bot == false
-            && store.state.replyControls.count < 4096 ? message.from?.id : nil
+        let author = message.sender_chat == nil && message.from?.is_bot == false && (message.from?.id ?? 0) > 0
+            ? message.from?.id : nil
+        let poster = store.state.replyControls.count < 4096 ? author : nil
         if poster != nil { addRemovalButton(to: &parameters, language: language) }
         let sentID: Int64
         do { sentID = try await deliverPreview("sendMessage", parameters: parameters, pendingID: pendingID) }
         catch BotError.telegram(let code) where code == 400 || code == 403 {
             await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
             throw BotError.telegram(code)
+        }
+        if let author, message.chat.isGroup, store.canRecordPublication(now: now.map(TimeInterval.init) ?? Date().timeIntervalSince1970) {
+            try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: author,
+                                        now: now.map(TimeInterval.init) ?? Date().timeIntervalSince1970)
         }
         if let poster {
             try store.recordReplyControl(chatID: message.chat.id, messageID: sentID, posterID: poster,
@@ -514,6 +549,7 @@ public final class Bot {
     /// keyboard changes; original messages, media and captions are never touched.
     public func expireReplyControls(now fixedNow: TimeInterval? = nil) async throws {
         let now = fixedNow ?? Date().timeIntervalSince1970
+        try store.prunePublications(now: now)
         try store.pruneReplyControls(now: now)
         cleanupRetryAfter = cleanupRetryAfter.filter { store.state.replyControls[$0.key] != nil }
         let pending = store.state.replyControls.filter {
@@ -570,7 +606,7 @@ public final class Bot {
         do {
             let deleted = try await api.call("deleteMessage", ["chat_id": message.chat.id, "message_id": message.message_id])
             guard deleted as? Bool == true else { throw BotError.invalidResponse }
-            do { try store.removeReplyControl(chatID: message.chat.id, messageID: message.message_id) }
+            do { try store.removePublication(chatID: message.chat.id, messageID: message.message_id) }
             catch { print("Preview removed; control cleanup will finish later.") }
             await answer(callback, nil)
         } catch {
@@ -584,6 +620,95 @@ public final class Bot {
         } catch {
             print("Replacement posted; original retained because deletion failed.")
         }
+    }
+
+    private func ownsPublication(chatID: Int64, messageID: Int64, userID: Int64, now: TimeInterval) -> Bool {
+        guard userID > 0, let receipt = store.state.publications["\(chatID):\(messageID)"] else { return false }
+        return receipt.posterID == userID && now >= receipt.createdAt
+            && now - receipt.createdAt < PublicationReceipt.retention
+    }
+
+    private func deletePublication(chatID: Int64, messageID: Int64) async throws {
+        let result = try await api.call("deleteMessage", ["chat_id": chatID, "message_id": messageID])
+        guard let boolean = result as? NSNumber, CFGetTypeID(boolean) == CFBooleanGetTypeID(), boolean.boolValue else {
+            throw BotError.invalidResponse
+        }
+        do { try store.removePublication(chatID: chatID, messageID: messageID) }
+        catch { print("Publication removed; ownership cleanup will finish later.") }
+    }
+
+    private func deletePublicationCommand(_ message: Message, now: TimeInterval, language: BotLanguage) async {
+        guard message.chat.isGroup, message.sender_chat == nil, let user = message.from, user.is_bot == false,
+              let target = message.reply_to_message,
+              ownsPublication(chatID: message.chat.id, messageID: target.message_id, userID: user.id, now: now) else {
+            try? await reply(language.text(
+                "Reply to a fxclip publication of your own with /delete or /supprimer. Removal is available for less than 48 hours; older or untracked messages cannot be removed this way.",
+                "Répondez à une publication fxclip issue de votre message avec /supprimer ou /delete. Le retrait est possible pendant moins de 48 heures ; les messages plus anciens ou non suivis ne peuvent pas être retirés ainsi."), to: message)
+            return
+        }
+        do {
+            try await deletePublication(chatID: message.chat.id, messageID: target.message_id)
+            try? await reply(language.text("Deleted ✓", "Supprimé ✓"), to: message)
+        } catch {
+            try? await reply(language.text("Could not delete the publication. Please try again.",
+                                           "Impossible de supprimer la publication. Réessayez."), to: message)
+        }
+    }
+
+    private func publicationsPanel(userID: Int64, page: Int, now: TimeInterval) -> SettingsUI {
+        let entries = store.state.publications.compactMap { key, receipt -> PublicationEntry? in
+            let ids = key.split(separator: ":", omittingEmptySubsequences: false)
+            guard receipt.posterID == userID, now >= receipt.createdAt, now - receipt.createdAt < PublicationReceipt.retention,
+                  ids.count == 2, let chatID = Int64(ids[0]), chatID < 0, let messageID = Int64(ids[1]), messageID > 0,
+                  key == "\(chatID):\(messageID)" else { return nil }
+            return PublicationEntry(chatID: chatID, messageID: messageID, createdAt: receipt.createdAt,
+                                    title: store.state.knownGroups[String(chatID)]?.chat.title)
+        }.sorted {
+            if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
+            if $0.chatID != $1.chatID { return $0.chatID < $1.chatID }
+            return $0.messageID > $1.messageID
+        }
+        return SettingsUI.publications(entries, page: page, language: store.userLanguage(userID))
+    }
+
+    private func publicationsCallback(_ callback: CallbackQuery, parts: [String], now: TimeInterval) async throws {
+        let language = store.userLanguage(callback.from.id)
+        guard let message = callback.message, message.chat.type == "private", message.chat.id == callback.from.id,
+              callback.from.is_bot == false else {
+            await answer(callback, language.text("Open /publications in your private chat with the bot.",
+                                                 "Ouvrez /publications dans votre conversation privée avec le bot."), alert: true)
+            return
+        }
+        let panel: SettingsUI
+        if parts.count == 4, parts[2] == "show", let page = Int(parts[3]), (0...4000).contains(page) {
+            panel = publicationsPanel(userID: callback.from.id, page: page, now: now)
+            await answer(callback, nil)
+        } else if parts.count == 6, ["ask", "del"].contains(parts[2]),
+                  let chatID = Int64(parts[3]), chatID < 0, let messageID = Int64(parts[4]), messageID > 0,
+                  let page = Int(parts[5]), (0...4000).contains(page),
+                  ownsPublication(chatID: chatID, messageID: messageID, userID: callback.from.id, now: now) {
+            if parts[2] == "ask" {
+                panel = SettingsUI.publicationConfirmation(PublicationEntry(chatID: chatID, messageID: messageID,
+                    createdAt: store.state.publications["\(chatID):\(messageID)"]!.createdAt,
+                    title: store.state.knownGroups[String(chatID)]?.chat.title), page: page, language: language)
+                await answer(callback, nil)
+            } else {
+                do { try await deletePublication(chatID: chatID, messageID: messageID) }
+                catch {
+                    await answer(callback, language.text("Could not delete the publication. Please try again.",
+                                                        "Impossible de supprimer la publication. Réessayez."), alert: true)
+                    return
+                }
+                panel = publicationsPanel(userID: callback.from.id, page: page, now: now)
+                await answer(callback, language.text("Deleted ✓", "Supprimé ✓"))
+            }
+        } else {
+            await answer(callback, language.text("This publication is unavailable or no longer removable.",
+                                                 "Cette publication est indisponible ou ne peut plus être retirée."), alert: true)
+            return
+        }
+        try await sendPanel(panel, to: message.chat.id, messageID: message.message_id,
+                            previousText: message.text, previousMarkup: message.reply_markup)
     }
 
     private func secretary(_ message: Message, now: Int) async throws {
@@ -746,6 +871,10 @@ public final class Bot {
             await removePreview(callback, now: TimeInterval(now))
             return
         }
+        if parts.prefix(2) == ["fxclip", "posts"] {
+            try await publicationsCallback(callback, parts: parts, now: now)
+            return
+        }
         if parts.count >= 2, parts[0] == "fxclip", parts[1] == "rules" {
             try await rulesCallback(callback, parts: parts)
             return
@@ -798,6 +927,12 @@ public final class Bot {
             return
         }
         let action = parts[2]
+        if !ownerPanel && action == "publications" {
+            await answer(callback, nil)
+            try await sendPanel(publicationsPanel(userID: callback.from.id, page: 0, now: now),
+                to: message.chat.id, messageID: message.message_id, previousText: message.text, previousMarkup: message.reply_markup)
+            return
+        }
         do {
             if ["show", "mode", "about"].contains(action) || (!ownerPanel && action == "secretary_setup") {
                 // Navigation never changes preferences.

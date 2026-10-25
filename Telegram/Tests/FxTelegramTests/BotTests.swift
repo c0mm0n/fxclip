@@ -521,7 +521,7 @@ final class BotTests: XCTestCase {
         XCTAssertNil(markup["keyboard"])
         let rows = try XCTUnwrap(markup["inline_keyboard"] as? [[[String: String]]])
         let actions = Set(rows.flatMap { $0 }.compactMap { $0["callback_data"] })
-        XCTAssertEqual(actions, Set(["mode", "secretary_setup", "about"].map { "fxclip:personal:\($0)" } + ["fxclip:language:show", "fxclip:panel:close", "fxclip:rules:p:show"]))
+        XCTAssertEqual(actions, Set(["mode", "secretary_setup", "about", "publications"].map { "fxclip:personal:\($0)" } + ["fxclip:language:show", "fxclip:panel:close", "fxclip:rules:p:show"]))
         XCTAssertTrue(store.state.users.isEmpty)
         XCTAssertTrue(store.state.chats.isEmpty)
     }
