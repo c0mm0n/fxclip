@@ -227,7 +227,9 @@ extension BotTests {
         XCTAssertEqual(options["prefer_large_media"] as? Bool, true)
         XCTAssertEqual(card["protect_content"] as? Bool, true)
         XCTAssertEqual(store.state.publications["-100:42"]?.posterID, 7)
-        XCTAssertEqual(store.state.replyControls["-100:42"]?.openButton?.url, "https://youtu.be/aB3_dE-fG09?t=42")
+        XCTAssertNil(store.state.replyControls["-100:42"]?.openButton)
+        let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(card["reply_markup"]))
+        XCTAssertTrue(markup.inline_keyboard.flatMap { $0 }.allSatisfy { $0.url == nil })
     }
 
     func testCleanShortsLinkGetsNativeReplyWithoutDeletingOrLookingUpRights() async throws {
@@ -363,7 +365,7 @@ extension BotTests {
         XCTAssertNil(store.state.publications["-100:42"]?.original)
     }
 
-    func testNativeExpiryAfterRestartKeepsOnlyTheRedYouTubeOpenButton() async throws {
+    func testNativeExpiryAfterRestartClearsControlsWithoutAddingAnOpenButton() async throws {
         let transport = NativeCardAPI(), provider = NativeYouTubeProvider(); nativeBot(transport, provider: provider)
         try await handle(["text": "https://youtu.be/aB3_dE-fG09"])
         store = try StateStore(directory: directory); nativeBot(transport, provider: provider)
@@ -372,10 +374,7 @@ extension BotTests {
         XCTAssertEqual(transport.calls.map(\.0), ["editMessageReplyMarkup"])
         let markup = try XCTUnwrap(transport.calls.first?.1["reply_markup"] as? [String: Any])
         let rows = try XCTUnwrap(markup["inline_keyboard"] as? [[[String: String]]])
-        XCTAssertEqual(rows.count, 1)
-        XCTAssertEqual(rows[0][0]["url"], "https://youtu.be/aB3_dE-fG09")
-        XCTAssertEqual(rows[0][0]["style"], "danger")
-        XCTAssertNil(rows[0][0]["callback_data"])
+        XCTAssertTrue(rows.isEmpty)
         XCTAssertNil(store.state.publications["-100:42"]?.original)
         XCTAssertEqual(store.state.publications["-100:42"]?.posterID, 7)
         XCTAssertEqual(provider.requests, 1)

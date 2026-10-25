@@ -108,9 +108,9 @@ Group admins can enable or disable enhanced previews in `/setup` or with
 
 For a message containing only a plain YouTube video link, enhanced previews request
 Telegram's native web card through **Koutube (`koutu.be`) by default**. The visible
-cleaned YouTube URL and red **Open YouTube / Ouvrir YouTube** button retain timestamps
-and point to YouTube. Koutube controls the web card's description, statistics and
-media; an in-chat player is not guaranteed. No custom domain is needed. On the YouTube page, choose **🌐 Koutube** or
+cleaned YouTube URL retains timestamps and points to YouTube. There is no
+separate Open button; use the visible link or the native card. Koutube controls
+the web card's description, statistics and media; an in-chat player is not guaranteed. No custom domain is needed. On the YouTube page, choose **🌐 Koutube** or
 **🖼 Our card / Notre carte**. Choosing our card skips every Koutube request;
 Koutube style keeps that photo card as fallback. Style inherits personal → group
 → bot defaults independently of YouTube On/Off, and is cleared by link reset.
@@ -134,7 +134,8 @@ off prevents both the Koutube check and YouTube metadata requests.
 
 If that check fails or Telegram explicitly rejects the native-card send/edit,
 our photo card is the fallback: compact linked title above a wide HD thumbnail
-when available, red Open button below. Replacement credit is preserved. A small
+when available. Its linked YouTube heading opens the video, without a separate
+Open button. Replacement credit is preserved. A small
 or letterboxed oEmbed image may trigger one cookie-free, redirect-blocked HD HEAD
 check (2 seconds). An explicitly rejected HD photo may retry the verified oEmbed
 image once. Ambiguous sends/edits never retry or delete the original.
@@ -142,11 +143,11 @@ image once. Ambiguous sends/edits never retry or delete the original.
 Telegram does **not** report whether it rendered a web preview after accepting a
 text message. Such a missing preview cannot automatically trigger the photo
 fallback. The photo itself opens an image, not a YouTube player; it cannot reproduce
-the native card's side bar or overlaid player. Button colors depend on the client.
+the native card's side bar or overlaid player.
 
 Par défaut, YouTube passe par la carte native Koutube, dont le cache des liens est
-public. Le lien visible et le bouton rouge ouvrent toujours YouTube. Notre carte
-photo (titre au-dessus, miniature HD panoramique si disponible) sert de secours si
+public. Le lien visible ouvre YouTube, sans bouton supplémentaire. Notre carte
+photo (titre YouTube cliquable au-dessus, miniature HD panoramique si disponible) sert de secours si
 la vérification Koutube échoue ou si Telegram refuse explicitement le message.
 Une absence d’aperçu après acceptation par Telegram n’est pas détectable. La lecture
 intégrée n’est pas garantie ; description et statistiques sont choisies par Koutube.
@@ -531,7 +532,7 @@ Startup registers English/French native descriptions and command menus. The
 persistent volume retains modes, language preferences, discovered group IDs and
 titles, and the polling checkpoint. Back up that volume. Message bodies and media
 are never persisted or logged. Pending removal-button cleanup temporarily retains
-YouTube and oversized-notice opening-button URLs until cleanup succeeds, for at
+legacy YouTube and oversized-notice opening-button URLs until cleanup succeeds, for at
 most 48 hours; full-video replies retain no source Open URL.
 Automatic container updates are disabled in the supplied
 configuration: install new images explicitly.
@@ -580,7 +581,7 @@ external account is used. Koutube-style YouTube cards check the fixed public Kou
 to generate a native preview from it. Koutube publishes its processed-link cache. The photo
 fallback may check YouTube’s HD CDN image without cookies or redirects and lets
 Telegram fetch the image bytes. Fetched titles, thumbnails and videos are not persisted;
-YouTube and oversized-notice opening-button URLs are retained only while
+legacy YouTube and oversized-notice opening-button URLs are retained only while
 removal-button cleanup is pending, for at most 48 hours. Full-video replies have
 no opening button or saved source Open URL. Separately, publication ownership
 IDs and dates remain for less than 48 hours for author-only deletion and the

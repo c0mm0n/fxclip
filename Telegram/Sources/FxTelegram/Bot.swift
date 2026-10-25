@@ -385,9 +385,6 @@ public final class Bot {
                     card["entities"] = try jsonObject(content.entities)
                     card["link_preview_options"] = ["is_disabled": false, "url": mirror, "prefer_large_media": true]
                     card["disable_notification"] = true
-                    card["reply_markup"] = ["inline_keyboard": [[[
-                        "text": language.text("▶ Open YouTube", "▶ Ouvrir YouTube"), "url": cleanURL, "style": "danger",
-                    ]]]]
                     let original = manualReplacementOriginal(message, replacement: replace, now: ownershipNow,
                                                              content: content.text, limit: 4096)
                     if removalPoster != nil { addRemovalButton(to: &card, language: language, replacement: replace, canReplace: original != nil) }
@@ -420,9 +417,6 @@ public final class Bot {
                     photo["show_caption_above_media"] = true
                     photo["disable_notification"] = true
                     photo["caption_entities"] = try jsonObject(caption.entities)
-                    photo["reply_markup"] = ["inline_keyboard": [[[
-                        "text": language.text("▶ Open YouTube", "▶ Ouvrir YouTube"), "url": cleanURL, "style": "danger",
-                    ]]]]
                     let original = manualReplacementOriginal(message, replacement: replace, now: ownershipNow,
                                                              content: caption.text, limit: 1024)
                     if removalPoster != nil { addRemovalButton(to: &photo, language: language, replacement: replace, canReplace: original != nil) }

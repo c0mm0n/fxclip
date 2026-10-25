@@ -362,8 +362,8 @@ struct SettingsUI {
                 ? follow(scope: scope, language: language)
                 : youTubeStyle == .koutube ? "Koutube" : language.text("Our photo card", "Notre carte photo"))
             text += "\n\n" + language.text(
-                "🌐 Koutube: native Telegram card. The video ID goes to public Koutube; its processed-link cache is public. Koutube supplies description/statistics; playback is not guaranteed.\n\n🖼 Our card: title above an HD photo when available, red Open YouTube button. Directly from YouTube, never Koutube.",
-                "🌐 Koutube : carte native Telegram. L’identifiant vidéo passe par Koutube public ; son cache des liens traités est public. Description et statistiques viennent de Koutube ; lecture intégrée non garantie.\n\n🖼 Notre carte : titre au-dessus d’une photo HD si disponible, bouton rouge Ouvrir YouTube. Directement depuis YouTube, jamais Koutube.")
+                "🌐 Koutube: native Telegram card. The video ID goes to public Koutube; its processed-link cache is public. Koutube supplies description/statistics; playback is not guaranteed.\n\n🖼 Our card: linked title above an HD photo when available. Directly from YouTube, never Koutube.",
+                "🌐 Koutube : carte native Telegram. L’identifiant vidéo passe par Koutube public ; son cache des liens traités est public. Description et statistiques viennent de Koutube ; lecture intégrée non garantie.\n\n🖼 Notre carte : titre cliquable au-dessus d’une photo HD si disponible. Directement depuis YouTube, jamais Koutube.")
             text += "\n\n" + language.text(
                 "Koutube failure or explicit Telegram rejection → our photo. A missing preview after message acceptance cannot be detected. Works on already-clean links too; duplicates are possible. Off disables both styles.",
                 "Échec Koutube ou refus explicite de Telegram → notre photo. Une absence d’aperçu après acceptation du message n’est pas détectable. Fonctionne aussi sur un lien déjà propre ; doublons possibles. Désactiver coupe les deux styles.")

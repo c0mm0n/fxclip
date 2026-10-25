@@ -129,7 +129,7 @@ extension BotTests {
         XCTAssertEqual(store.state.publications["-100:43"]?.posterID, 7)
     }
 
-    func testYouTubeRedButtonSurvivesRestartAndFiveMinuteCleanup() async throws {
+    func testYouTubeLinkedHeadingSurvivesCleanupWithoutAnOpenButtonOrStoredURL() async throws {
         _ = enableYouTubeCards()
         let url = "https://youtu.be/dQw4w9WgXcQ?t=42"
         try await handle(["text": url])
@@ -137,15 +137,31 @@ extension BotTests {
         XCTAssertEqual(photo["show_caption_above_media"] as? Bool, true)
         XCTAssertEqual(photo["protect_content"] as? Bool, true)
         let restarted = try StateStore(directory: directory)
-        XCTAssertEqual(restarted.state.replyControls["-100:42"]?.openButton?.style, "danger")
+        XCTAssertNil(restarted.state.replyControls["-100:42"]?.openButton)
+        let entities = try decode([Entity].self, from: XCTUnwrap(photo["caption_entities"]))
+        XCTAssertEqual(entities.first { $0.type == "text_link" }?.url, url)
+        let persisted = try String(contentsOf: directory.appendingPathComponent("state.json"), encoding: .utf8)
+        XCTAssertFalse(persisted.contains(url))
         bot = Bot(api: api, store: restarted, engine: engine, allowedChats: [-100], botID: 99, username: "fxclipbot")
         api.calls = []
         try await bot.expireReplyControls(now: 1400)
         let edit = try XCTUnwrap(api.calls.first { $0.0 == "editMessageReplyMarkup" }?.1)
         let buttons = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(edit["reply_markup"])).inline_keyboard.flatMap { $0 }
-        XCTAssertEqual(buttons.count, 1)
-        XCTAssertEqual(buttons.first?.style, "danger")
-        XCTAssertEqual(buttons.first?.url, url)
+        XCTAssertTrue(buttons.isEmpty)
         XCTAssertNil(edit["protect_content"])
+    }
+
+    func testLegacyYouTubeOpenButtonStillSurvivesRestartAndCleanup() async throws {
+        let url = "https://youtu.be/aB3_dE-fG09?t=42"
+        try store.recordReplyControl(chatID: -100, messageID: 42, posterID: 7, now: 1100,
+            openButton: InlineKeyboardButton(text: "▶ Open YouTube", url: url, style: "danger"))
+        let restarted = try StateStore(directory: directory)
+        bot = Bot(api: api, store: restarted, engine: engine, allowedChats: [-100], botID: 99, username: "fxclipbot")
+        try await bot.expireReplyControls(now: 1400)
+        let edit = try XCTUnwrap(api.calls.first { $0.0 == "editMessageReplyMarkup" }?.1)
+        let buttons = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(edit["reply_markup"])).inline_keyboard.flatMap { $0 }
+        XCTAssertEqual(buttons.count, 1)
+        XCTAssertEqual(buttons.first?.url, url)
+        XCTAssertEqual(buttons.first?.style, "danger")
     }
 }

@@ -169,27 +169,23 @@ extension BotTests {
         XCTAssertTrue(api.calls.isEmpty)
     }
 
-    func testReplyExpiryMediaAfterRestartKeepsYouTubeOpenButtonAndClearsBareVideoMarkup() async throws {
+    func testReplyExpiryMediaAfterRestartClearsControlsWithoutAddingOpenButtons() async throws {
         for kind in [ExpiryReplyKind.photo, .video] {
             for language in [BotLanguage.en, .fr] {
                 let parameters = try await replyExpirySend(kind, language: language)
                 let originalRows = try replyExpiryRows(parameters)
-                XCTAssertEqual(originalRows.count, kind == .photo ? 2 : 1)
-                let open = kind == .photo ? try XCTUnwrap(originalRows.first?.first) : nil
-                if let open {
-                    XCTAssertEqual(open.url, kind.source)
-                    XCTAssertNil(open.callback_data)
-                    XCTAssertTrue(open.text.contains(language == .fr ? "Ouvrir YouTube" : "Open YouTube"))
-                } else {
+                XCTAssertEqual(originalRows.count, 1)
+                XCTAssertTrue(originalRows.flatMap { $0 }.allSatisfy { $0.url == nil })
+                if kind == .video {
                     XCTAssertNil(parameters["caption"])
                     XCTAssertNil(parameters["caption_entities"])
                     XCTAssertNil(originalRows.first?.first?.url)
                 }
                 XCTAssertEqual(originalRows.last?.first?.callback_data, "fxclip:preview:delete")
-                XCTAssertEqual(store.state.replyControls["-100:7301"]?.openButton, open)
+                XCTAssertNil(store.state.replyControls["-100:7301"]?.openButton)
 
                 try replyExpiryRestart()
-                XCTAssertEqual(store.state.replyControls["-100:7301"]?.openButton, open)
+                XCTAssertNil(store.state.replyControls["-100:7301"]?.openButton)
                 api.calls = []
                 try await bot.expireReplyControls(now: 1399)
                 XCTAssertTrue(api.calls.isEmpty)
@@ -198,7 +194,7 @@ extension BotTests {
                 XCTAssertEqual(api.methods, ["editMessageReplyMarkup"])
                 let edit = try XCTUnwrap(api.calls.first?.1)
                 replyExpiryAssertEdit(edit, messageID: 7301)
-                XCTAssertEqual(try replyExpiryRows(edit), open.map { [[$0]] } ?? [])
+                XCTAssertTrue(try replyExpiryRows(edit).isEmpty)
                 XCTAssertTrue(store.state.replyControls.isEmpty)
                 let persisted = try String(contentsOf: directory.appendingPathComponent("state.json"), encoding: .utf8)
                 XCTAssertFalse(persisted.contains(kind.source))
@@ -206,22 +202,16 @@ extension BotTests {
         }
     }
 
-    func testReplyExpiryPersistsOnlyKnownOpenButtonWithoutMessageBodyOrMedia() async throws {
+    func testReplyExpiryPersistsNoURLOrMessageBodyForNewCardsAndVideos() async throws {
         for kind in ExpiryReplyKind.allCases {
             let parameters = try await replyExpirySend(kind)
             let state = try XCTUnwrap(JSONSerialization.jsonObject(with:
                 Data(contentsOf: directory.appendingPathComponent("state.json"))) as? [String: Any])
             let receipts = try XCTUnwrap(state["replyControls"] as? [String: [String: Any]])
             let receipt = try XCTUnwrap(receipts["-100:7301"])
-            let expectedKeys: Set<String> = kind == .photo
-                ? ["posterID", "createdAt", "openButton"] : ["posterID", "createdAt"]
+            let expectedKeys: Set<String> = ["posterID", "createdAt"]
             XCTAssertEqual(Set(receipt.keys), expectedKeys)
-            if kind == .photo {
-                let open = try XCTUnwrap(receipt["openButton"] as? [String: Any])
-                XCTAssertEqual(Set(open.keys), ["text", "url", "style"])
-                XCTAssertEqual(open["style"] as? String, "danger")
-                XCTAssertEqual(open["url"] as? String, kind.source)
-            }
+            XCTAssertNil(receipt["openButton"])
             let encoded = try String(decoding: JSONSerialization.data(withJSONObject: receipt), as: UTF8.self)
             if kind == .video {
                 XCTAssertFalse(encoded.contains("facebook"))

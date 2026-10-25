@@ -158,7 +158,7 @@ extension BotTests {
         XCTAssertFalse(persisted.contains("Look "))
     }
 
-    func testPreviewRemovalYouTubeReplyKeepsOpenActionAndAddsSecondRow() async throws {
+    func testPreviewRemovalYouTubeReplyKeepsPairedControlsWithoutAnOpenRow() async throws {
         _ = enableYouTubeCards()
         try replaceMode() // An already clean YouTube URL is still an actual reply.
         for (language, label) in [(BotLanguage.en, "🗑 Remove"), (.fr, "🗑 Retirer")] {
@@ -168,9 +168,8 @@ extension BotTests {
             XCTAssertEqual(api.methods, ["sendPhoto"])
             let photo = try XCTUnwrap(api.calls.first?.1)
             let rows = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(photo["reply_markup"])).inline_keyboard
-            XCTAssertEqual(rows.count, 2)
-            XCTAssertEqual(rows.first?.first?.url, "https://youtu.be/dQw4w9WgXcQ?t=42")
-            XCTAssertEqual(rows.first?.first?.text, language == .fr ? "▶ Ouvrir YouTube" : "▶ Open YouTube")
+            XCTAssertEqual(rows.count, 1)
+            XCTAssertTrue(rows.flatMap { $0 }.allSatisfy { $0.url == nil })
             XCTAssertEqual(rows.last?.first?.text, label)
             XCTAssertEqual(rows.last?.first?.callback_data, "fxclip:preview:delete")
             XCTAssertEqual(rows.last?.count, 2)
@@ -330,9 +329,8 @@ extension BotTests {
         try await handle(["text": "https://youtu.be/dQw4w9WgXcQ?si=tracking"])
         XCTAssertEqual(api.methods, ["getChatMember", "sendPhoto", "deleteMessage"])
         let buttons = try previewRemovalButtons(XCTUnwrap(api.calls.first { $0.0 == "sendPhoto" }?.1))
-        XCTAssertEqual(buttons.count, 2)
-        XCTAssertNotNil(buttons.first?.url)
-        XCTAssertNil(buttons.first?.callback_data)
+        XCTAssertEqual(buttons.count, 1)
+        XCTAssertNil(buttons.first?.url)
         XCTAssertEqual(buttons.last?.callback_data, "fxclip:preview:delete")
         XCTAssertEqual(store.state.replyControls["-100:42"]?.posterID, 7)
         XCTAssertEqual(store.state.publications["-100:42"]?.posterID, 7)

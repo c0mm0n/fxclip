@@ -158,18 +158,17 @@ final class ManualReplacementBotTests: XCTestCase {
         }
     }
 
-    func testPhotoReplyKeepsOpenRowThroughAskCancelAndConfirmation() async throws {
+    func testPhotoReplyKeepsOnlyPairedControlsThroughAskAndCancel() async throws {
         rebuildBot(photo: true)
         let source = original(["text": "https://youtu.be/aB3_dE-fG09?si=tracking"])
         let sent = try await publish(source)
         XCTAssertTrue(api.methods.contains("sendPhoto"))
         let initialRows = try rows(sent)
-        XCTAssertEqual(initialRows.count, 2)
+        XCTAssertEqual(initialRows.count, 1)
         XCTAssertEqual(initialRows.last?.compactMap(\.callback_data), [remove, replace])
-        let open = try XCTUnwrap(initialRows.first)
-        XCTAssertEqual(open.first?.url, "https://youtu.be/aB3_dE-fG09")
+        XCTAssertTrue(initialRows.flatMap { $0 }.allSatisfy { $0.url == nil })
         let asked = try await ask(reply(sent, source: source))
-        XCTAssertEqual(try rows(asked).first, open)
+        XCTAssertEqual(try rows(asked).count, 1)
         XCTAssertEqual(try rows(asked).last?.compactMap(\.callback_data), [confirm, cancel])
         try await click(cancel, message: asked)
         assertNoDestructiveCalls()
@@ -178,7 +177,7 @@ final class ManualReplacementBotTests: XCTestCase {
         XCTAssertNotNil(try persistedOriginal())
     }
 
-    func testPhotoManualCreditKeepsCaptionAboveMediaAndRedOpenButton() async throws {
+    func testPhotoManualCreditKeepsCaptionAboveMediaAndLinkedHeadingWithoutAnOpenButton() async throws {
         rebuildBot(photo: true)
         let source = original(["text": "https://youtu.be/aB3_dE-fG09?t=42"])
         let sent = try await publish(source)
@@ -188,9 +187,9 @@ final class ManualReplacementBotTests: XCTestCase {
         let edit = try XCTUnwrap(api.calls.first { $0.0 == "editMessageCaption" }?.1)
         XCTAssertEqual(edit["show_caption_above_media"] as? Bool, true)
         XCTAssertTrue((edit["caption"] as? String)?.hasPrefix("Shared by Alice 😀\n\nYouTube\n") == true)
-        let button = try XCTUnwrap(rows(edit).first?.first)
-        XCTAssertEqual(button.style, "danger")
-        XCTAssertEqual(button.url, "https://youtu.be/aB3_dE-fG09?t=42")
+        XCTAssertTrue(try rows(edit).flatMap { $0 }.allSatisfy { $0.url == nil })
+        let entities = try wire([Entity].self, XCTUnwrap(edit["caption_entities"]))
+        XCTAssertEqual(entities.first { $0.type == "text_link" }?.url, "https://youtu.be/aB3_dE-fG09?t=42")
         assertOriginalDeleted()
     }
 
@@ -283,7 +282,6 @@ final class ManualReplacementBotTests: XCTestCase {
             let source = original(["text": "https://youtu.be/aB3_dE-fG09?si=tracking"])
             let sent = try await publish(source)
             let caption = "🎬 Existing caption"
-            let open = try XCTUnwrap(rows(sent).first)
             var message = reply(sent, source: source, extra: ["text": NSNull(), "caption": caption,
                 "caption_entities": [["type": "bold", "offset": 3, "length": 8]]])
             message[media] = media == "photo" ? [["file_id": "same-photo", "width": 400, "height": 300]]
@@ -297,7 +295,8 @@ final class ManualReplacementBotTests: XCTestCase {
             let entities = try wire([Entity].self, XCTUnwrap(edit["caption_entities"]))
             XCTAssertEqual(entities.first { $0.type == "bold" }?.offset, 3 + credited.utf16.count - caption.utf16.count)
             XCTAssertEqual(entities.first { $0.type == "text_mention" }?.user?.id, 7)
-            XCTAssertEqual(try rows(edit).first, open)
+            XCTAssertEqual(try rows(edit).flatMap { $0 }.compactMap(\.callback_data), [remove])
+            XCTAssertTrue(try rows(edit).flatMap { $0 }.allSatisfy { $0.url == nil })
             XCTAssertNil(edit["media"])
             XCTAssertNil(edit["photo"])
             XCTAssertNil(edit["video"])
@@ -596,7 +595,7 @@ final class ManualReplacementBotTests: XCTestCase {
         try await bot.expireReplyControls(now: 1400)
         XCTAssertEqual(api.methods, ["editMessageReplyMarkup"])
         let edit = try XCTUnwrap(api.calls.first?.1)
-        XCTAssertEqual(try rows(edit), Array(try rows(sent).prefix(1)))
+        XCTAssertTrue(try rows(edit).isEmpty)
         XCTAssertNil(try persistedOriginal())
         XCTAssertNil(store.state.replyControls[receiptKey])
         XCTAssertNotNil(store.state.publications[receiptKey])
