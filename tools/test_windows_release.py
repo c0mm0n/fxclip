@@ -10,7 +10,7 @@ class WindowsReleaseTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.asset = {'Type':'Full','Version':'0.5.0','FileName':'fxclip-0.5.0-full.nupkg','Size':7,'SHA256':hashlib.sha256(b'package').hexdigest()}
+        self.asset = {'PackageId':'LegacyApplication','Type':'Full','Version':'0.5.0','FileName':'fxclip-0.5.0-full.nupkg','Size':7,'SHA256':hashlib.sha256(b'package').hexdigest()}
         (self.root/self.asset['FileName']).write_bytes(b'package')
         for name in ('fxclip-windows-x64.zip','fxclip-windows-setup.exe'): (self.root/name).write_bytes(b'x')
         self.feed()
@@ -28,3 +28,16 @@ class WindowsReleaseTests(unittest.TestCase):
     def test_incomplete_assets(self):
         (self.root/'fxclip-windows-setup.exe').unlink()
         with self.assertRaises(FileNotFoundError): validate(self.root,'v0.5.0')
+    def test_internal_identity_does_not_define_public_filename(self):
+        validate(self.root,'v0.5.0')
+        self.assertEqual(json.loads((self.root/'releases.win.json').read_text())['Assets'][0]['PackageId'], 'LegacyApplication')
+    def test_rejects_identity_in_public_filename(self):
+        previous = self.root/self.asset['FileName']
+        self.asset['FileName'] = 'LegacyApplication-0.5.0-full.nupkg'
+        previous.rename(self.root/self.asset['FileName']); self.feed()
+        with self.assertRaises(ValueError): validate(self.root,'v0.5.0')
+    def test_filename_version_must_match_feed(self):
+        previous = self.root/self.asset['FileName']
+        self.asset['FileName'] = 'fxclip-0.6.0-full.nupkg'
+        previous.rename(self.root/self.asset['FileName']); self.feed()
+        with self.assertRaises(ValueError): validate(self.root,'v0.5.0')

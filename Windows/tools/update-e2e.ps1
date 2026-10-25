@@ -10,8 +10,21 @@ try {
         dotnet publish Windows/Fxclip -c Release -r win-x64 --self-contained true -o $publish "-p:Version=$version" "-p:AssemblyVersion=$version.0" "-p:FileVersion=$version.0" -p:DefineConstants=UPDATE_TESTING -p:ContinuousIntegrationBuild=true
         if ($LASTEXITCODE -ne 0) { throw 'QA publish failed' }
         $releases = Join-Path $root "release-$version"
-        ./Windows/vpk/vpk.exe pack --packId FxclipUpdateQA --packTitle 'fxclip Update QA' --packAuthors c0mm0n --packVersion $version --packDir $publish --mainExe fxclip.exe --delta None --outputDir $releases --skip-updates
+        ./Windows/vpk/vpk.exe pack --packId FxclipUpdateQA --packTitle 'fxclip Update QA' --packAuthors fxclip --packVersion $version --packDir $publish --mainExe fxclip.exe --delta None --outputDir $releases --skip-updates
         if ($LASTEXITCODE -ne 0) { throw 'QA pack failed' }
+        if ($version -eq '1.0.1') {
+            $before = Get-Content (Join-Path $releases 'releases.win.json') -Raw | ConvertFrom-Json
+            ./Windows/tools/prepare-release.ps1 -Directory $releases
+            $after = Get-Content (Join-Path $releases 'releases.win.json') -Raw | ConvertFrom-Json
+            if ($after.Assets[0].FileName -ne 'fxclip-1.0.1-full.nupkg' -or
+                $after.Assets[0].PackageId -ne $before.Assets[0].PackageId -or
+                $after.Assets[0].SHA256 -ne $before.Assets[0].SHA256 -or
+                $after.Assets[0].Size -ne $before.Assets[0].Size) { throw 'Public filename normalization changed package identity or contents' }
+            if (!(Test-Path (Join-Path $releases 'fxclip-1.0.1-full.nupkg')) -or
+                (Test-Path (Join-Path $releases $before.Assets[0].FileName))) { throw 'Expected only the neutral public package' }
+            python tools/check_windows_release.py $releases v1.0.1
+            if ($LASTEXITCODE -ne 0) { throw 'Normalized QA release is invalid' }
+        }
     }
     $log = Join-Path $proof 'requests.log'
     $portFile = Join-Path $root 'port'
@@ -55,6 +68,8 @@ try {
     Run-Phase $exe 'automatic' "$base/normal" 'automatic-daily'
     Run-Phase $exe 'download' "$base/normal" 'download'
     Run-Phase $exe 'pending' "$base/normal" 'installed-and-relaunched'
+    if (!(Select-String $log -SimpleMatch '/normal/fxclip-1.0.1-full.nupkg') -or
+        (Select-String $log -SimpleMatch 'FxclipUpdateQA-1.0.1-full.nupkg')) { throw 'Updater did not use the neutral public filename' }
     # Verify a real replacement: the current executable's version and unchanged AppData.
     if ((Get-Content (Join-Path $proof 'installed-and-relaunched.json') -Raw | ConvertFrom-Json).version -ne '1.0.1') { throw 'New version not running' }
     $running = @(Get-Process fxclip -ErrorAction SilentlyContinue | Where-Object {
@@ -82,7 +97,7 @@ try {
         if ($priorLogin) { Set-ItemProperty $runKey -Name fxclip -Value $priorLogin }
         else { Remove-ItemProperty $runKey -Name fxclip -ErrorAction SilentlyContinue }
     }
-    Add-Content $env:GITHUB_STEP_SUMMARY 'Real Velopack portable and per-user setup 1.0.0 → 1.0.1 replacement and relaunch passed; AppData preserved; opt-in, decline, cancellation, corrupt archive, pending restart and older-version checks passed.'
+    Add-Content $env:GITHUB_STEP_SUMMARY 'Real Velopack portable and per-user setup 1.0.0 legacy filename → 1.0.1 neutral filename replacement and relaunch passed; package identity and AppData preserved; opt-in, decline, cancellation, corrupt archive, pending restart and older-version checks passed.'
 } finally {
     if ($server -and !$server.HasExited) { Stop-Process -Id $server.Id -Force }
     $env:APPDATA = $priorAppData

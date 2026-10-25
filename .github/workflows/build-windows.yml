@@ -30,6 +30,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Test public package filename normalization
+        run: ./Windows/tools/test-prepare-release.ps1
       - name: Test every shared vector
         run: dotnet test Windows/Fxclip.Engine.Tests -c Release --logger "console;verbosity=normal"
       - name: Publish standalone executable
@@ -64,7 +66,7 @@ jobs:
           Copy-Item Windows/README.md Windows/publish/README.txt
           $notes = "release-notes/v$env:FXCLIP_VERSION.md"
           if (!(Test-Path $notes)) { $notes = 'Windows/release-notes.md' }
-          ./Windows/vpk/vpk.exe pack --packId io.github.c0mm0n.fxclip --packTitle fxclip --packAuthors c0mm0n --packVersion $env:FXCLIP_VERSION --packDir Windows/publish --mainExe fxclip.exe --icon Windows/Fxclip/Assets/fxclip.ico --releaseNotes $notes --delta None --outputDir Windows/releases --skip-updates
+          ./Windows/vpk/vpk.exe pack --packId io.github.c0mm0n.fxclip --packTitle fxclip --packAuthors fxclip --packVersion $env:FXCLIP_VERSION --packDir Windows/publish --mainExe fxclip.exe --icon Windows/Fxclip/Assets/fxclip.ico --releaseNotes $notes --delta None --outputDir Windows/releases --skip-updates
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./Windows/tools/prepare-release.ps1 -Directory Windows/releases
       - name: Real Windows update and failure tests

@@ -55,6 +55,8 @@ internal static class UpdateTest
             else if (phase == "pending")
             {
                 if (Program.Version != "1.0.0" || manager.UpdatePendingRestart is null) throw new Exception("Pending update was applied without consent");
+                if (manager.UpdatePendingRestart.FileName != "fxclip-1.0.1-full.nupkg" || manager.UpdatePendingRestart.PackageId != "FxclipUpdateQA")
+                    throw new Exception("Restart lost the neutral package filename or installed identity");
                 manager.WaitExitThenApplyUpdates(manager.UpdatePendingRestart, silent: true, restart: true, restartArgs: ["--update-test", "verify", source, output]);
                 Application.Current.Shutdown(); return;
             }
@@ -65,6 +67,8 @@ internal static class UpdateTest
                 else
                 {
                     if (info is null || info.TargetFullRelease.Version.ToString() != "1.0.1") throw new Exception("Missing update");
+                    if (info.TargetFullRelease.FileName != "fxclip-1.0.1-full.nupkg" || info.TargetFullRelease.PackageId != "FxclipUpdateQA")
+                        throw new Exception("Feed changed the internal identity or exposed the legacy filename");
                     if (phase == "download") await manager.DownloadUpdatesAsync(info);
                     else if (phase is "cancel" or "corrupt")
                     {

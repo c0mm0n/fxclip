@@ -13,7 +13,7 @@ def validate(directory, tag):
     if asset['Type'] != 'Full' or asset['Version'] != tag.removeprefix('v'):
         raise ValueError('Incorrect Windows release version')
     name = asset['FileName']
-    if Path(name).name != name or not name.endswith('-full.nupkg'):
+    if Path(name).name != name or name != f'fxclip-{asset["Version"]}-full.nupkg':
         raise ValueError('Invalid Windows package filename')
     data = (directory / name).read_bytes()
     if len(data) != asset['Size'] or hashlib.sha256(data).hexdigest().lower() != asset['SHA256'].lower():

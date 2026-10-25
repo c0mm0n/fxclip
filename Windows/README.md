@@ -52,3 +52,7 @@ The CI clipboard smoke test launches the published executable with an isolated t
 Install `fxclip-windows-setup.exe` for a per-user installation, or extract the complete `fxclip-windows-x64.zip` portable archive. Keep its helper files with the app. If your current version has no updater, install the latest complete download manually once; settings and counters remain in `%APPDATA%\fxclip`, and an existing login preference follows the new path.
 
 Use **Settings → Updates** or **Check for Updates…** in the tray menu. Checking contacts public GitHub Releases; cleaning stays local. Automatic checks are optional, off by default and at most daily. Downloads verify Velopack's package digest, then wait for **Restart to Update** and a second confirmation. Quitting or opening the app never installs a downloaded update automatically. No account, token or paid signing certificate is required.
+
+The release also includes `fxclip-VERSION-full.nupkg` and `releases.win.json` for
+in-app updates. Their public filenames use the product name; the existing internal
+installation identity stays unchanged so previously installed versions can update.
