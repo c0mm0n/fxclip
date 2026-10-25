@@ -119,6 +119,8 @@ Before requesting that card, the bot performs one cookie-free, redirect-blocked
 Koutube HTML check (3-second request / 4-second
 resource budget, 128 KiB limit). Only the video ID is sent in that check. A valid
 response must identify the same YouTube video and supply image/video metadata.
+Portrait videos and Shorts may omit the image when a typed MP4 is declared;
+Koutube intentionally leaves that thumbnail blank to avoid cropping.
 The bot uses the validated title but never follows URLs extracted from that HTML
 or downloads a YouTube video. A working native card does not depend on YouTube
 oEmbed; only photo mode or failed mirror checks request oEmbed metadata.

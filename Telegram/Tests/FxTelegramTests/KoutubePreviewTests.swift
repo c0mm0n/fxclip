@@ -81,6 +81,28 @@ final class KoutubePreviewTests: XCTestCase {
         XCTAssertTrue(metadata.nativePreviewAvailable)
     }
 
+    func testPortraitVideoWithEmptyOrMissingThumbnailRemainsNative() async throws {
+        for html in [page.replacingOccurrences(of: "https://images.example/thumbnail.jpg", with: ""),
+                     page.replacingOccurrences(of: "<meta property=\"og:image\" content=\"https://images.example/thumbnail.jpg\">", with: "")] {
+            let video = html + "<meta property='og:video:type' content='video/mp4'>"
+                + "<meta property='og:video:width' content='360'><meta property='og:video:height' content='640'>"
+            let metadata = try await fetch(page: video)
+            XCTAssertTrue(metadata.nativePreviewAvailable)
+            XCTAssertEqual(requestedHosts, ["koutu.be"])
+        }
+    }
+
+    func testMissingThumbnailStillRejectsUntypedOrUnsafeVideo() async throws {
+        let noImage = page.replacingOccurrences(of: "https://images.example/thumbnail.jpg", with: "")
+        for html in [noImage, noImage + "<meta property='og:video:type' content='text/html'>",
+                     (noImage + "<meta property='og:video:type' content='video/mp4'>")
+                        .replacingOccurrences(of: "https://video.example", with: "http://video.example")] {
+            let metadata = try await fetch(page: html)
+            XCTAssertFalse(metadata.nativePreviewAvailable)
+            XCTAssertEqual(requestedHosts, ["koutu.be", "www.youtube.com"])
+        }
+    }
+
     func testUnavailableWrongMIMEAndRedirectResponsesRetainPhotoFallback() async throws {
         for status in [301, 302, 403, 404, 429, 500, 503] {
             let metadata = try await fetch(status: status)
@@ -205,6 +227,18 @@ extension BotTests {
         XCTAssertEqual(card["protect_content"] as? Bool, true)
         XCTAssertEqual(store.state.publications["-100:42"]?.posterID, 7)
         XCTAssertEqual(store.state.replyControls["-100:42"]?.openButton?.url, "https://youtu.be/aB3_dE-fG09?t=42")
+    }
+
+    func testCleanShortsLinkGetsNativeReplyWithoutDeletingOrLookingUpRights() async throws {
+        try replaceMode()
+        let transport = NativeCardAPI(), provider = NativeYouTubeProvider(); nativeBot(transport, provider: provider)
+        let source = "https://www.youtube.com/shorts/aB3_dE-fG09"
+        try await handle(["text": source])
+        XCTAssertEqual(transport.calls.map(\.0), ["sendMessage"])
+        let card = try XCTUnwrap(transport.calls.first?.1)
+        XCTAssertEqual(card["text"] as? String, source)
+        XCTAssertEqual((card["link_preview_options"] as? [String: Any])?["url"] as? String, "https://koutu.be/aB3_dE-fG09")
+        XCTAssertEqual(card["protect_content"] as? Bool, true)
     }
 
     func testNativeReplacementPersistsOwnershipBeforeDeletingAndKeepsCredit() async throws {

@@ -222,18 +222,27 @@ public final class YouTubeMetadataFetcher: YouTubeMetadataProviding {
             // Koutube emits raw '&' query separators in og:video. These values
             // are only checked for presence/HTTPS, never displayed or fetched.
             // Keep Facebook's strict entity decoding unchanged.
-            let tags = try ReelHTML.metadata(html, keys: ["og:url", "og:image", "og:video", "twitter:title"], decodeContent: false)
+            let tags = try ReelHTML.metadata(html, keys: ["og:url", "og:image", "og:video", "og:video:type", "twitter:title"], decodeContent: false)
             let titles = try ReelHTML.metadata(html, keys: ["twitter:title"])
             guard let canonical = tags["og:url"], YouTubePreview.videoID(in: canonical) == videoID,
                   let title = titles["twitter:title"], !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   title.utf16.count <= 512,
-                  let image = tags["og:image"], let video = tags["og:video"] else { return nil }
+                  let video = tags["og:video"] else { return nil }
             // Metadata URLs are inspected only, never fetched or copied into a
             // request. The final preview always points to our fixed mirror host.
-            guard [image, video].allSatisfy({
-                guard let url = URLComponents(string: $0) else { return false }
+            func httpsMetadataURL(_ value: String) -> Bool {
+                guard let url = URLComponents(string: value) else { return false }
                 return url.scheme == "https" && url.host != nil && url.user == nil && url.password == nil
-            }) else { return nil }
+            }
+            guard httpsMetadataURL(video) else { return nil }
+            // Koutube deliberately leaves og:image empty on portrait videos to
+            // avoid cropping them. A typed MP4 is sufficient for a video card;
+            // ordinary image cards still require a valid thumbnail URL.
+            if let image = tags["og:image"], !image.isEmpty {
+                guard httpsMetadataURL(image) else { return nil }
+            } else {
+                guard tags["og:video:type"]?.lowercased() == "video/mp4" else { return nil }
+            }
             return YouTubeMetadata(title: title,
                 thumbnailURL: URL(string: "https://i.ytimg.com/vi/\(videoID)/maxresdefault.jpg")!,
                 fallbackThumbnailURL: URL(string: "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg")!,
