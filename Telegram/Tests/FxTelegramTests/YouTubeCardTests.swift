@@ -129,7 +129,7 @@ extension BotTests {
         XCTAssertEqual(store.state.publications["-100:43"]?.posterID, 7)
     }
 
-    func testYouTubeLinkedHeadingSurvivesCleanupWithoutAnOpenButtonOrStoredURL() async throws {
+    func testYouTubePhotoOpenButtonSurvivesRestartAndCleanupWithoutRetainingURL() async throws {
         _ = enableYouTubeCards()
         let url = "https://youtu.be/dQw4w9WgXcQ?t=42"
         try await handle(["text": url])
@@ -137,18 +137,23 @@ extension BotTests {
         XCTAssertEqual(photo["show_caption_above_media"] as? Bool, true)
         XCTAssertNil(photo["protect_content"] as? Bool)
         let restarted = try StateStore(directory: directory)
-        XCTAssertNil(restarted.state.replyControls["-100:42"]?.openButton)
+        let opening = try XCTUnwrap(restarted.state.replyControls["-100:42"]?.openButton)
+        XCTAssertEqual(opening.url, url)
+        XCTAssertEqual(opening.style, "danger")
+        XCTAssertEqual(opening.text, "▶ Open YouTube")
         let entities = try decode([Entity].self, from: XCTUnwrap(photo["caption_entities"]))
         XCTAssertEqual(entities.first { $0.type == "text_link" }?.url, url)
         let persisted = try String(contentsOf: directory.appendingPathComponent("state.json"), encoding: .utf8)
-        XCTAssertFalse(persisted.contains(url))
+        XCTAssertTrue(persisted.replacingOccurrences(of: "\\/", with: "/").contains(url))
         bot = Bot(api: api, store: restarted, engine: engine, allowedChats: [-100], botID: 99, username: "fxclipbot")
         api.calls = []
         try await bot.expireReplyControls(now: 1400)
         let edit = try XCTUnwrap(api.calls.first { $0.0 == "editMessageReplyMarkup" }?.1)
         let buttons = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(edit["reply_markup"])).inline_keyboard.flatMap { $0 }
-        XCTAssertTrue(buttons.isEmpty)
+        XCTAssertEqual(buttons, [opening])
         XCTAssertNil(edit["protect_content"])
+        XCTAssertFalse(try String(contentsOf: directory.appendingPathComponent("state.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\\/", with: "/").contains(url))
     }
 
     func testLegacyYouTubeOpenButtonStillSurvivesRestartAndCleanup() async throws {

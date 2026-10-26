@@ -418,6 +418,10 @@ public final class Bot {
                     photo["caption_entities"] = try jsonObject(caption.entities)
                     let original = manualReplacementOriginal(message, replacement: replace, now: ownershipNow,
                                                              content: caption.text, limit: 1024)
+                    photo["reply_markup"] = ["inline_keyboard": [[[
+                        "text": language.text("▶ Open YouTube", "▶ Ouvrir YouTube"),
+                        "url": cleanURL, "style": "danger",
+                    ]]]]
                     if removalPoster != nil { addRemovalButton(to: &photo, language: language, replacement: replace, canReplace: original != nil) }
                     if replace {
                         if let parent = message.reply_to_message {

@@ -219,7 +219,7 @@ final class PendingPreviewBotTests: XCTestCase {
         }
     }
 
-    func testSlowYouTubePreservesLinkedCaptionWithoutAnOpenButton() async throws {
+    func testSlowYouTubePreservesLinkedCaptionAndLocalizedRedOpenButton() async throws {
         for language in [BotLanguage.en, .fr] {
             try reset(language: language)
             try await handle(dirtyYouTubeURL, extra: ["message_thread_id": 123,
@@ -243,10 +243,12 @@ final class PendingPreviewBotTests: XCTestCase {
             XCTAssertFalse(caption.contains(youtubeURL))
             XCTAssertEqual(media["show_caption_above_media"] as? Bool, true)
             let buttons = try rows(edit)
-            XCTAssertEqual(buttons.count, 1)
-            XCTAssertTrue(buttons.flatMap { $0 }.allSatisfy { $0.url == nil })
+            XCTAssertEqual(buttons.count, 2)
+            XCTAssertEqual(buttons.first?.first?.url, youtubeURL)
+            XCTAssertEqual(buttons.first?.first?.style, "danger")
+            XCTAssertEqual(buttons.first?.first?.text, language.text("▶ Open YouTube", "▶ Ouvrir YouTube"))
             XCTAssertEqual(buttons.last?.first?.callback_data, "fxclip:preview:delete")
-            XCTAssertNil(store.state.replyControls["-100:7301"]?.openButton)
+            XCTAssertEqual(store.state.replyControls["-100:7301"]?.openButton, buttons.first?.first)
             XCTAssertTrue(deletedIDs().isEmpty)
         }
     }

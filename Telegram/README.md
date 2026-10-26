@@ -149,8 +149,8 @@ off prevents both the Koutube check and YouTube metadata requests.
 
 If that check fails or Telegram explicitly rejects the native-card send/edit,
 our photo card is the fallback: compact linked title above a wide HD thumbnail
-when available. Its linked YouTube heading opens the video, without a separate
-Open button. Replacement credit is preserved. A small
+when available. Its linked YouTube heading and red **Open YouTube / Ouvrir YouTube** button
+open the video. The opening button stays after the five-minute removal controls expire. Replacement credit is preserved. A small
 or letterboxed oEmbed image may trigger one cookie-free, redirect-blocked HD HEAD
 check (2 seconds). An explicitly rejected HD photo may retry the verified oEmbed
 image once. Ambiguous sends/edits never retry or delete the original.
@@ -162,7 +162,8 @@ the native card's side bar or overlaid player.
 
 Par défaut, YouTube passe par la carte native Koutube, dont le cache des liens est
 public. Le lien visible ouvre YouTube, sans bouton supplémentaire. Notre carte
-photo (titre YouTube cliquable au-dessus, miniature HD panoramique si disponible) sert de secours si
+photo (titre YouTube cliquable au-dessus, miniature HD panoramique si disponible,
+bouton rouge **Ouvrir YouTube** conservé après les cinq minutes) sert de secours si
 la vérification Koutube échoue ou si Telegram refuse explicitement le message.
 Une absence d’aperçu après acceptation par Telegram n’est pas détectable. La lecture
 intégrée n’est pas garantie ; description et statistiques sont choisies par Koutube.
@@ -364,7 +365,7 @@ unexpired records and never evicts one early. At capacity, replacement falls bac
 to a reply and keeps the original.
 
 Pending cleanup keeps chat/message IDs, the poster's ID and a timestamp. For
-YouTube cards and oversized-video notices it also temporarily keeps the source
+YouTube photo cards and oversized-video notices it also temporarily keeps the source
 Open button's label and URL, so that button can stay after the removal button
 expires, including across a restart. Full-video replies have no Open button and
 retain no source Open URL.
@@ -549,7 +550,7 @@ Startup registers English/French native descriptions and command menus. The
 persistent volume retains modes, language preferences, discovered group IDs and
 titles, and the polling checkpoint. Back up that volume. Message bodies and media
 are never persisted or logged. Pending removal-button cleanup temporarily retains
-legacy YouTube and oversized-notice opening-button URLs until cleanup succeeds, for at
+YouTube photo-card, legacy YouTube and oversized-notice opening-button URLs until cleanup succeeds, for at
 most 48 hours; full-video replies retain no source Open URL.
 Automatic container updates are disabled in the supplied
 configuration: install new images explicitly.
@@ -598,7 +599,7 @@ external account is used. Koutube-style YouTube cards check the fixed public Kou
 to generate a native preview from it. Koutube publishes its processed-link cache. The photo
 fallback may check YouTube’s HD CDN image without cookies or redirects and lets
 Telegram fetch the image bytes. Fetched titles, thumbnails and videos are not persisted;
-legacy YouTube and oversized-notice opening-button URLs are retained only while
+YouTube photo-card, legacy YouTube and oversized-notice opening-button URLs are retained only while
 removal-button cleanup is pending, for at most 48 hours. Full-video replies have
 no opening button or saved source Open URL. Separately, publication ownership
 IDs and dates remain for less than 48 hours for author-only deletion and the

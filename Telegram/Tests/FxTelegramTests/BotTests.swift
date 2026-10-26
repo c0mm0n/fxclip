@@ -182,9 +182,10 @@ final class BotTests: XCTestCase {
         XCTAssertEqual(title.offset, "YouTube\n".utf16.count)
         XCTAssertEqual(title.length, metadata.title.utf16.count)
         let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(photo["reply_markup"]))
-        XCTAssertTrue(markup.inline_keyboard.flatMap { $0 }.allSatisfy { $0.url == nil })
+        XCTAssertEqual(markup.inline_keyboard.first?.first?.url, url)
+        XCTAssertEqual(markup.inline_keyboard.first?.first?.style, "danger")
         XCTAssertEqual(entities.first { $0.type == "text_link" }?.url, url)
-        XCTAssertEqual(markup.inline_keyboard.first?.first?.callback_data, "fxclip:preview:delete")
+        XCTAssertEqual(markup.inline_keyboard.last?.first?.callback_data, "fxclip:preview:delete")
         XCTAssertEqual(photo["show_caption_above_media"] as? Bool, true)
         XCTAssertNoThrow(try JSONSerialization.data(withJSONObject: photo))
     }
@@ -202,8 +203,10 @@ final class BotTests: XCTestCase {
         api.calls = []
         try await handle(["text": "https://youtu.be/dQw4w9WgXcQ?t=42"])
         let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(api.calls.first?.1["reply_markup"]))
-        XCTAssertTrue(markup.inline_keyboard.flatMap { $0 }.allSatisfy { $0.url == nil })
-        XCTAssertEqual(markup.inline_keyboard.first?.first?.callback_data, "fxclip:preview:delete")
+        XCTAssertEqual(markup.inline_keyboard.first?.first?.url, "https://youtu.be/dQw4w9WgXcQ?t=42")
+        XCTAssertEqual(markup.inline_keyboard.first?.first?.text, "▶ Ouvrir YouTube")
+        XCTAssertEqual(markup.inline_keyboard.first?.first?.style, "danger")
+        XCTAssertEqual(markup.inline_keyboard.last?.first?.callback_data, "fxclip:preview:delete")
     }
 
     func testYouTubeCardsHonorPreviewModeAndActivationChoices() async throws {
