@@ -274,7 +274,7 @@ extension BotTests {
             XCTAssertEqual(transport.calls.map(\.0), ["sendMessage", "sendPhoto"])
             let photo = try XCTUnwrap(transport.calls.last?.1)
             XCTAssertEqual(photo["caption"] as? String, "YouTube\nA title")
-            XCTAssertEqual(photo["show_caption_above_media"] as? Bool, true)
+            XCTAssertEqual(photo["show_caption_above_media"] as? Bool, false)
             XCTAssertNil(photo["protect_content"] as? Bool)
         }
     }
@@ -307,7 +307,7 @@ extension BotTests {
         try await handle(["text": "https://youtu.be/aB3_dE-fG09"])
         XCTAssertEqual(transport.calls.map(\.0), ["sendMessage", "editMessageText", "editMessageMedia"])
         XCTAssertEqual(transport.calls.last?.1["message_id"] as? Int64, 42)
-        XCTAssertEqual((transport.calls.last?.1["media"] as? [String: Any])?["show_caption_above_media"] as? Bool, true)
+        XCTAssertEqual((transport.calls.last?.1["media"] as? [String: Any])?["show_caption_above_media"] as? Bool, false)
     }
 
     func testNativeEditWrongReceiptNeverSendsPhotoOrDeletesOriginal() async throws {

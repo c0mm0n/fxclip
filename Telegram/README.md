@@ -148,8 +148,9 @@ shown on YouTube settings and group activation/resume pages. Turning YouTube car
 off prevents both the Koutube check and YouTube metadata requests.
 
 If that check fails or Telegram explicitly rejects the native-card send/edit,
-our photo card is the fallback: compact linked title above a wide HD thumbnail
-when available. Its linked YouTube heading and red **Open YouTube / Ouvrir YouTube** button
+our photo card is the fallback: wide HD thumbnail when available, with a compact
+linked title below it. Keeping the caption below avoids clipped buttons in Telegram for macOS.
+Its linked YouTube heading and red **Open YouTube / Ouvrir YouTube** button
 open the video. The opening button stays after the five-minute removal controls expire. Replacement credit is preserved. A small
 or letterboxed oEmbed image may trigger one cookie-free, redirect-blocked HD HEAD
 check (2 seconds). An explicitly rejected HD photo may retry the verified oEmbed
@@ -162,7 +163,7 @@ the native card's side bar or overlaid player.
 
 Par défaut, YouTube passe par la carte native Koutube, dont le cache des liens est
 public. Le lien visible ouvre YouTube, sans bouton supplémentaire. Notre carte
-photo (titre YouTube cliquable au-dessus, miniature HD panoramique si disponible,
+photo (miniature HD panoramique si disponible, titre YouTube cliquable dessous,
 bouton rouge **Ouvrir YouTube** conservé après les cinq minutes) sert de secours si
 la vérification Koutube échoue ou si Telegram refuse explicitement le message.
 Une absence d’aperçu après acceptation par Telegram n’est pas détectable. La lecture

@@ -89,7 +89,7 @@ extension BotTests {
         let photos = transport.calls.filter { $0.0 == "sendPhoto" }.map(\.1)
         XCTAssertTrue((photos[0]["photo"] as? String)?.hasSuffix("maxresdefault.jpg") == true)
         XCTAssertTrue((photos[1]["photo"] as? String)?.hasSuffix("hqdefault.jpg") == true)
-        XCTAssertTrue(photos.allSatisfy { $0["protect_content"] == nil && $0["show_caption_above_media"] as? Bool == true })
+        XCTAssertTrue(photos.allSatisfy { $0["protect_content"] == nil && $0["show_caption_above_media"] as? Bool == false })
         XCTAssertEqual(store.state.publications["-100:42"]?.posterID, 7)
     }
 
@@ -134,7 +134,7 @@ extension BotTests {
         let url = "https://youtu.be/dQw4w9WgXcQ?t=42"
         try await handle(["text": url])
         let photo = try XCTUnwrap(api.calls.first { $0.0 == "sendPhoto" }?.1)
-        XCTAssertEqual(photo["show_caption_above_media"] as? Bool, true)
+        XCTAssertEqual(photo["show_caption_above_media"] as? Bool, false)
         XCTAssertNil(photo["protect_content"] as? Bool)
         let restarted = try StateStore(directory: directory)
         let opening = try XCTUnwrap(restarted.state.replyControls["-100:42"]?.openButton)

@@ -179,15 +179,15 @@ final class ManualReplacementBotTests: XCTestCase {
         XCTAssertNotNil(try persistedOriginal())
     }
 
-    func testPhotoManualCreditKeepsCaptionAboveMediaLinkedHeadingAndOpenButton() async throws {
+    func testPhotoManualCreditKeepsCaptionBelowMediaLinkedHeadingAndOpenButton() async throws {
         rebuildBot(photo: true)
         let source = original(["text": "https://youtu.be/aB3_dE-fG09?t=42"])
         let sent = try await publish(source)
-        XCTAssertEqual(sent["show_caption_above_media"] as? Bool, true)
+        XCTAssertEqual(sent["show_caption_above_media"] as? Bool, false)
         let asked = try await ask(reply(sent, source: source))
         try await click(confirm, message: asked)
         let edit = try XCTUnwrap(api.calls.first { $0.0 == "editMessageCaption" }?.1)
-        XCTAssertEqual(edit["show_caption_above_media"] as? Bool, true)
+        XCTAssertEqual(edit["show_caption_above_media"] as? Bool, false)
         XCTAssertTrue((edit["caption"] as? String)?.hasPrefix("Shared by Alice 😀\n\nYouTube\n") == true)
         XCTAssertEqual(try rows(edit).first, try rows(sent).first)
         XCTAssertEqual(try rows(edit).first?.first?.style, "danger")

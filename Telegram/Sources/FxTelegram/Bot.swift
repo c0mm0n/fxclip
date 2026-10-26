@@ -413,7 +413,10 @@ public final class Bot {
                     var photo = base(message)
                     photo["photo"] = metadata.thumbnailURL.absoluteString
                     photo["caption"] = caption.text
-                    photo["show_caption_above_media"] = true
+                    // Telegram for macOS can clip inline controls when a photo's
+                    // caption is above its media. Keep the caption below so the
+                    // opening and author controls remain visible on that client.
+                    photo["show_caption_above_media"] = false
                     photo["disable_notification"] = true
                     photo["caption_entities"] = try jsonObject(caption.entities)
                     let original = manualReplacementOriginal(message, replacement: replace, now: ownershipNow,

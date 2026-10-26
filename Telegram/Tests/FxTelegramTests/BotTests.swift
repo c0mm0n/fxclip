@@ -186,7 +186,7 @@ final class BotTests: XCTestCase {
         XCTAssertEqual(markup.inline_keyboard.first?.first?.style, "danger")
         XCTAssertEqual(entities.first { $0.type == "text_link" }?.url, url)
         XCTAssertEqual(markup.inline_keyboard.last?.first?.callback_data, "fxclip:preview:delete")
-        XCTAssertEqual(photo["show_caption_above_media"] as? Bool, true)
+        XCTAssertEqual(photo["show_caption_above_media"] as? Bool, false)
         XCTAssertNoThrow(try JSONSerialization.data(withJSONObject: photo))
     }
 

@@ -265,7 +265,7 @@ final class VideoDimensionsBotTests: XCTestCase {
             assertDimensions(media, width: nil, height: nil)
             XCTAssertNil(media["supports_streaming"])
             XCTAssertEqual(media["caption"] as? String, "YouTube\nFixture video")
-            XCTAssertEqual(media["show_caption_above_media"] as? Bool, true)
+            XCTAssertEqual(media["show_caption_above_media"] as? Bool, false)
             XCTAssertNotNil(media["caption_entities"])
             XCTAssertEqual(media[slow ? "media" : "photo"] as? String, "https://example.invalid/thumbnail.jpg")
             if slow { XCTAssertEqual(media["type"] as? String, "photo") }

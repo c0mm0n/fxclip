@@ -241,7 +241,7 @@ final class PendingPreviewBotTests: XCTestCase {
             XCTAssertEqual((caption as NSString).substring(with: NSRange(location: title.offset, length: title.length)), youtube.title)
             XCTAssertFalse(entities.contains { $0.type == "url" })
             XCTAssertFalse(caption.contains(youtubeURL))
-            XCTAssertEqual(media["show_caption_above_media"] as? Bool, true)
+            XCTAssertEqual(media["show_caption_above_media"] as? Bool, false)
             let buttons = try rows(edit)
             XCTAssertEqual(buttons.count, 2)
             XCTAssertEqual(buttons.first?.first?.url, youtubeURL)
