@@ -259,14 +259,16 @@ final class VideoDimensionsBotTests: XCTestCase {
         for slow in [false, true] {
             try reset(slow: slow)
             try await handle("https://youtu.be/AAAAAAAAAAA")
-            XCTAssertEqual(api.methods, ["sendPhoto"])
-            let media = try parameters("sendPhoto")
+            XCTAssertEqual(api.methods, slow ? ["sendMessage", "editMessageMedia"] : ["sendPhoto"])
+            let envelope = try parameters(slow ? "editMessageMedia" : "sendPhoto")
+            let media = slow ? try XCTUnwrap(envelope["media"] as? [String: Any]) : envelope
             assertDimensions(media, width: nil, height: nil)
             XCTAssertNil(media["supports_streaming"])
             XCTAssertEqual(media["caption"] as? String, "YouTube\nFixture video")
             XCTAssertEqual(media["show_caption_above_media"] as? Bool, true)
             XCTAssertNotNil(media["caption_entities"])
-            XCTAssertEqual(media["photo"] as? String, "https://example.invalid/thumbnail.jpg")
+            XCTAssertEqual(media[slow ? "media" : "photo"] as? String, "https://example.invalid/thumbnail.jpg")
+            if slow { XCTAssertEqual(media["type"] as? String, "photo") }
             XCTAssertEqual(Set(store.state.replyControls.keys), ["-100:\(api.sentID)"])
         }
     }

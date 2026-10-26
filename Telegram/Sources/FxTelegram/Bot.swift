@@ -212,9 +212,9 @@ public final class Bot {
                                               includeUnchangedLinks: directMessage)
         // This is presentation, not another cleaning engine. Only plain, single-link
         // messages qualify; formatting, hidden links and media keep their existing path.
+        // Telegram's original-preview flag does not change the saved fxclip card choice.
         let videoID: String?
         if settings.previews, cardsEnabled(chatID: settingsChatID, userID: senderID),
-           message.link_preview_options?.is_disabled != true,
            youTubeMetadata != nil, let text = message.text,
            (message.entities ?? []).allSatisfy({ $0.type == "url" }), isBareURL(text) {
             videoID = YouTubePreview.videoID(in: text.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -362,14 +362,17 @@ public final class Bot {
             }
         }
         if let videoID, let youTubeMetadata {
-            // A rejected text placeholder must not prevent a prepared photo from
-            // being sent. YouTube sends only its finished card, without a status.
-            // Fetching metadata is safe to fall back from; an uncertain send is not.
-            let metadata: YouTubeMetadata?
-            do { metadata = try await youTubeMetadata.fetch(videoID: videoID, nativePreview: youTubeStyle == .koutube) }
-            catch is CancellationError { throw CancellationError() }
-            catch { try Task.checkCancellation(); metadata = nil }
-            try Task.checkCancellation()
+            // Fetching metadata is safe to fall back from; a timed-out send is not.
+            let fetched = try await fetchWithPendingPreview(api: api, parameters: pending,
+                originalMessageID: message.message_id, delayNanoseconds: pendingPreviewDelayNanoseconds) {
+                try await youTubeMetadata.fetch(videoID: videoID, nativePreview: youTubeStyle == .koutube)
+            }
+            pendingID = fetched.1
+            if case .failure(let error) = fetched.0, error is CancellationError {
+                await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
+                throw error
+            }
+            let metadata = try? fetched.0.get()
             if let metadata {
                 let cleanURL = configured.engine.clean(message.text ?? "").text
                     .trimmingCharacters(in: .whitespacesAndNewlines)

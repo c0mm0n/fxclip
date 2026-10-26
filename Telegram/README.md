@@ -126,6 +126,9 @@ the web card's description, statistics and media; an in-chat player is not guara
 **🖼 Our card / Notre carte**. Choosing our card skips every Koutube request;
 Koutube style keeps that photo card as fallback. Style inherits personal → group
 → bot defaults independently of YouTube On/Off, and is cleared by link reset.
+Hiding Telegram's preview on the original message does not disable the bot's
+YouTube card. Use the fxclip YouTube switch or the group's enhanced-preview
+switch to disable it.
 
 Before requesting that card, the bot performs one cookie-free, redirect-blocked
 Koutube HTML check (3-second request / 4-second
@@ -163,11 +166,13 @@ photo (titre YouTube cliquable au-dessus, miniature HD panoramique si disponible
 la vérification Koutube échoue ou si Telegram refuse explicitement le message.
 Une absence d’aperçu après acceptation par Telegram n’est pas détectable. La lecture
 intégrée n’est pas garantie ; description et statistiques sont choisies par Koutube.
+Masquer l’aperçu Telegram du message original ne désactive pas la carte du bot.
+Pour la désactiver, utilisez le réglage YouTube de fxclip ou les aperçus du groupe.
 
 This includes already-clean links. Telegram's Bot API does not expose
 whether its own card appeared, so a duplicate preview is possible. Turning
-enhanced previews off disables these cards. Explicitly suppressed previews,
-formatted or hidden links, captions and messages containing more than one link
+enhanced previews off disables these cards. Formatted or hidden links, captions
+and messages containing more than one link
 keep their existing behavior. Secretary only edits links; it does not post cards.
 
 **Facebook videos** (**Vidéos Facebook**) is a separate Telegram-only option under
@@ -199,10 +204,9 @@ MP4 URL to the bot server, then uploads a copy to Telegram. Tracker removal stay
 entirely in the shared engine and `Shared/rules.json`; this option adds no shared
 mirror rule or separate tracking-parameter list.
 
-Slow Facebook/Reddit replies show a quiet “Preparing preview…” reply
+Slow Facebook/Reddit replies and YouTube fetches show a quiet “Preparing preview…” reply
 (“Préparation de l’aperçu…” in French) after 0.7 seconds. The same message becomes
-the video or size notice; fast fetches skip the status. YouTube sends its finished
-native or photo card directly, so a rejected text status cannot block the card. Facebook
+the video, thumbnail card or size notice; fast fetches skip the status. Facebook
 and Reddit replacement attempts skip this status until the outcome is known, preserving the
 reply target if a video is too large and the original must stay. Removal
 controls start their five-minute window only when the finished content is confirmed.

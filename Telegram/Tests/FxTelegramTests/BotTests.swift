@@ -226,10 +226,9 @@ final class BotTests: XCTestCase {
         XCTAssertTrue(metadata.requestedIDs.isEmpty)
     }
 
-    func testYouTubeCardsRespectExplicitPreviewSuppressionAndFormattedContent() async throws {
+    func testYouTubeCardsRespectFormattedContent() async throws {
         let metadata = enableYouTubeCards()
         let url = "https://youtu.be/dQw4w9WgXcQ"
-        try await handle(["text": url, "link_preview_options": ["is_disabled": true]])
         for type in ["code", "pre", "spoiler", "text_link"] {
             try await handle(["text": url, "entities": [["type": type, "offset": 0, "length": url.utf16.count]]])
         }
