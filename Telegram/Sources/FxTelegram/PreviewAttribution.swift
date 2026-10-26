@@ -5,8 +5,8 @@ enum PreviewAttribution {
     /// Keep normal display names plain. Code spans prevent Telegram from turning
     /// address-like names into automatic mentions, URLs or phone-number links.
     static func unlinkedLabelEntities(_ label: String, offset: Int) -> [Entity] {
-        let addressLike = label.rangeOfCharacter(from: CharacterSet(charactersIn: "@.:+")) != nil
-            || label.range(of: #"\d[\d ()-]{5,}"#, options: .regularExpression) != nil
+        let addressLike = label.contains("@") || label.contains("://")
+            || label.range(of: #"\S+\.\S+|\d[\d ()-]{5,}"#, options: .regularExpression) != nil
         return addressLike && !label.isEmpty
             ? [Entity(type: "code", offset: offset, length: label.utf16.count)] : []
     }

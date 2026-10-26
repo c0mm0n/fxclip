@@ -69,6 +69,14 @@ final class PreviewAttributionTests: XCTestCase {
         }
     }
 
+    func testOrdinaryNamePunctuationRemainsPlainText() throws {
+        for name in ["Alice J.", "M. Dupont", "Jean+Marie", "Émilie :)", "O’Connor"] {
+            let result = try XCTUnwrap(PreviewAttribution.prefix(poster: TelegramUser(id: 7, first_name: name), origin: nil, language: .fr))
+            XCTAssertEqual(result.text, "Partagé par \(name)\n\n")
+            XCTAssertTrue(result.entities.isEmpty)
+        }
+    }
+
     func testChannelLinksOnlyOriginalPublicPost() throws {
         let chat = Chat(id: -100, type: "channel", title: "📣 Actualités", username: "Actualites_24")
         let result = try prefix(ForwardOrigin(type: "channel", date: 1000, chat: chat,
