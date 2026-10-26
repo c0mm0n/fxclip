@@ -78,12 +78,14 @@ private final class PendingYouTubeProvider: YouTubeMetadataProviding {
     var error: Error?
     var requests = 0
     var nativePreviewAvailable = false
+    var ignoresCancellation = false
     let title = "🎬 Example video 😀"
     let thumbnailURL = URL(string: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg")!
 
     func fetch(videoID: String) async throws -> YouTubeMetadata {
         requests += 1
-        try await Task.sleep(nanoseconds: delayNanoseconds)
+        do { try await Task.sleep(nanoseconds: delayNanoseconds) }
+        catch { if !ignoresCancellation { throw error } }
         if let error { throw error }
         return YouTubeMetadata(title: title, thumbnailURL: thumbnailURL, nativePreviewAvailable: nativePreviewAvailable)
     }
@@ -322,6 +324,18 @@ final class PendingPreviewBotTests: XCTestCase {
         try reset()
         youtube.error = CancellationError()
         do { try await handle(youtubeURL); XCTFail("Expected cancellation") }
+        catch is CancellationError {}
+        XCTAssertTrue(api.calls.isEmpty)
+        XCTAssertTrue(store.state.replyControls.isEmpty)
+        XCTAssertTrue(store.state.publications.isEmpty)
+    }
+
+    func testParentCancellationStopsYouTubeEvenIfProviderReturnsMetadata() async throws {
+        try reset()
+        youtube.ignoresCancellation = true
+        let task = Task { try await self.handle(self.youtubeURL) }
+        task.cancel()
+        do { try await task.value; XCTFail("Expected cancellation") }
         catch is CancellationError {}
         XCTAssertTrue(api.calls.isEmpty)
         XCTAssertTrue(store.state.replyControls.isEmpty)

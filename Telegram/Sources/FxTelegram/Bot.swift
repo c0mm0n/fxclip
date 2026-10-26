@@ -368,7 +368,8 @@ public final class Bot {
             let metadata: YouTubeMetadata?
             do { metadata = try await youTubeMetadata.fetch(videoID: videoID, nativePreview: youTubeStyle == .koutube) }
             catch is CancellationError { throw CancellationError() }
-            catch { metadata = nil }
+            catch { try Task.checkCancellation(); metadata = nil }
+            try Task.checkCancellation()
             if let metadata {
                 let cleanURL = configured.engine.clean(message.text ?? "").text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
