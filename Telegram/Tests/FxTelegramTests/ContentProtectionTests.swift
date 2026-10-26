@@ -4,33 +4,33 @@ import FxEngine
 @testable import FxTelegram
 
 extension BotTests {
-    func testProtectionDisclosureExplainsScopeAndRetroactiveLimitInBothLanguages() {
+    func testSharingDisclosureExplainsUnlinkedDisplayNamesAndLegacyProtectionInBothLanguages() {
         for language in BotLanguage.allCases {
             let panel = SettingsUI.rules(UserSettings(), builtins: engine.rules, scope: "p", section: "info",
                                          inherited: true, language: language)
-            XCTAssertTrue(panel.plainText.contains(language.text("cannot be forwarded or saved", "bloquent le transfert et l’enregistrement")))
-            XCTAssertTrue(panel.plainText.contains(language.text("Direct link replies stay shareable", "Les liens traités en privé restent partageables")))
-            XCTAssertTrue(panel.plainText.contains(language.text("not protected retroactively", "pas protégés rétroactivement")))
+            XCTAssertTrue(panel.plainText.contains(language.text("can be forwarded and saved", "peuvent être transférés et enregistrés")))
+            XCTAssertTrue(panel.plainText.contains(language.text("display names without account links", "noms d’affichage sans lien vers les comptes")))
+            XCTAssertTrue(panel.plainText.contains(language.text("remain protected", "restent protégés")))
             XCTAssertLessThanOrEqual(panel.text.utf16.count, 4096)
         }
     }
 
-    func testGroupRepliesAndAutomaticReplacementsAreProtectedBeforeCreditLeavesBot() async throws {
+    func testGroupRepliesAndAutomaticReplacementsStayShareableWithPlainCredit() async throws {
         for mode in [Mode.reply, .replace] {
             var settings = ChatSettings(); settings.mode = mode
             try store.set(settings, chatID: -100)
             api.calls = []
             try await handle()
-            XCTAssertEqual(sent["protect_content"] as? Bool, true)
+            XCTAssertNil(sent["protect_content"])
             XCTAssertEqual(api.methods.contains("deleteMessage"), mode == .replace)
             if mode == .replace { XCTAssertTrue((sent["text"] as? String)?.contains("Posted by") == true) }
         }
     }
 
-    func testGroupPhotoAndPanelsAreProtectedButDirectLinksRemainShareable() async throws {
+    func testGroupPhotoAndDirectLinksAreShareableWhileAdminPanelsStayProtected() async throws {
         _ = enableYouTubeCards()
         try await handle(["text": "https://youtu.be/dQw4w9WgXcQ"])
-        XCTAssertEqual(api.calls.first { $0.0 == "sendPhoto" }?.1["protect_content"] as? Bool, true)
+        XCTAssertNil(api.calls.first { $0.0 == "sendPhoto" }?.1["protect_content"])
         api.calls = []
         try await membership(["status": "administrator"], old: ["status": "left"])
         XCTAssertEqual(sent["protect_content"] as? Bool, true)

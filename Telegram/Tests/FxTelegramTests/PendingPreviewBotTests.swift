@@ -17,8 +17,8 @@ private final class PendingPreviewAPI: BotAPI {
     func call(_ method: String, _ parameters: [String: Any]) async throws -> Any {
         if ["sendMessage", "sendPhoto", "sendVideo"].contains(method),
            let chatID = parameters["chat_id"] as? Int64, chatID < 0 {
-            XCTAssertEqual(parameters["protect_content"] as? Bool, true,
-                           "Even the placeholder must already be protected")
+            XCTAssertNil(parameters["protect_content"] as? Bool,
+                           "Pending content must remain shareable")
         }
         if ["editMessageText", "editMessageMedia"].contains(method) {
             XCTAssertNil(parameters["protect_content"], "Telegram edits cannot set content protection")
@@ -319,9 +319,8 @@ final class PendingPreviewBotTests: XCTestCase {
                 XCTAssertEqual(store.state.publications["-100:7301"]?.posterID, 7)
                 let caption = try XCTUnwrap(media["caption"] as? String)
                 let entities = try decode([Entity].self, from: XCTUnwrap(media["caption_entities"]))
-                let credit = try XCTUnwrap(entities.first { $0.type == "text_mention" })
-                XCTAssertEqual(credit.user?.id, 7)
-                XCTAssertEqual((caption as NSString).substring(with: NSRange(location: credit.offset, length: credit.length)), "Member 😀")
+                XCTAssertFalse(entities.contains { $0.user != nil || $0.type == "text_mention" })
+                XCTAssertTrue(caption.contains("Member 😀"))
             }
         }
     }

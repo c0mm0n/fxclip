@@ -197,8 +197,7 @@ final class BotTests: XCTestCase {
         let photo = api.calls[1].1
         XCTAssertEqual(photo["caption"] as? String, "Posted by Alice\n\nYouTube\n" + metadata.title)
         let entities = try decode([Entity].self, from: XCTUnwrap(photo["caption_entities"]))
-        XCTAssertEqual(entities.first { $0.type == "text_mention" }?.offset,
-                       "Posted by ".utf16.count)
+        XCTAssertFalse(entities.contains { $0.type == "text_mention" })
         try store.setGroupLanguage(.fr, chatID: -100)
         api.calls = []
         try await handle(["text": "https://youtu.be/dQw4w9WgXcQ?t=42"])
@@ -371,9 +370,7 @@ final class BotTests: XCTestCase {
         XCTAssertNil(sent["reply_parameters"])
         XCTAssertEqual(sent["text"] as? String, "Posted by Alice\n\nLook https://fxtwitter.com/a/status/1")
         let entities = try decode([Entity].self, from: XCTUnwrap(sent["entities"]))
-        let mention = try XCTUnwrap(entities.first { $0.type == "text_mention" })
-        XCTAssertEqual(mention.user?.id, 7)
-        XCTAssertEqual(((try XCTUnwrap(sent["text"] as? String)) as NSString).substring(with: NSRange(location: mention.offset, length: mention.length)), "Alice")
+        XCTAssertFalse(entities.contains { $0.type == "text_mention" || $0.user != nil })
     }
     func testAmbiguousSendNeverDeletes() async throws {
         try replaceMode(); api.failSend = true

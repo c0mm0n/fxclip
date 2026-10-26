@@ -343,11 +343,8 @@ extension BotTests {
         for (language, label): (BotLanguage, String) in [(.en, "Posted by "), (.fr, "Publié par ")] {
             let rendered = try XCTUnwrap(Rewriter(engine: engine).rewrite(fixture, previews: true, language: language))
             XCTAssertEqual(rendered.text, "\(label)😀 Zoé 李\n\n😀 Mon lien https://fxtwitter.com/a et café")
-            let mention = try XCTUnwrap(rendered.entities.first { $0.type == "text_mention" })
-            XCTAssertEqual(mention.offset, label.utf16.count)
-            XCTAssertEqual(mention.length, "😀 Zoé 李".utf16.count)
-            XCTAssertEqual(mention.user?.id, 7)
-            let expected = ["text_mention": "😀 Zoé 李", "bold": "https://fxtwitter.com/a", "italic": "café"]
+            XCTAssertFalse(rendered.entities.contains { $0.user != nil || $0.type == "text_mention" })
+            let expected = ["bold": "https://fxtwitter.com/a", "italic": "café"]
             for entity in rendered.entities {
                 XCTAssertEqual((rendered.text as NSString).substring(with: NSRange(location: entity.offset, length: entity.length)), expected[entity.type])
             }

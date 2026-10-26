@@ -102,10 +102,7 @@ extension BotTests {
         XCTAssertEqual(caption, "Posted by Member")
         XCTAssertEqual((video["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 3)
         let entities = try decode([Entity].self, from: XCTUnwrap(video["caption_entities"]))
-        XCTAssertEqual(entities.count, 1)
-        let credit = try XCTUnwrap(entities.first { $0.type == "text_mention" })
-        XCTAssertEqual(credit.user?.id, 7)
-        XCTAssertEqual((caption as NSString).substring(with: NSRange(location: credit.offset, length: credit.length)), "Member")
+        XCTAssertTrue(entities.isEmpty)
         let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(video["reply_markup"]))
         XCTAssertEqual(markup.inline_keyboard.flatMap { $0 }.map(\.callback_data), ["fxclip:preview:delete"])
         XCTAssertEqual(store.state.replyControls["-100:1234567890123"]?.posterID, 7)
@@ -406,7 +403,7 @@ extension BotTests {
         }
     }
 
-    func testFacebookReplacementUsesOnlyLocalizedPosterCreditWithUTF16Mention() async throws {
+    func testFacebookReplacementUsesOnlyLocalizedPlainDisplayNameCredit() async throws {
         _ = try facebookProvider()
         try replaceMode()
         for language in [BotLanguage.en, .fr] {
@@ -420,12 +417,7 @@ extension BotTests {
             let prefix = language == .fr ? "Publié par " : "Posted by "
             XCTAssertEqual(video["caption"] as? String, prefix + name)
             let entities = try decode([Entity].self, from: XCTUnwrap(video["caption_entities"]))
-            XCTAssertEqual(entities.count, 1)
-            let mention = try XCTUnwrap(entities.first)
-            XCTAssertEqual(mention.type, "text_mention")
-            XCTAssertEqual(mention.user?.id, 7)
-            XCTAssertEqual(mention.offset, prefix.utf16.count)
-            XCTAssertEqual(mention.length, name.utf16.count)
+            XCTAssertTrue(entities.isEmpty)
             XCTAssertNil(video["reply_parameters"])
             let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(video["reply_markup"]))
             XCTAssertEqual(markup.inline_keyboard.flatMap { $0 }.map(\.callback_data), ["fxclip:preview:delete"])

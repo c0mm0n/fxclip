@@ -225,7 +225,7 @@ extension BotTests {
         let options = try XCTUnwrap(card["link_preview_options"] as? [String: Any])
         XCTAssertEqual(options["url"] as? String, "https://koutu.be/aB3_dE-fG09?t=42")
         XCTAssertEqual(options["prefer_large_media"] as? Bool, true)
-        XCTAssertEqual(card["protect_content"] as? Bool, true)
+        XCTAssertNil(card["protect_content"] as? Bool)
         XCTAssertEqual(store.state.publications["-100:42"]?.posterID, 7)
         XCTAssertNil(store.state.replyControls["-100:42"]?.openButton)
         let markup = try decode(InlineKeyboardMarkup.self, from: XCTUnwrap(card["reply_markup"]))
@@ -241,7 +241,7 @@ extension BotTests {
         let card = try XCTUnwrap(transport.calls.first?.1)
         XCTAssertEqual(card["text"] as? String, source)
         XCTAssertEqual((card["link_preview_options"] as? [String: Any])?["url"] as? String, "https://koutu.be/aB3_dE-fG09")
-        XCTAssertEqual(card["protect_content"] as? Bool, true)
+        XCTAssertNil(card["protect_content"] as? Bool)
     }
 
     func testNativeReplacementPersistsOwnershipBeforeDeletingAndKeepsCredit() async throws {
@@ -275,7 +275,7 @@ extension BotTests {
             let photo = try XCTUnwrap(transport.calls.last?.1)
             XCTAssertEqual(photo["caption"] as? String, "YouTube\nA title")
             XCTAssertEqual(photo["show_caption_above_media"] as? Bool, true)
-            XCTAssertEqual(photo["protect_content"] as? Bool, true)
+            XCTAssertNil(photo["protect_content"] as? Bool)
         }
     }
 

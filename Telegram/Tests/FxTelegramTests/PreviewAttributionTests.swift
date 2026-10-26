@@ -19,23 +19,54 @@ final class PreviewAttributionTests: XCTestCase {
                                      (.fr, "Partagé par 😀 Zoé 李\n\n")] {
             let result = try prefix(language: language)
             XCTAssertEqual(result.text, expected)
-            XCTAssertEqual(result.entities.count, 1)
-            XCTAssertEqual(result.entities[0].type, "text_mention")
-            XCTAssertEqual(result.entities[0].user, poster)
-            XCTAssertEqual(label(result.entities[0], in: result.text), poster.name)
+            XCTAssertTrue(result.entities.isEmpty)
         }
     }
 
-    func testForwardedUserMentionsOriginalSenderWithUTF16Offsets() throws {
+    func testForwardedUserNamesRemainPlainWithoutAccountLinks() throws {
         let source = TelegramUser(id: 8, first_name: "👩🏽‍💻 Émilie", last_name: "王")
         let result = try prefix(ForwardOrigin(type: "user", date: 1000, sender_user: source), language: .fr)
         XCTAssertEqual(result.text, "Partagé par 😀 Zoé 李\nSource : 👩🏽‍💻 Émilie 王\n\n")
-        XCTAssertEqual(result.entities.map(\.type), ["text_mention", "text_mention"])
-        XCTAssertEqual(result.entities.map(\.user), [poster, source])
-        XCTAssertEqual(label(result.entities[0], in: result.text), poster.name)
-        XCTAssertEqual(label(result.entities[1], in: result.text), source.name)
-        XCTAssertEqual(result.entities[1].offset, "Partagé par 😀 Zoé 李\nSource : ".utf16.count)
-        XCTAssertEqual(result.entities[1].length, source.name.utf16.count)
+        XCTAssertTrue(result.entities.isEmpty)
+    }
+
+    func testAccountUsernamesAndIDsAreNeverEmbeddedInGeneratedCredit() throws {
+        let poster = TelegramUser(id: 123456, first_name: "Visible 😀", last_name: "Name", username: "hidden_poster_handle")
+        let source = TelegramUser(id: 654321, first_name: "Source 👩🏽‍💻", username: "hidden_source_handle")
+        let result = try XCTUnwrap(PreviewAttribution.prefix(poster: poster,
+            origin: ForwardOrigin(type: "user", sender_user: source), language: .en))
+        XCTAssertEqual(result.text, "Shared by Visible 😀 Name\nSource: Source 👩🏽‍💻\n\n")
+        XCTAssertTrue(result.entities.isEmpty)
+        let wire = String(decoding: try JSONEncoder().encode(result.entities), as: UTF8.self)
+        for forbidden in ["hidden_poster_handle", "hidden_source_handle", "123456", "654321", "tg://user", "text_mention"] {
+            XCTAssertFalse((result.text + wire).contains(forbidden))
+        }
+    }
+
+    func testAddressLikeNamesAreLiteralCodeWithCorrectUTF16Offsets() throws {
+        for language in BotLanguage.allCases {
+            for name in ["😀 @visible_name", "Zoé t.me/someone", "tg://user?id=123456", "person@example.test", "+33 600 000 000"] {
+                let poster = TelegramUser(id: 7, first_name: name, username: "not_the_display_name")
+                let origin = ForwardOrigin(type: "user", sender_user: TelegramUser(id: 8, first_name: "Source @source_name"))
+                let result = try XCTUnwrap(PreviewAttribution.prefix(poster: poster, origin: origin, language: language))
+                XCTAssertEqual(result.entities.map(\.type), ["code", "code"])
+                XCTAssertEqual(label(result.entities[0], in: result.text), name)
+                XCTAssertEqual(label(result.entities[1], in: result.text), "Source @source_name")
+                XCTAssertTrue(result.entities.allSatisfy { $0.user == nil && $0.url == nil })
+                XCTAssertFalse(result.text.contains("not_the_display_name"))
+            }
+        }
+    }
+
+    func testHiddenAndPrivateSourceLabelsCannotBecomeAutomaticProfileLinks() throws {
+        for origin in [
+            ForwardOrigin(type: "hidden_user", sender_user_name: "@hidden_name"),
+            ForwardOrigin(type: "chat", sender_chat: Chat(id: -100, type: "supergroup", title: "t.me/private_name"))
+        ] {
+            let result = try prefix(origin)
+            XCTAssertEqual(result.entities.map(\.type), ["code"])
+            XCTAssertTrue(result.entities.allSatisfy { $0.user == nil && $0.url == nil })
+        }
     }
 
     func testChannelLinksOnlyOriginalPublicPost() throws {
@@ -56,7 +87,7 @@ final class PreviewAttributionTests: XCTestCase {
             let result = try prefix(ForwardOrigin(type: "chat", date: 1000, sender_chat: chat,
                                                 author_signature: "Admin"))
             XCTAssertEqual(result.text, "Shared by 😀 Zoé 李\nSource: Le groupe 🐈\n\n")
-            XCTAssertEqual(result.entities.count, 1)
+            XCTAssertTrue(result.entities.isEmpty)
             XCTAssertFalse(result.text.contains("Admin"))
         }
     }
@@ -64,7 +95,7 @@ final class PreviewAttributionTests: XCTestCase {
     func testHiddenSourceRemainsPlainNameWithoutInventedUser() throws {
         let result = try prefix(ForwardOrigin(type: "hidden_user", date: 1000, sender_user_name: "Alice 🦊"))
         XCTAssertEqual(result.text, "Shared by 😀 Zoé 李\nSource: Alice 🦊\n\n")
-        XCTAssertEqual(result.entities.count, 1)
+        XCTAssertTrue(result.entities.isEmpty)
     }
 
     func testPrivateOrUnsafeChannelUsernameFallsBackToPlainLabel() throws {
@@ -75,7 +106,7 @@ final class PreviewAttributionTests: XCTestCase {
             let chat = Chat(id: -100, type: "channel", title: "Private source", username: username)
             let result = try prefix(ForwardOrigin(type: "channel", chat: chat, message_id: 123))
             XCTAssertEqual(result.text, "Shared by 😀 Zoé 李\nSource: Private source\n\n")
-            XCTAssertEqual(result.entities.count, 1, "Unsafe username: \(username ?? "nil")")
+            XCTAssertTrue(result.entities.isEmpty, "Unsafe username: \(username ?? "nil")")
         }
     }
 
@@ -117,7 +148,7 @@ final class PreviewAttributionTests: XCTestCase {
         let fitting = try XCTUnwrap(PreviewAttribution.prefix(poster: TelegramUser(id: 7, first_name: fittingName),
                                                             origin: nil, language: .en))
         XCTAssertEqual(fitting.text.utf16.count, 4096)
-        XCTAssertEqual(label(fitting.entities[0], in: fitting.text), fittingName)
+        XCTAssertTrue(fitting.entities.isEmpty)
     }
 
     func testExpandedModelsDecodeLegacyAndCurrentPayloads() throws {

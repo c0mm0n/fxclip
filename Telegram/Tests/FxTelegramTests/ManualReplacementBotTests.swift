@@ -57,8 +57,8 @@ final class ManualReplacementBotTests: XCTestCase {
         try await bot.handle(wire(Update.self, ["update_id": 1, "message": source ?? original()]), now: now)
         for call in api.calls where ["sendMessage", "sendPhoto", "sendVideo"].contains(call.0)
             && (call.1["chat_id"] as? Int64 ?? 0) < 0 {
-            XCTAssertEqual(call.1["protect_content"] as? Bool, true,
-                           "Replacement-capable replies must be protected before attribution is added")
+            XCTAssertNil(call.1["protect_content"] as? Bool,
+                           "Replacement-capable replies stay shareable without account-linked credit")
         }
         return api.calls.first { ["sendMessage", "sendPhoto", "sendVideo"].contains($0.0) }?.1 ?? [:]
     }
@@ -255,10 +255,7 @@ final class ManualReplacementBotTests: XCTestCase {
             XCTAssertTrue(credited.hasPrefix(label + "Alice 😀"))
             XCTAssertTrue(credited.hasSuffix(body))
             let entities = try wire([Entity].self, XCTUnwrap(edit["entities"]))
-            let mention = try XCTUnwrap(entities.first { $0.type == "text_mention" })
-            XCTAssertEqual(mention.user?.id, 7)
-            XCTAssertEqual(mention.offset, label.utf16.count)
-            XCTAssertEqual(mention.length, "Alice 😀".utf16.count)
+            XCTAssertFalse(entities.contains { $0.user != nil || $0.type == "text_mention" })
             let prefixLength = credited.utf16.count - body.utf16.count
             for old in try wire([Entity].self, existing) {
                 var shifted = old
@@ -294,7 +291,7 @@ final class ManualReplacementBotTests: XCTestCase {
             XCTAssertTrue(credited.hasSuffix(caption))
             let entities = try wire([Entity].self, XCTUnwrap(edit["caption_entities"]))
             XCTAssertEqual(entities.first { $0.type == "bold" }?.offset, 3 + credited.utf16.count - caption.utf16.count)
-            XCTAssertEqual(entities.first { $0.type == "text_mention" }?.user?.id, 7)
+            XCTAssertFalse(entities.contains { $0.user != nil || $0.type == "text_mention" })
             XCTAssertEqual(try rows(edit).flatMap { $0 }.compactMap(\.callback_data), [remove])
             XCTAssertTrue(try rows(edit).flatMap { $0 }.allSatisfy { $0.url == nil })
             XCTAssertNil(edit["media"])
@@ -319,6 +316,8 @@ final class ManualReplacementBotTests: XCTestCase {
             let asked = try await ask(reply(sent, source: source))
             try await click(confirm, message: asked)
             let edit = try XCTUnwrap(api.calls.first { $0.0 == "editMessageText" }?.1)
+            let creditedEntities = try wire([Entity].self, XCTUnwrap(edit["entities"]))
+            XCTAssertFalse(creditedEntities.contains { $0.user != nil || $0.type == "text_mention" })
             if origin["type"] as? String == "channel" {
                 XCTAssertTrue((edit["text"] as? String)?.contains("Source channel 😀") == true)
                 let entities = try wire([Entity].self, XCTUnwrap(edit["entities"]))
@@ -327,7 +326,7 @@ final class ManualReplacementBotTests: XCTestCase {
             if origin["type"] as? String == "hidden_user" {
                 XCTAssertTrue((edit["text"] as? String)?.contains("Visible source 😀") == true)
                 let entities = try wire([Entity].self, XCTUnwrap(edit["entities"]))
-                XCTAssertEqual(entities.filter { $0.type == "text_mention" }.count, 1)
+                XCTAssertFalse(entities.contains { $0.user != nil || $0.type == "text_mention" })
                 XCTAssertFalse(entities.contains { $0.type == "text_link" && $0.url?.contains("t.me/") == true })
             }
             assertOriginalDeleted()

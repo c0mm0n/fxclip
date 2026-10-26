@@ -332,9 +332,8 @@ public final class Bot {
                 if replace {
                     video["caption"] = credit
                     if let user = message.from {
-                        video["caption_entities"] = try jsonObject([
-                            Entity(type: "text_mention", offset: creditLabel.utf16.count, length: user.name.utf16.count, user: user)
-                        ])
+                        video["caption_entities"] = try jsonObject(
+                            PreviewAttribution.unlinkedLabelEntities(user.name, offset: creditLabel.utf16.count))
                     }
                 }
                 let original = manualReplacementOriginal(message, replacement: replace, now: ownershipNow,
@@ -925,9 +924,7 @@ public final class Bot {
 
     private func base(_ message: Message) -> [String: Any] {
         var parameters: [String: Any] = ["chat_id": message.chat.id]
-        // Protection must be set on the initial send: a later Replace action can
-        // add account attribution, but Telegram's edit methods cannot add this flag.
-        if message.chat.isGroup { parameters["protect_content"] = true }
+        // Content replies stay shareable; generated credit never links a person.
         if let thread = message.message_thread_id { parameters["message_thread_id"] = thread }
         return parameters
     }

@@ -63,16 +63,16 @@ public struct Rewriter {
         for edit in edits.reversed() { output.replaceCharacters(in: edit.range, with: edit.value) }
         let author: String
         let authorLabel = language.text("Posted by ", "Publié par ")
-        var mention: Entity?
         if let chat = message.sender_chat {
             author = chat.title ?? language.text("Anonymous sender", "Auteur anonyme")
         } else if let user = message.from {
             author = user.name
-            mention = Entity(type: "text_mention", offset: authorLabel.utf16.count, length: author.utf16.count, user: user)
         } else { author = language.text("Unknown sender", "Auteur inconnu") }
         let prefix = attribution ? "\(authorLabel)\(author)\n\n" : ""
         for index in outputEntities.indices { outputEntities[index].offset += prefix.utf16.count }
-        if attribution, let mention { outputEntities.insert(mention, at: 0) }
+        if attribution {
+            outputEntities.insert(contentsOf: PreviewAttribution.unlinkedLabelEntities(author, offset: authorLabel.utf16.count), at: 0)
+        }
         let result = prefix + (output as String)
         // Never truncate somebody's message to make replacement fit.
         let limit = !attribution && message.text == nil ? 1024 : 4096

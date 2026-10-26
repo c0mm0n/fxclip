@@ -2,22 +2,28 @@ import Foundation
 
 /// Attribution is built from the live Telegram payload, never from persisted content.
 enum PreviewAttribution {
+    /// Keep normal display names plain. Code spans prevent Telegram from turning
+    /// address-like names into automatic mentions, URLs or phone-number links.
+    static func unlinkedLabelEntities(_ label: String, offset: Int) -> [Entity] {
+        let addressLike = label.rangeOfCharacter(from: CharacterSet(charactersIn: "@.:+")) != nil
+            || label.range(of: #"\d[\d ()-]{5,}"#, options: .regularExpression) != nil
+        return addressLike && !label.isEmpty
+            ? [Entity(type: "code", offset: offset, length: label.utf16.count)] : []
+    }
+
     static func prefix(poster: TelegramUser, origin: ForwardOrigin?, language: BotLanguage)
         -> (text: String, entities: [Entity])? {
         guard poster.id > 0, hasLabel(poster.name) else { return nil }
         var text = language.text("Shared by ", "Partagé par ")
-        var entities = [Entity(type: "text_mention", offset: text.utf16.count,
-                               length: poster.name.utf16.count, user: poster)]
+        var entities = unlinkedLabelEntities(poster.name, offset: text.utf16.count)
         text += poster.name
         if let origin {
             let label: String
-            var user: TelegramUser?
             var url: String?
             switch origin.type {
             case "user":
                 guard let source = origin.sender_user, source.id > 0, hasLabel(source.name) else { return nil }
                 label = source.name
-                user = source
             case "hidden_user":
                 guard let name = origin.sender_user_name, hasLabel(name) else { return nil }
                 label = name
@@ -38,12 +44,11 @@ enum PreviewAttribution {
                 return nil
             }
             text += language.text("\nSource: ", "\nSource : ")
-            if let user {
-                entities.append(Entity(type: "text_mention", offset: text.utf16.count,
-                                       length: label.utf16.count, user: user))
-            } else if let url {
+            if let url {
                 entities.append(Entity(type: "text_link", offset: text.utf16.count,
                                        length: label.utf16.count, url: url))
+            } else {
+                entities += unlinkedLabelEntities(label, offset: text.utf16.count)
             }
             text += label
         }

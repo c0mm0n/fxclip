@@ -7,21 +7,33 @@ using the [Docker setup](#docker-setup); this project does not configure a publi
 
 ## Forwarding privacy / Confidentialité des transferts
 
-Group replies (text, cards and videos), including pending previews and automatic
-replacements, are sent with Telegram content protection: forwarding and saving
-from Telegram are blocked. The same protection applies when a group preview is
-edited later with **Replace**. Credit remains visible and clickable inside the
-group. This does not hide it from group members or prevent manual copying by
-someone who can see it. Direct-message link replies remain shareable.
-Protection applies to new sends only: Telegram's Bot API cannot add it to an
-existing message through an edit. Existing unprotected posts must be removed and
-posted again to receive it; already forwarded copies cannot be recalled.
+New content replies in groups and direct chats can be forwarded and saved,
+including pending previews and automatic replacements. Generated **Posted by /
+Shared by** credit uses the person's display name (first/last name), never their
+username or a hidden account mention. Known and hidden forwarded-user sources
+follow the same rule. Public channel-post source links remain clickable.
 
-Les réponses du bot dans les groupes sont protégées contre le transfert et
-l’enregistrement, dès l’envoi, y compris les aperçus en préparation et les
-remplacements. Le crédit reste visible et cliquable dans le groupe ; il n’est
-pas masqué à ses membres. Les liens traités en message direct restent
-partageables. Les anciens messages ne sont pas verrouillés rétroactivement.
+Ordinary names are plain text. Address-like display names are rendered as code to
+prevent Telegram from automatically creating a mention, URL or phone link. The
+name stays visible and can still identify someone; this is not anonymity. Links
+and mentions deliberately present in the original content are preserved. Telegram
+handles its native reply/forward headers separately; personal forwarding privacy
+settings still apply to them.
+
+Group settings/welcome panels stay protected. Previously sent messages and copies
+are not rewritten: old protected previews remain protected because normal Bot API
+edits cannot change that flag. Send the original link again for a new shareable
+preview. No old message is deleted or reposted automatically.
+
+Les nouveaux aperçus de groupe et les réponses en privé peuvent être transférés et
+enregistrés. Les crédits **Publié par / Partagé par** affichent le nom d’affichage,
+jamais le @username ni une mention cachée vers le compte. Même règle pour une
+personne citée comme source d’un transfert ; les liens vers les publications de
+canaux publics restent accessibles. Les noms qui ressemblent à une adresse sont
+rendus en texte de code pour éviter les liens automatiques. Le nom reste visible :
+ce n’est pas de l’anonymat. Le contenu original conserve ses propres liens et
+mentions. Les réglages de groupe et les anciens messages protégés restent protégés ;
+les messages déjà envoyés ne sont pas réécrits.
 
 ## Direct messages / Messages directs
 
