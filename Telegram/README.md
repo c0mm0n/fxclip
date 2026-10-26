@@ -199,9 +199,10 @@ MP4 URL to the bot server, then uploads a copy to Telegram. Tracker removal stay
 entirely in the shared engine and `Shared/rules.json`; this option adds no shared
 mirror rule or separate tracking-parameter list.
 
-Slow Facebook/Reddit replies and YouTube fetches show a quiet “Preparing preview…” reply
+Slow Facebook/Reddit replies show a quiet “Preparing preview…” reply
 (“Préparation de l’aperçu…” in French) after 0.7 seconds. The same message becomes
-the video, thumbnail card or size notice; fast fetches skip the status. Facebook
+the video or size notice; fast fetches skip the status. YouTube sends its finished
+native or photo card directly, so a rejected text status cannot block the card. Facebook
 and Reddit replacement attempts skip this status until the outcome is known, preserving the
 reply target if a video is too large and the original must stay. Removal
 controls start their five-minute window only when the finished content is confirmed.

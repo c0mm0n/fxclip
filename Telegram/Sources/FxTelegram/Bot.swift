@@ -345,7 +345,7 @@ public final class Bot {
                     }
                 } else { video["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true] }
                 do {
-                    let sentID = try await deliverPreview("sendVideo", parameters: video, pendingID: pendingID)
+                    let sentID = try await deliverPreview("sendVideo", parameters: video, pendingID: pendingID, originalMessageID: message.message_id)
                     if let publicationPoster {
                         try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: publicationPoster,
                                                     now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970, original: original)
@@ -362,17 +362,13 @@ public final class Bot {
             }
         }
         if let videoID, let youTubeMetadata {
-            // Fetching metadata is safe to fall back from; a timed-out send is not.
-            let fetched = try await fetchWithPendingPreview(api: api, parameters: pending,
-                originalMessageID: message.message_id, delayNanoseconds: pendingPreviewDelayNanoseconds) {
-                try await youTubeMetadata.fetch(videoID: videoID, nativePreview: youTubeStyle == .koutube)
-            }
-            pendingID = fetched.1
-            if case .failure(let error) = fetched.0, error is CancellationError {
-                await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
-                throw error
-            }
-            let metadata = try? fetched.0.get()
+            // A rejected text placeholder must not prevent a prepared photo from
+            // being sent. YouTube sends only its finished card, without a status.
+            // Fetching metadata is safe to fall back from; an uncertain send is not.
+            let metadata: YouTubeMetadata?
+            do { metadata = try await youTubeMetadata.fetch(videoID: videoID, nativePreview: youTubeStyle == .koutube) }
+            catch is CancellationError { throw CancellationError() }
+            catch { metadata = nil }
             if let metadata {
                 let cleanURL = configured.engine.clean(message.text ?? "").text
                     .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -393,7 +389,7 @@ public final class Bot {
                         }
                     } else { card["reply_parameters"] = ["message_id": message.message_id, "allow_sending_without_reply": true] }
                     do {
-                        let sentID = try await deliverPreview("sendMessage", parameters: card, pendingID: pendingID)
+                        let sentID = try await deliverPreview("sendMessage", parameters: card, pendingID: pendingID, originalMessageID: message.message_id)
                         if let publicationPoster {
                             try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: publicationPoster,
                                 now: fixedNow.map(TimeInterval.init) ?? Date().timeIntervalSince1970, original: original)
@@ -429,12 +425,12 @@ public final class Bot {
                     do {
                         let sentID: Int64
                         do {
-                            sentID = try await deliverPreview("sendPhoto", parameters: photo, pendingID: pendingID)
+                            sentID = try await deliverPreview("sendPhoto", parameters: photo, pendingID: pendingID, originalMessageID: message.message_id)
                         } catch BotError.telegram(400) where metadata.fallbackThumbnailURL != nil {
                             // A definite HD-image rejection permits one attempt with
                             // the verified oEmbed image, including on the same placeholder.
                             photo["photo"] = metadata.fallbackThumbnailURL!.absoluteString
-                            sentID = try await deliverPreview("sendPhoto", parameters: photo, pendingID: pendingID)
+                            sentID = try await deliverPreview("sendPhoto", parameters: photo, pendingID: pendingID, originalMessageID: message.message_id)
                         }
                         if let publicationPoster {
                             try store.recordPublication(chatID: message.chat.id, messageID: sentID, posterID: publicationPoster,
@@ -475,7 +471,7 @@ public final class Bot {
         }
         // No delete until Telegram confirms an actual new message ID. Never retry an ambiguous send.
         let sentID: Int64
-        do { sentID = try await deliverPreview("sendMessage", parameters: parameters, pendingID: pendingID) }
+        do { sentID = try await deliverPreview("sendMessage", parameters: parameters, pendingID: pendingID, originalMessageID: message.message_id) }
         catch BotError.telegram(let code) where code == 400 || code == 403 {
             await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
             throw BotError.telegram(code)
@@ -493,7 +489,7 @@ public final class Bot {
 
     /// A confirmed placeholder is edited in place. An ambiguous edit must never
     /// trigger another send or permit deletion of the original.
-    private func deliverPreview(_ method: String, parameters: [String: Any], pendingID: Int64?) async throws -> Int64 {
+    private func deliverPreview(_ method: String, parameters: [String: Any], pendingID: Int64?, originalMessageID: Int64) async throws -> Int64 {
         let result: Any
         if let pendingID {
             var edit: [String: Any] = ["chat_id": parameters["chat_id"]!, "message_id": pendingID,
@@ -512,7 +508,7 @@ public final class Bot {
             result = try await api.call(method, parameters)
         }
         guard let object = result as? [String: Any], let id = confirmedMessageID(object["message_id"]),
-              pendingID == nil || id == pendingID else { throw BotError.invalidResponse }
+              id != originalMessageID, pendingID == nil || id == pendingID else { throw BotError.invalidResponse }
         return id
     }
 
@@ -591,7 +587,7 @@ public final class Bot {
         let poster = store.state.replyControls.count < 4096 ? author : nil
         if poster != nil { addRemovalButton(to: &parameters, language: language) }
         let sentID: Int64
-        do { sentID = try await deliverPreview("sendMessage", parameters: parameters, pendingID: pendingID) }
+        do { sentID = try await deliverPreview("sendMessage", parameters: parameters, pendingID: pendingID, originalMessageID: message.message_id) }
         catch BotError.telegram(let code) where code == 400 || code == 403 {
             await discardPendingPreview(pendingID, chatID: message.chat.id, language: language)
             throw BotError.telegram(code)

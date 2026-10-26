@@ -11,6 +11,7 @@ private final class PendingPreviewAPI: BotAPI {
     var beforeCall: ((String, [String: Any]) -> Void)?
     var completedAt: [String: TimeInterval] = [:]
     var canDelete = true
+    var rejectStatus = false
 
     var methods: [String] { calls.map(\.0) }
 
@@ -24,6 +25,10 @@ private final class PendingPreviewAPI: BotAPI {
             XCTAssertNil(parameters["protect_content"], "Telegram edits cannot set content protection")
         }
         calls.append((method, parameters))
+        if rejectStatus, method == "sendMessage",
+           (parameters["link_preview_options"] as? [String: Any])?["is_disabled"] as? Bool == true {
+            throw BotError.telegram(429)
+        }
         beforeCall?(method, parameters)
         if var queued = outcomes[method], !queued.isEmpty {
             let outcome = queued.removeFirst()
@@ -72,6 +77,7 @@ private final class PendingYouTubeProvider: YouTubeMetadataProviding {
     var delayNanoseconds: UInt64 = 25_000_000
     var error: Error?
     var requests = 0
+    var nativePreviewAvailable = false
     let title = "🎬 Example video 😀"
     let thumbnailURL = URL(string: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg")!
 
@@ -79,7 +85,7 @@ private final class PendingYouTubeProvider: YouTubeMetadataProviding {
         requests += 1
         try await Task.sleep(nanoseconds: delayNanoseconds)
         if let error { throw error }
-        return YouTubeMetadata(title: title, thumbnailURL: thumbnailURL)
+        return YouTubeMetadata(title: title, thumbnailURL: thumbnailURL, nativePreviewAvailable: nativePreviewAvailable)
     }
 }
 
@@ -223,13 +229,12 @@ final class PendingPreviewBotTests: XCTestCase {
             try reset(language: language)
             try await handle(dirtyYouTubeURL, extra: ["message_thread_id": 123,
                 "entities": [["type": "url", "offset": 0, "length": dirtyYouTubeURL.utf16.count]]])
-            XCTAssertEqual(api.methods, ["sendMessage", "editMessageMedia"])
-            assertPending(try parameters("sendMessage"), language: language, thread: 123)
-            let edit = try parameters("editMessageMedia")
-            assertSameIDEdit(edit)
-            let media = try XCTUnwrap(edit["media"] as? [String: Any])
-            XCTAssertEqual(media["type"] as? String, "photo")
-            XCTAssertEqual(media["media"] as? String, youtube.thumbnailURL.absoluteString)
+            XCTAssertEqual(api.methods, ["sendPhoto"])
+            let edit = try parameters("sendPhoto")
+            XCTAssertEqual(edit["message_thread_id"] as? Int64, 123)
+            XCTAssertEqual((edit["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5)
+            let media = edit
+            XCTAssertEqual(media["photo"] as? String, youtube.thumbnailURL.absoluteString)
             let caption = try XCTUnwrap(media["caption"] as? String)
             XCTAssertEqual(caption, "YouTube\n" + youtube.title)
             let entities = try decode([Entity].self, from: XCTUnwrap(media["caption_entities"]))
@@ -248,6 +253,79 @@ final class PendingPreviewBotTests: XCTestCase {
             XCTAssertNil(store.state.replyControls["-100:7301"]?.openButton)
             XCTAssertTrue(deletedIDs().isEmpty)
         }
+    }
+
+    func testSlowYouTubeCannotBeBlockedByRejectedStatusInPrivateOrGroups() async throws {
+        for language in [BotLanguage.en, .fr] {
+            for native in [false, true] {
+                for direct in [false, true] {
+                    try reset(language: language)
+                    youtube.nativePreviewAvailable = native
+                    api.rejectStatus = true
+                    let extra: [String: Any] = direct ? ["chat": ["id": 7, "type": "private"]] : [:]
+                    try await handle(youtubeURL, extra: extra)
+                    XCTAssertEqual(api.methods, [native ? "sendMessage" : "sendPhoto"])
+                    let card = try XCTUnwrap(api.calls.first?.1)
+                    XCTAssertEqual((card["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, 5)
+                    if native {
+                        XCTAssertEqual(card["text"] as? String, youtubeURL)
+                        XCTAssertEqual((card["link_preview_options"] as? [String: Any])?["url"] as? String,
+                                       "https://koutu.be/dQw4w9WgXcQ?t=42")
+                    } else {
+                        XCTAssertEqual(card["caption"] as? String, "YouTube\n" + youtube.title)
+                        let entities = try decode([Entity].self, from: XCTUnwrap(card["caption_entities"]))
+                        XCTAssertEqual(entities.first { $0.type == "text_link" }?.url, youtubeURL)
+                    }
+                    let key = direct ? "7:7301" : "-100:7301"
+                    XCTAssertEqual(store.state.replyControls[key]?.posterID, 7)
+                    XCTAssertEqual(store.state.publications.isEmpty, direct)
+                    XCTAssertTrue(deletedIDs().isEmpty)
+                }
+            }
+        }
+    }
+
+    func testSlowYouTubeFinalAmbiguityOrRateLimitNeverFallsBackOrDeletesOriginal() async throws {
+        let outcomes: [Result<Any, Error>] = [.failure(BotError.telegram(429)),
+            .failure(URLError(.timedOut)), .failure(BotError.telegram(500)),
+            .success(["message_id": true]), .success(["message_id": Int64(5)]),
+            .success(["message_id": "7301"])]
+        for native in [false, true] {
+            for outcome in outcomes {
+                try reset(replace: true)
+                youtube.nativePreviewAvailable = native
+                let method = native ? "sendMessage" : "sendPhoto"
+                api.outcomes[method] = [outcome]
+                do { try await handle(dirtyYouTubeURL); XCTFail("Expected unconfirmed final card") } catch {}
+                XCTAssertEqual(api.methods, ["getChatMember", method])
+                XCTAssertTrue(deletedIDs().isEmpty)
+                XCTAssertTrue(store.state.replyControls.isEmpty)
+                XCTAssertTrue(store.state.publications.isEmpty)
+            }
+        }
+    }
+
+    func testUnavailableCleanYouTubeKeepsGroupOriginalAndDirectLinkReplyWithoutStatus() async throws {
+        for direct in [false, true] {
+            try reset(replace: true)
+            youtube.error = YouTubeMetadataError.invalidResponse
+            let extra: [String: Any] = direct ? ["chat": ["id": 7, "type": "private"]] : [:]
+            try await handle(youtubeURL, extra: extra)
+            XCTAssertEqual(api.methods, direct ? ["sendMessage"] : [])
+            if direct { XCTAssertEqual(try parameters("sendMessage")["text"] as? String, youtubeURL) }
+            XCTAssertTrue(deletedIDs().isEmpty)
+            XCTAssertTrue(store.state.publications.isEmpty)
+        }
+    }
+
+    func testCancelledYouTubeFetchDoesNotSendStatusOrFinalCard() async throws {
+        try reset()
+        youtube.error = CancellationError()
+        do { try await handle(youtubeURL); XCTFail("Expected cancellation") }
+        catch is CancellationError {}
+        XCTAssertTrue(api.calls.isEmpty)
+        XCTAssertTrue(store.state.replyControls.isEmpty)
+        XCTAssertTrue(store.state.publications.isEmpty)
     }
 
     func testFastProvidersSkipPlaceholderAndKeepExistingDirectSendPaths() async throws {
@@ -291,11 +369,10 @@ final class PendingPreviewBotTests: XCTestCase {
                 try reset(replace: true)
                 var observedFinal = false
                 api.beforeCall = { method, parameters in
-                    if method == (isFacebook ? "sendVideo" : "editMessageMedia") {
+                    if method == (isFacebook ? "sendVideo" : "sendPhoto") {
                         observedFinal = true
                         XCTAssertTrue(self.deletedIDs().isEmpty)
                         XCTAssertTrue(self.store.state.replyControls.isEmpty)
-                        if !isFacebook { self.assertSameIDEdit(parameters) }
                     }
                     if method == "deleteMessage" { XCTAssertTrue(observedFinal) }
                 }
@@ -303,7 +380,7 @@ final class PendingPreviewBotTests: XCTestCase {
                     ?? ["message_thread_id": 123]
                 try await handle(isFacebook ? dirtyFacebookURL : dirtyYouTubeURL, extra: extra)
                 XCTAssertEqual(api.methods, isFacebook ? ["getChatMember", "sendVideo", "deleteMessage"]
-                    : ["getChatMember", "sendMessage", "editMessageMedia", "deleteMessage"])
+                    : ["getChatMember", "sendPhoto", "deleteMessage"])
                 let media: [String: Any]
                 if isFacebook {
                     media = try parameters("sendVideo")
@@ -311,8 +388,9 @@ final class PendingPreviewBotTests: XCTestCase {
                     XCTAssertEqual(media["message_thread_id"] as? Int64, 123)
                     XCTAssertEqual((media["video"] as? VideoUpload)?.data, facebook.video)
                 } else {
-                    assertPending(try parameters("sendMessage"), replyTo: parent, thread: 123)
-                    media = try XCTUnwrap(parameters("editMessageMedia")["media"] as? [String: Any])
+                    media = try parameters("sendPhoto")
+                    XCTAssertEqual((media["reply_parameters"] as? [String: Any])?["message_id"] as? Int64, parent)
+                    XCTAssertEqual(media["message_thread_id"] as? Int64, 123)
                 }
                 XCTAssertEqual(deletedIDs(), [5])
                 XCTAssertEqual(store.state.replyControls["-100:7301"]?.posterID, 7)
@@ -371,9 +449,9 @@ final class PendingPreviewBotTests: XCTestCase {
                 }
                 let clean = isFacebook ? facebookURL : youtubeURL
                 try await handle(isFacebook ? dirtyFacebookURL : dirtyYouTubeURL)
-                let direct = isFacebook && replace
-                XCTAssertEqual(api.methods, direct ? ["getChatMember", "sendMessage", "deleteMessage"] : replace
-                    ? ["getChatMember", "sendMessage", "editMessageText", "deleteMessage"] : ["sendMessage", "editMessageText"])
+                let direct = !isFacebook || replace
+                XCTAssertEqual(api.methods, direct ? (replace ? ["getChatMember", "sendMessage", "deleteMessage"] : ["sendMessage"])
+                    : ["sendMessage", "editMessageText"])
                 let edit = try parameters(direct ? "sendMessage" : "editMessageText")
                 if !direct { assertSameIDEdit(edit) }
                 XCTAssertTrue((edit["text"] as? String ?? "").hasSuffix(clean))
@@ -391,8 +469,8 @@ final class PendingPreviewBotTests: XCTestCase {
             facebook.error = URLError(.timedOut)
             youtube.error = URLError(.timedOut)
             try await handle(isFacebook ? facebookURL : youtubeURL)
-            XCTAssertEqual(api.methods, ["sendMessage", "deleteMessage"])
-            XCTAssertEqual(deletedIDs(), [7301])
+            XCTAssertEqual(api.methods, isFacebook ? ["sendMessage", "deleteMessage"] : [])
+            XCTAssertEqual(deletedIDs(), isFacebook ? [7301] : [])
             XCTAssertTrue(store.state.replyControls.isEmpty)
         }
     }
@@ -446,26 +524,23 @@ final class PendingPreviewBotTests: XCTestCase {
     }
 
     func testPendingExplicit400Or403RejectionUsesRegularFinalSend() async throws {
-        for isFacebook in [true, false] {
-            for code in [400, 403] {
-                try reset(replace: !isFacebook)
-                api.outcomes["sendMessage"] = [.failure(BotError.telegram(code))]
-                try await handle(isFacebook ? dirtyFacebookURL : dirtyYouTubeURL)
-                XCTAssertEqual(api.methods, isFacebook ? ["sendMessage", "sendVideo"]
-                    : ["getChatMember", "sendMessage", "sendPhoto", "deleteMessage"])
-                XCTAssertEqual(deletedIDs(), isFacebook ? [] : [5])
-                XCTAssertEqual(Set(store.state.replyControls.keys), ["-100:7301"])
-                XCTAssertEqual(store.state.publications["-100:7301"]?.posterID, 7)
-            }
+        for code in [400, 403] {
+            try reset()
+            api.outcomes["sendMessage"] = [.failure(BotError.telegram(code))]
+            try await handle(dirtyFacebookURL)
+            XCTAssertEqual(api.methods, ["sendMessage", "sendVideo"])
+            XCTAssertTrue(deletedIDs().isEmpty)
+            XCTAssertEqual(Set(store.state.replyControls.keys), ["-100:7301"])
+            XCTAssertEqual(store.state.publications["-100:7301"]?.posterID, 7)
         }
     }
 
     func testAmbiguousPendingSendNeverDuplicatesOrDeletesOriginal() async throws {
         for failure in [URLError(.timedOut) as Error, BotError.invalidResponse, BotError.telegram(500)] {
-            try reset(replace: true)
+            try reset()
             api.outcomes["sendMessage"] = [.failure(failure)]
-            do { try await handle(dirtyYouTubeURL); XCTFail("Expected ambiguous pending send to fail") } catch {}
-            XCTAssertEqual(api.methods, ["getChatMember", "sendMessage"])
+            do { try await handle(dirtyFacebookURL); XCTFail("Expected ambiguous pending send to fail") } catch {}
+            XCTAssertEqual(api.methods, ["sendMessage"])
             XCTAssertTrue(store.state.replyControls.isEmpty)
         }
     }
@@ -474,10 +549,10 @@ final class PendingPreviewBotTests: XCTestCase {
         let receipts: [Any] = [true, ["message_id": true], ["message_id": Int64(0)],
             ["message_id": Int64(-1)], ["message_id": Int64(5)], ["message_id": "7301"], ["message_id": 7301.5]]
         for receipt in receipts {
-            try reset(replace: true)
+            try reset()
             api.outcomes["sendMessage"] = [.success(receipt)]
-            await assertInvalidReceipt(dirtyYouTubeURL)
-            XCTAssertEqual(api.methods, ["getChatMember", "sendMessage"])
+            await assertInvalidReceipt(dirtyFacebookURL)
+            XCTAssertEqual(api.methods, ["sendMessage"])
             XCTAssertTrue(store.state.replyControls.isEmpty)
         }
     }
@@ -485,82 +560,69 @@ final class PendingPreviewBotTests: XCTestCase {
     func testFinalEditBooleanOrMismatchedMessageIDNeverConfirmsReplacementOrReceipt() async throws {
         let receipts: [Any] = [true, ["message_id": true], ["message_id": Int64(7302)],
             ["message_id": Int64(5)], ["message_id": Int64(0)], ["message_id": "7301"]]
-        for isFacebook in [true, false] {
-            for replace in (isFacebook ? [false] : [false, true]) {
-                for receipt in receipts {
-                    try reset(replace: replace)
-                    api.outcomes["editMessageMedia"] = [.success(receipt)]
-                    await assertInvalidReceipt(isFacebook ? dirtyFacebookURL : dirtyYouTubeURL)
-                    XCTAssertEqual(api.methods, replace
-                        ? ["getChatMember", "sendMessage", "editMessageMedia"] : ["sendMessage", "editMessageMedia"])
-                    XCTAssertTrue(deletedIDs().isEmpty)
-                    XCTAssertTrue(store.state.replyControls.isEmpty)
-                }
-            }
+        for receipt in receipts {
+            try reset()
+            api.outcomes["editMessageMedia"] = [.success(receipt)]
+            await assertInvalidReceipt(dirtyFacebookURL)
+            XCTAssertEqual(api.methods, ["sendMessage", "editMessageMedia"])
+            XCTAssertTrue(deletedIDs().isEmpty)
+            XCTAssertTrue(store.state.replyControls.isEmpty)
         }
     }
 
     func testAmbiguousFinalMediaEditNeverResendsFallsBackOrDeletesOriginal() async throws {
-        for isFacebook in [true, false] {
-            for failure in [URLError(.timedOut) as Error, BotError.invalidResponse, BotError.telegram(500)] {
-                try reset(replace: !isFacebook)
-                api.outcomes["editMessageMedia"] = [.failure(failure)]
-                do { try await handle(isFacebook ? dirtyFacebookURL : dirtyYouTubeURL); XCTFail("Expected final edit failure") } catch {}
-                XCTAssertEqual(api.methods, isFacebook ? ["sendMessage", "editMessageMedia"]
-                    : ["getChatMember", "sendMessage", "editMessageMedia"])
-                XCTAssertTrue(deletedIDs().isEmpty)
-                XCTAssertTrue(store.state.replyControls.isEmpty)
-            }
+        for failure in [URLError(.timedOut) as Error, BotError.invalidResponse, BotError.telegram(500)] {
+            try reset()
+            api.outcomes["editMessageMedia"] = [.failure(failure)]
+            do { try await handle(dirtyFacebookURL); XCTFail("Expected final edit failure") } catch {}
+            XCTAssertEqual(api.methods, ["sendMessage", "editMessageMedia"])
+            XCTAssertTrue(deletedIDs().isEmpty)
+            XCTAssertTrue(store.state.replyControls.isEmpty)
         }
     }
 
     func testExplicitFinalMediaRejectionCanOnlyFallbackByEditingSamePendingID() async throws {
-        for isFacebook in [true, false] {
-            for code in [400, 403] {
-                try reset(replace: !isFacebook)
-                api.outcomes["editMessageMedia"] = [.failure(BotError.telegram(code))]
-                try await handle(isFacebook ? dirtyFacebookURL : dirtyYouTubeURL)
-                XCTAssertEqual(api.methods, isFacebook ? ["sendMessage", "editMessageMedia", "editMessageText"]
-                    : ["getChatMember", "sendMessage", "editMessageMedia", "editMessageText", "deleteMessage"])
-                assertSameIDEdit(try parameters("editMessageText"))
-                XCTAssertEqual(deletedIDs(), isFacebook ? [] : [5])
-            }
+        for code in [400, 403] {
+            try reset()
+            api.outcomes["editMessageMedia"] = [.failure(BotError.telegram(code))]
+            try await handle(dirtyFacebookURL)
+            XCTAssertEqual(api.methods, ["sendMessage", "editMessageMedia", "editMessageText"])
+            assertSameIDEdit(try parameters("editMessageText"))
+            XCTAssertTrue(deletedIDs().isEmpty)
         }
     }
 
     func testExplicitFinalRejectionWithoutFallbackDiscardsOnlyKnownPending() async throws {
-        for isFacebook in [true, false] {
-            for code in [400, 403] {
-                try reset(replace: true)
-                api.outcomes["editMessageMedia"] = [.failure(BotError.telegram(code))]
-                try await handle(isFacebook ? facebookURL : youtubeURL)
-                XCTAssertEqual(api.methods, ["sendMessage", "editMessageMedia", "deleteMessage"])
-                XCTAssertEqual(deletedIDs(), [7301])
-                XCTAssertTrue(store.state.replyControls.isEmpty)
-            }
-        }
-    }
-
-    func testRejectedTextFallbackCleansPendingWithoutResurrectingReplyOrDeletingOriginal() async throws {
         for code in [400, 403] {
             try reset(replace: true)
-            youtube.error = URLError(.timedOut)
-            api.outcomes["editMessageText"] = [.failure(BotError.telegram(code))]
-            do { try await handle(dirtyYouTubeURL); XCTFail("Expected text edit rejection") } catch {}
-            XCTAssertEqual(api.methods, ["getChatMember", "sendMessage", "editMessageText", "deleteMessage"])
+            api.outcomes["editMessageMedia"] = [.failure(BotError.telegram(code))]
+            try await handle(facebookURL)
+            XCTAssertEqual(api.methods, ["sendMessage", "editMessageMedia", "deleteMessage"])
             XCTAssertEqual(deletedIDs(), [7301])
             XCTAssertTrue(store.state.replyControls.isEmpty)
         }
     }
 
+    func testRejectedYouTubeTextFallbackNeverResendsOrDeletesOriginal() async throws {
+        for code in [400, 403] {
+            try reset(replace: true)
+            youtube.error = URLError(.timedOut)
+            api.outcomes["sendMessage"] = [.failure(BotError.telegram(code))]
+            do { try await handle(dirtyYouTubeURL); XCTFail("Expected text send rejection") } catch {}
+            XCTAssertEqual(api.methods, ["getChatMember", "sendMessage"])
+            XCTAssertTrue(deletedIDs().isEmpty)
+            XCTAssertTrue(store.state.replyControls.isEmpty)
+        }
+    }
+
     func testUnconfirmedOrAmbiguousTextFallbackNeverDeletesOriginalOrDuplicates() async throws {
-        for outcome in [Result<Any, Error>.success(true), .success(["message_id": Int64(7302)]),
+        for outcome in [Result<Any, Error>.success(true), .success(["message_id": Int64(5)]),
                         .failure(URLError(.timedOut)), .failure(BotError.telegram(500))] {
             try reset(replace: true)
             youtube.error = URLError(.timedOut)
-            api.outcomes["editMessageText"] = [outcome]
-            do { try await handle(dirtyYouTubeURL); XCTFail("Expected unconfirmed text edit") } catch {}
-            XCTAssertEqual(api.methods, ["getChatMember", "sendMessage", "editMessageText"])
+            api.outcomes["sendMessage"] = [outcome]
+            do { try await handle(dirtyYouTubeURL); XCTFail("Expected unconfirmed text send") } catch {}
+            XCTAssertEqual(api.methods, ["getChatMember", "sendMessage"])
             XCTAssertTrue(deletedIDs().isEmpty)
             XCTAssertTrue(store.state.replyControls.isEmpty)
         }
@@ -586,10 +648,9 @@ final class PendingPreviewBotTests: XCTestCase {
         for isFacebook in [true, false] {
             try reset()
             try await handle(isFacebook ? facebookURL : youtubeURL, now: nil)
-            let sentAt = try XCTUnwrap(api.completedAt["sendMessage"])
-            let readyAt = try XCTUnwrap(api.completedAt["editMessageMedia"])
+            let readyAt = try XCTUnwrap(api.completedAt[isFacebook ? "editMessageMedia" : "sendPhoto"])
             let receipt = try XCTUnwrap(store.state.replyControls["-100:7301"])
-            XCTAssertGreaterThan(readyAt, sentAt)
+            if isFacebook { XCTAssertGreaterThan(readyAt, try XCTUnwrap(api.completedAt["sendMessage"])) }
             XCTAssertGreaterThanOrEqual(receipt.createdAt, readyAt)
             XCTAssertEqual(try StateStore(directory: directory).state.replyControls["-100:7301"], receipt)
             api.calls = []
@@ -607,7 +668,7 @@ final class PendingPreviewBotTests: XCTestCase {
     func testRemovePendingPreviewUsesFinalReceiptAndExpiresAtFiveMinutes() async throws {
         for elapsed in [299, 300] {
             try reset()
-            try await handle(youtubeURL)
+            try await handle(facebookURL)
             let markup = try XCTUnwrap(parameters("editMessageMedia")["reply_markup"])
             api.calls = []
             let callback = try decode(Update.self, from: ["update_id": 2, "callback_query": [
