@@ -12,6 +12,16 @@
       "telegram": "https://fxtwitter.com/a/status/1"
     },
     {
+      "input": "https://x.com/f1trollofficial/status/2115916339135299741?a=9YJkbehEcgelwv7Vcm4",
+      "clean": "https://x.com/f1trollofficial/status/2115916339135299741",
+      "telegram": "https://fxtwitter.com/f1trollofficial/status/2115916339135299741"
+    },
+    {
+      "input": "https://example.com/page?a=1",
+      "clean": "https://example.com/page?a=1",
+      "telegram": "https://example.com/page?a=1"
+    },
+    {
       "input": "https://mobile.x.com/a/status/1",
       "clean": "https://mobile.x.com/a/status/1",
       "telegram": "https://fxtwitter.com/a/status/1"
