@@ -374,6 +374,24 @@ final class BotTests: XCTestCase {
         let entities = try decode([Entity].self, from: XCTUnwrap(sent["entities"]))
         XCTAssertFalse(entities.contains { $0.type == "text_mention" || $0.user != nil })
     }
+    func testLinkAlreadySharedInTheGroupIsLeftAlone() async throws {
+        try replaceMode()
+        // Someone already posted the clean preview link; the bot had nothing to do.
+        try await handle(["message_id": 4, "text": "https://fxtwitter.com/a/status/1"])
+        XCTAssertTrue(api.calls.isEmpty)
+        // Someone else shares the same post from X a few minutes later.
+        try await handle(["from": fixtureUser(9, languageCode: nil)])
+        XCTAssertTrue(api.calls.isEmpty)
+        // A different post still gets its preview.
+        try await handle(["message_id": 6, "text": "Look https://x.com/a/status/2?s=20"])
+        XCTAssertTrue(api.methods.contains("sendMessage"))
+    }
+    func testLinkSharedMoreThanAnHourAgoIsRewrittenAgain() async throws {
+        try await bot.handle(update(message(["message_id": 4, "date": 1000 - 3700])), now: 1000 - 3700)
+        api.calls = []
+        try await handle()
+        XCTAssertEqual(api.methods, ["sendMessage"])
+    }
     func testAmbiguousSendNeverDeletes() async throws {
         try replaceMode(); api.failSend = true
         do { try await handle(); XCTFail("Expected timeout") } catch {}

@@ -15,6 +15,9 @@ public final class Bot {
     private let redditVideos: RedditVideoProviding?
     private let pendingPreviewDelayNanoseconds: UInt64
     private var cleanupRetryAfter: [String: TimeInterval] = [:]
+    /// Links seen per group in the last hour, kept in memory as hashes only.
+    private var recentLinks: [Int64: [Int: (date: Int, messageID: Int64)]] = [:]
+    static let duplicateWindow = 3600
     public init(api: BotAPI, store: StateStore, engine: Engine,
                 allowedChats: Set<Int64>, allowedOwners: Set<Int64> = [], botID: Int64, username: String,
                 youTubeMetadata: YouTubeMetadataProviding? = nil,
@@ -199,6 +202,9 @@ public final class Bot {
             settings.mode = .reply
         } else {
             guard message.chat.isGroup, isEnabled(chatID: message.chat.id) else { return }
+            // A link the group already saw within the hour is left alone: reposting it
+            // only adds a second copy of the same preview.
+            if alreadyShared(message, now: now) { return }
         }
         if !directMessage, message.sender_chat == nil, let user = message.from,
            let personal = store.state.users[String(user.id)], personal != .secretary { settings.mode = personal }
@@ -612,6 +618,32 @@ public final class Bot {
                                          now: now.map(TimeInterval.init) ?? Date().timeIntervalSince1970,
                                          openButton: openingButton(in: parameters))
         }
+    }
+
+    /// Records every link of a group message and says whether all of them were already
+    /// posted there by another message within `duplicateWindow` of its first sighting.
+    /// Links compare in their Telegram form, so x.com and fxtwitter.com copies match;
+    /// a redelivered update is never a duplicate of itself.
+    private func alreadyShared(_ message: Message, now: Int) -> Bool {
+        guard let text = message.text ?? message.caption else { return false }
+        let entities = (message.text == nil ? message.caption_entities : message.entities) ?? []
+        var urls: [String] = entities.compactMap { $0.type == "text_link" ? $0.url : nil }
+        _ = mapURLs(text) { urls.append($0); return $0 }
+        let engine = rewriter.engine
+        let keys = Set(urls.map { url -> Int in
+            var hasher = Hasher()
+            hasher.combine(engine.preview(engine.clean(url).text, forBundleID: "org.telegram.desktop"))
+            return hasher.finalize()
+        })
+        guard !keys.isEmpty else { return false }
+        var seen = recentLinks[message.chat.id, default: [:]].filter { now - $0.value.date < Self.duplicateWindow }
+        let duplicate = keys.allSatisfy { seen[$0].map { $0.messageID != message.message_id } ?? false }
+        for key in keys where seen[key] == nil { seen[key] = (now, message.message_id) }
+        if seen.count > 1024 {
+            seen = Dictionary(uniqueKeysWithValues: seen.sorted { $0.value.date > $1.value.date }.prefix(1024).map { ($0.key, $0.value) })
+        }
+        recentLinks[message.chat.id] = seen
+        return duplicate
     }
 
     private func facebookCaptionText(_ text: String, limit: Int) -> String {

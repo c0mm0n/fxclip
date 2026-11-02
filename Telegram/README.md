@@ -84,6 +84,8 @@ senders receive a reply instead. **Secretary / Secrétaire** only edits your own
 outgoing messages in connected private chats; see [Secretary Mode](#secretary-mode).
 Secretary has its own on/off choice and leaves group behavior unchanged.
 Behavior and link choices are separate.
+A link already posted in the group within the last hour, by anyone and in its
+x.com or fxtwitter.com form, is left alone instead of being reposted.
 
 Dans **Comportement en groupe**, choisissez une réponse qui garde l’original sauf
 confirmation explicite de **Remplacer**, un remplacement automatique avec le nom
@@ -91,6 +93,8 @@ de l’auteur, ou la désactivation. **Secrétaire** concerne
 uniquement vos messages sortants dans les conversations privées connectées.
 Son activation est indépendante et ne change pas le comportement en groupe.
 Changer les liens ne change pas ce comportement.
+Un lien déjà posté dans le groupe depuis moins d’une heure, par n’importe qui et
+sous sa forme x.com ou fxtwitter.com, est laissé tel quel au lieu d’être republié.
 
 Changes save immediately and apply to future messages. **Close / Fermer** only
 hides the panel; there is no extra Save step.
